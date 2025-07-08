@@ -1,0 +1,71 @@
+# Version simplifiée fonctionnelle de docker-compose
+
+services:
+  # Service Redis pour la queue des tâches
+  redis:
+    image: redis:7-alpine
+    container_name: redis
+    ports:
+      - "6379:6379"
+    restart: unless-stopped
+
+  # Service API Backend
+  backend:
+    build:
+      context: .
+      args:
+        UID: ${UID:-1000}
+        GID: ${GID:-1000}
+    container_name: backend
+    ports:
+      - "5000:5000"
+    environment:
+      - FLASK_ENV=development
+      - REDIS_URL=redis://redis:6379
+      - PYTHONUNBUFFERED=1
+    volumes:
+      - ./results:/app/results
+      - ./reports:/app/reports
+      - ./logs:/app/logs
+      - ./data.json:/app/data.json
+    depends_on:
+      - redis
+    restart: unless-stopped
+    command: python app.py
+
+  # Service Worker Celery pour les tâches asynchrones
+  worker:
+    build:
+      context: .
+      args:
+        UID: ${UID:-1000}
+        GID: ${GID:-1000}
+    container_name: worker
+    environment:
+      - REDIS_URL=redis://redis:6379
+      - PYTHONUNBUFFERED=1
+    volumes:
+      - ./results:/app/results
+      - ./reports:/app/reports
+      - ./logs:/app/logs
+    depends_on:
+      - redis
+      - backend
+    restart: unless-stopped
+    command: celery -A app.celery worker --loglevel=info
+
+  # Service Frontend Next.js (corrigé)
+  frontend:
+    build: ./frontend
+    container_name: frontend
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=development
+      - NEXT_PUBLIC_API_URL=http://localhost:5000
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    depends_on:
+      - backend
+    restart: unless-stopped
