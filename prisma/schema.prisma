@@ -1,0 +1,100 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Investigation {
+  id          String   @id @default(cuid())
+  status      InvestigationStatus @default(INITIALIZING)
+  progress    Int      @default(0)
+  currentStep String?
+  inputData   Json?
+  finalReport Json?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  // Relations
+  indicators  Indicator[]
+  results     Result[]
+  logs        InvestigationLog[]
+  
+  @@map("investigations")
+}
+
+model Indicator {
+  id             String          @id @default(cuid())
+  investigationId String
+  type           IndicatorType
+  value          String
+  source         String?         // buster, mosint, maigret, phoneinfoga, spiderfoot
+  confidence     Float           @default(0.5)
+  verified       Boolean         @default(false)
+  createdAt      DateTime        @default(now())
+  
+  investigation  Investigation   @relation(fields: [investigationId], references: [id], onDelete: Cascade)
+  results        Result[]
+  
+  @@unique([investigationId, type, value])
+  @@map("indicators")
+}
+
+model Result {
+  id             String     @id @default(cuid())
+  investigationId String
+  indicatorId    String?
+  toolSource     String     // buster, mosint, maigret, phoneinfoga, spiderfoot
+  data           Json
+  score          Float      @default(0.0)
+  createdAt      DateTime   @default(now())
+  
+  investigation  Investigation @relation(fields: [investigationId], references: [id], onDelete: Cascade)
+  indicator      Indicator?     @relation(fields: [indicatorId], references: [id], onDelete: SetNull)
+  
+  @@map("results")
+}
+
+model InvestigationLog {
+  id             String     @id @default(cuid())
+  investigationId String
+  step           String
+  message        String
+  level          LogLevel    @default(INFO)
+  timestamp      DateTime   @default(now())
+  
+  investigation  Investigation @relation(fields: [investigationId], references: [id], onDelete: Cascade)
+  
+  @@map("investigation_logs")
+}
+
+enum InvestigationStatus {
+  INITIALIZING
+  ENRICHING
+  SCANNING
+  CONSOLIDATING
+  COMPLETED
+  FAILED
+}
+
+enum IndicatorType {
+  NAME
+  EMAIL
+  USERNAME
+  PHONE
+  IP
+  DOMAIN
+  URL
+}
+
+enum LogLevel {
+  INFO
+  WARNING
+  ERROR
+  DEBUG
+}
