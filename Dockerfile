@@ -1,39 +1,65 @@
-FROM python:3.10-slim
+FROM node:18-slim
 
-# Installer les dépendances système
+# Installer les dépendances système nécessaires pour Prisma
 RUN apt-get update && apt-get install -y \
     git \
     curl \
-    build-essential \
+    python3 \
+    make \
+    g++ \
+    openssl \
+    ca-certificates \
+    procps \
     && rm -rf /var/lib/apt/lists/*
 
-# Créer un utilisateur non-root avec un UID/GID correspondant à l'hôte
-ARG UID=1000
-ARG GID=1000
-RUN groupadd -g $GID -o turbolehe || true
-RUN useradd -m -u $UID -g $GID -s /bin/bash turbolehe
+# Créer l'utilisateur et les répertoires avec les bonnes permissions
+RUN groupadd --gid 1001 app && \
+    useradd --uid 1001 --gid app --shell /bin/bash --create-home app
 
 # Définir le répertoire de travail
 WORKDIR /app
 
-# Copier les fichiers requirements
-COPY requirements.txt .
+# Créer les répertoires nécessaires avec les bonnes permissions
+RUN mkdir -p /app/logs /app/results /app/prisma && \
+    chown -R app:app /app && \
+    chmod -R 755 /app
 
-# Installer les dépendances Python
-RUN pip install --no-cache-dir -r requirements.txt
+# Copier d'abord les fichiers de configuration pour l'installation
+COPY package*.json ./
+COPY prisma ./prisma/
+
+# Changer vers l'utilisateur app pour l'installation
+USER app
+
+# Installer les dépendances Node.js
+RUN npm ci --only=production && \
+    npm cache clean --force
+
+# Générer le client Prisma avec les bons binaryTargets
+RUN npx prisma generate
+
+# Revenir à root pour copier les fichiers de l'application
+USER root
 
 # Copier le reste de l'application
-COPY --chown=turbolehe:turbolehe . .
+COPY --chown=app:app . .
 
-# Créer les répertoires nécessaires
-RUN mkdir -p /app/results /app/logs && \
-    chown -R turbolehe:turbolehe /app
+# Rendre le script de démarrage exécutable
+RUN chmod +x start-backend.sh
 
-# Changer vers l'utilisateur non-root
-USER turbolehe
+# S'assurer que tous les fichiers appartiennent à app
+RUN chown -R app:app /app && \
+    chmod -R 755 /app/logs /app/results
 
-# Exposer les ports
-EXPOSE 5000 8000
+# Changer définitivement vers l'utilisateur non-root
+USER app
 
-# Script de démarrage
-CMD ["python", "app.py"] 
+# Exposer le port
+EXPOSE 5001
+
+# Variables d'environnement pour Prisma
+ENV PRISMA_QUERY_ENGINE_LIBRARY=/app/node_modules/.prisma/client/libquery_engine-debian-openssl-3.0.x.so.node
+ENV PRISMA_QUERY_ENGINE_BINARY=/app/node_modules/.prisma/client/query-engine-debian-openssl-3.0.x
+
+# Script de démarrage amélioré
+CMD ["./start-backend.sh"] 

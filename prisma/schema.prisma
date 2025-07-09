@@ -2,7 +2,8 @@
 // learn more about it in the docs: https://pris.ly/d/prisma-schema
 
 generator client {
-  provider = "prisma-client-js"
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "debian-openssl-3.0.x", "linux-musl", "linux-musl-openssl-3.0.x"]
 }
 
 datasource db {
@@ -29,18 +30,19 @@ model Investigation {
 }
 
 model Indicator {
-  id             String          @id @default(cuid())
+  id              String        @id @default(cuid())
   investigationId String
-  type           IndicatorType
-  value          String
-  source         String?         // buster, mosint, maigret, phoneinfoga, spiderfoot
-  confidence     Float           @default(0.5)
-  verified       Boolean         @default(false)
-  createdAt      DateTime        @default(now())
-  
-  investigation  Investigation   @relation(fields: [investigationId], references: [id], onDelete: Cascade)
-  results        Result[]
-  
+  type            IndicatorType
+  value           String
+  source          String? // buster, mosint, maigret, phoneinfoga, spiderfoot
+  confidence      Float         @default(0.5)
+  verified        Boolean       @default(false)
+  processed       Boolean       @default(false) // Ajout pour le suivi du traitement
+  createdAt       DateTime      @default(now())
+
+  investigation Investigation @relation(fields: [investigationId], references: [id], onDelete: Cascade)
+  results       Result[]
+
   @@unique([investigationId, type, value])
   @@map("indicators")
 }
@@ -90,6 +92,9 @@ enum IndicatorType {
   IP
   DOMAIN
   URL
+  LOCATION
+  COUNTRY
+  ORGANIZATION
 }
 
 enum LogLevel {

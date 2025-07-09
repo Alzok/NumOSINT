@@ -37,7 +37,7 @@ export default function ActiveInvestigations() {
     loadInvestigations();
   }, [loadInvestigations]);
 
-  const activeInvestigations = investigations.filter(inv => 
+  const activeInvestigations = (investigations || []).filter(inv => 
     inv.status === 'INITIALIZING' || 
     inv.status === 'SCANNING' || 
     inv.status === 'ENRICHING'

@@ -1,15 +1,27 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { investigationAPI, InvestigationInput, Investigation, Indicator, Result, InvestigationLog } from '@/lib/investigation-api';
 import { useAppStore } from '@/lib/store';
+import { io, Socket } from 'socket.io-client';
 
-export function useInvestigation() {
+interface ProgressUpdate {
+  investigationId: string;
+  progress: number;
+  status: string;
+  currentStep: string;
+  message?: string;
+}
+
+export function useInvestigation(investigationId?: string) {
   const [isLoading, setIsLoading] = useState(false);
   const [currentInvestigation, setCurrentInvestigation] = useState<Investigation | null>(null);
   const [investigations, setInvestigations] = useState<Investigation[]>([]);
   const [indicators, setIndicators] = useState<Indicator[]>([]);
   const [results, setResults] = useState<Result[]>([]);
   const [logs, setLogs] = useState<InvestigationLog[]>([]);
+  const [isSocketConnected, setIsSocketConnected] = useState(false);
   
+  const socketRef = useRef<Socket | null>(null);
+
   const {
     addNotification,
     setLoading,
@@ -28,20 +40,12 @@ export function useInvestigation() {
       } else {
         setInvestigations([]);
         if (response.error) {
-          addNotification({ 
-            type: 'error', 
-            title: 'Erreur de chargement', 
-            message: response.error 
-          });
+          addNotification({ type: 'error', title: 'Erreur de chargement', message: response.error });
         }
       }
     } catch (error) {
       console.error('Erreur lors de la récupération des investigations:', error);
-      addNotification({ 
-        type: 'error', 
-        title: 'Erreur de chargement', 
-        message: 'Impossible de récupérer les investigations.' 
-      });
+      addNotification({ type: 'error', title: 'Erreur de chargement', message: 'Impossible de récupérer les investigations.' });
       setInvestigations([]);
     } finally {
       setLoading(false);
@@ -69,14 +73,8 @@ export function useInvestigation() {
       if (response.data) {
         setCurrentInvestigation(response.data);
         addSearchLog(`[${new Date().toLocaleTimeString()}] Investigation ${response.data.id} créée.`);
-        addNotification({ 
-          type: 'success', 
-          title: 'Investigation créée', 
-          message: `Investigation ${response.data.id} créée avec succès`, 
-          duration: 5000 
-        });
+        addNotification({ type: 'success', title: 'Investigation créée', message: `Investigation ${response.data.id} créée avec succès`, duration: 5000 });
         
-        // Recharger la liste des investigations
         await loadInvestigations();
         
         return response.data;
@@ -94,15 +92,15 @@ export function useInvestigation() {
   }, [addNotification, setLoading, clearSearchLogs, setSearchProgress, loadInvestigations]);
 
   // Démarrer une investigation
-  const startInvestigation = useCallback(async (investigationId: string) => {
+  const startInvestigation = useCallback(async (id: string) => {
     setIsLoading(true);
     setLoading(true);
     setSearchProgress(10);
     
-    addSearchLog(`[${new Date().toLocaleTimeString()}] Démarrage de l'investigation ${investigationId}...`);
+    addSearchLog(`[${new Date().toLocaleTimeString()}] Démarrage de l'investigation ${id}...`);
 
     try {
-      const response = await investigationAPI.startInvestigation(investigationId);
+      const response = await investigationAPI.startInvestigation(id);
       
       if (response.error) {
         addNotification({ type: 'error', title: 'Erreur', message: response.error });
@@ -111,16 +109,10 @@ export function useInvestigation() {
       }
 
       if (response.data) {
-        addSearchLog(`[${new Date().toLocaleTimeString()}] Investigation ${investigationId} démarrée.`);
-        addNotification({ 
-          type: 'success', 
-          title: 'Investigation démarrée', 
-          message: `Investigation ${investigationId} démarrée avec succès`, 
-          duration: 5000 
-        });
+        addSearchLog(`[${new Date().toLocaleTimeString()}] Investigation ${id} démarrée.`);
+        addNotification({ type: 'success', title: 'Investigation démarrée', message: `Investigation ${id} démarrée avec succès`, duration: 5000 });
         
-        // Mettre à jour le statut de l'investigation
-        await refreshInvestigation(investigationId);
+        await refreshInvestigation(id);
         
         return true;
       }
@@ -137,9 +129,9 @@ export function useInvestigation() {
   }, [addNotification, setLoading, setSearchProgress]);
 
   // Arrêter une investigation
-  const stopInvestigation = useCallback(async (investigationId: string) => {
+  const stopInvestigation = useCallback(async (id: string) => {
     try {
-      const response = await investigationAPI.stopInvestigation(investigationId);
+      const response = await investigationAPI.stopInvestigation(id);
       
       if (response.error) {
         addNotification({ type: 'error', title: 'Erreur', message: response.error });
@@ -147,16 +139,10 @@ export function useInvestigation() {
       }
 
       if (response.data) {
-        addSearchLog(`[${new Date().toLocaleTimeString()}] Investigation ${investigationId} arrêtée.`);
-        addNotification({ 
-          type: 'success', 
-          title: 'Investigation arrêtée', 
-          message: `Investigation ${investigationId} arrêtée avec succès`, 
-          duration: 5000 
-        });
+        addSearchLog(`[${new Date().toLocaleTimeString()}] Investigation ${id} arrêtée.`);
+        addNotification({ type: 'success', title: 'Investigation arrêtée', message: `Investigation ${id} arrêtée avec succès`, duration: 5000 });
         
-        // Mettre à jour le statut de l'investigation
-        await refreshInvestigation(investigationId);
+        await refreshInvestigation(id);
         
         return true;
       }
@@ -169,9 +155,9 @@ export function useInvestigation() {
   }, [addNotification]);
 
   // Supprimer une investigation
-  const deleteInvestigation = useCallback(async (investigationId: string) => {
+  const deleteInvestigation = useCallback(async (id: string) => {
     try {
-      const response = await investigationAPI.deleteInvestigation(investigationId);
+      const response = await investigationAPI.deleteInvestigation(id);
       
       if (response.error) {
         addNotification({ type: 'error', title: 'Erreur', message: response.error });
@@ -179,17 +165,11 @@ export function useInvestigation() {
       }
 
       if (response.data) {
-        addSearchLog(`[${new Date().toLocaleTimeString()}] Investigation ${investigationId} supprimée.`);
-        addNotification({ 
-          type: 'success', 
-          title: 'Investigation supprimée', 
-          message: `Investigation ${investigationId} supprimée avec succès`, 
-          duration: 5000 
-        });
+        addSearchLog(`[${new Date().toLocaleTimeString()}] Investigation ${id} supprimée.`);
+        addNotification({ type: 'success', title: 'Investigation supprimée', message: `Investigation ${id} supprimée avec succès`, duration: 5000 });
         
-        // Retirer de la liste et recharger
-        setInvestigations((prev: Investigation[]) => prev.filter((inv: Investigation) => inv.id !== investigationId));
-        if (currentInvestigation?.id === investigationId) {
+        setInvestigations((prev) => prev.filter((inv) => inv.id !== id));
+        if (currentInvestigation?.id === id) {
           setCurrentInvestigation(null);
         }
         
@@ -204,41 +184,31 @@ export function useInvestigation() {
   }, [addNotification, currentInvestigation]);
 
   // Charger une investigation spécifique
-  const loadInvestigation = useCallback(async (investigationId: string) => {
+  const loadInvestigation = useCallback(async (id: string) => {
     setLoading(true);
     try {
-      const response = await investigationAPI.getInvestigation(investigationId);
+      const response = await investigationAPI.getInvestigation(id);
       if (response.data) {
         setCurrentInvestigation(response.data);
         
-        // Charger les indicateurs, résultats et logs
         await Promise.all([
-          loadIndicators(investigationId),
-          loadResults(investigationId),
-          loadLogs(investigationId)
+          loadIndicators(id),
+          loadResults(id),
+          loadLogs(id)
         ]);
         
-        // Mettre à jour la progression
         setSearchProgress(response.data.progress);
         
         return response.data;
       } else {
         setCurrentInvestigation(null);
         if (response.error) {
-          addNotification({ 
-            type: 'error', 
-            title: 'Erreur de chargement', 
-            message: response.error 
-          });
+          addNotification({ type: 'error', title: 'Erreur de chargement', message: response.error });
         }
       }
     } catch (error) {
       console.error('Erreur lors de la récupération de l\'investigation:', error);
-      addNotification({ 
-        type: 'error', 
-        title: 'Erreur de chargement', 
-        message: 'Impossible de récupérer l\'investigation.' 
-      });
+      addNotification({ type: 'error', title: 'Erreur de chargement', message: 'Impossible de récupérer l\'investigation.' });
       setCurrentInvestigation(null);
     } finally {
       setLoading(false);
@@ -247,69 +217,50 @@ export function useInvestigation() {
     return null;
   }, [setLoading, addNotification, setSearchProgress]);
 
-  // Rafraîchir une investigation
-  const refreshInvestigation = useCallback(async (investigationId: string) => {
+  // Rafraîchir une investigation (utilisé par les actions manuelles)
+  const refreshInvestigation = useCallback(async (id: string) => {
     try {
-      const response = await investigationAPI.getInvestigation(investigationId);
+      const response = await investigationAPI.getInvestigation(id);
       if (response.data) {
         setCurrentInvestigation(response.data);
         setSearchProgress(response.data.progress);
-        
-        // Mettre à jour la liste des investigations
-        setInvestigations((prev: Investigation[]) => 
-          prev.map((inv: Investigation) => inv.id === investigationId ? response.data! : inv)
-        );
-        
+        setInvestigations((prev) => prev.map((inv) => inv.id === id ? response.data! : inv));
         return response.data;
       }
     } catch (error) {
       console.error('Erreur lors du rafraîchissement de l\'investigation:', error);
     }
-
     return null;
   }, [setSearchProgress]);
 
-  // Charger les indicateurs d'une investigation
-  const loadIndicators = useCallback(async (investigationId: string) => {
+  const loadIndicators = useCallback(async (id: string) => {
     try {
-      const response = await investigationAPI.getIndicators(investigationId);
-      if (response.data) {
-        setIndicators(response.data);
-      } else {
-        setIndicators([]);
-      }
+      const response = await investigationAPI.getIndicators(id);
+      if (response.data) setIndicators(response.data);
+      else setIndicators([]);
     } catch (error) {
       console.error('Erreur lors de la récupération des indicateurs:', error);
       setIndicators([]);
     }
   }, []);
 
-  // Charger les résultats d'une investigation
-  const loadResults = useCallback(async (investigationId: string) => {
+  const loadResults = useCallback(async (id: string) => {
     try {
-      const response = await investigationAPI.getResults(investigationId);
-      if (response.data) {
-        setResults(response.data);
-      } else {
-        setResults([]);
-      }
+      const response = await investigationAPI.getResults(id);
+      if (response.data) setResults(response.data);
+      else setResults([]);
     } catch (error) {
       console.error('Erreur lors de la récupération des résultats:', error);
       setResults([]);
     }
   }, []);
 
-  // Charger les logs d'une investigation
-  const loadLogs = useCallback(async (investigationId: string) => {
+  const loadLogs = useCallback(async (id: string) => {
     try {
-      const response = await investigationAPI.getLogs(investigationId);
+      const response = await investigationAPI.getLogs(id);
       if (response.data) {
         setLogs(response.data);
-        
-        // Ajouter les nouveaux logs à l'interface
-        response.data.forEach(log => {
-          addSearchLog(`[${new Date(log.timestamp).toLocaleTimeString()}] ${log.message}`);
-        });
+        response.data.forEach(log => addSearchLog(`[${new Date(log.timestamp).toLocaleTimeString()}] ${log.message}`));
       } else {
         setLogs([]);
       }
@@ -319,32 +270,57 @@ export function useInvestigation() {
     }
   }, [addSearchLog]);
 
-  // Charger les résultats par outil
-  const loadResultsByTool = useCallback(async (investigationId: string, toolSource: string) => {
-    try {
-      const response = await investigationAPI.getResultsByTool(investigationId, toolSource);
-      if (response.data) {
-        return response.data;
-      }
-    } catch (error) {
-      console.error('Erreur lors de la récupération des résultats par outil:', error);
-    }
-
-    return [];
-  }, []);
-
-  // Polling pour mettre à jour l'investigation en cours
+  // Gestion de la connexion Socket.IO
   useEffect(() => {
-    if (!currentInvestigation || currentInvestigation.status === 'COMPLETED' || currentInvestigation.status === 'FAILED') {
-      return;
-    }
+    if (!investigationId) return;
 
-    const interval = setInterval(async () => {
-      await refreshInvestigation(currentInvestigation.id);
-    }, 2000); // Mise à jour toutes les 2 secondes
+    const socket = io(process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5001');
+    socketRef.current = socket;
 
-    return () => clearInterval(interval);
-  }, [currentInvestigation, refreshInvestigation]);
+    socket.on('connect', () => {
+      setIsSocketConnected(true);
+      socket.emit('join_investigation', investigationId);
+    });
+
+    socket.on('disconnect', () => {
+      setIsSocketConnected(false);
+    });
+
+    socket.on('investigation:progress', (data: ProgressUpdate) => {
+      if (data.investigationId === investigationId) {
+        setCurrentInvestigation(prev => prev ? { ...prev, status: data.status as Investigation['status'], progress: data.progress, currentStep: data.currentStep } : null);
+        setSearchProgress(data.progress);
+      }
+    });
+
+    socket.on('investigation:log', (log: InvestigationLog) => {
+      if (log.investigationId === investigationId) {
+        setLogs(prev => [...prev, log]);
+      }
+    });
+    
+    socket.on('investigation:new_indicator', (indicator: Indicator) => {
+        if (indicator.investigationId === investigationId) {
+            setIndicators(prev => [...prev, indicator]);
+        }
+    });
+
+    socket.on('investigation:new_result', (result: Result) => {
+        if (result.investigationId === investigationId) {
+            setResults(prev => [...prev, result]);
+        }
+    });
+
+    socket.on('investigation:completed', (data: { investigationId: string }) => {
+      if (data.investigationId === investigationId) {
+        refreshInvestigation(investigationId);
+      }
+    });
+
+    return () => {
+      socket.disconnect();
+    };
+  }, [investigationId, refreshInvestigation, setSearchProgress]);
 
   // Charger les données initiales
   useEffect(() => {
@@ -352,25 +328,18 @@ export function useInvestigation() {
   }, [loadInvestigations]);
 
   return {
-    // État
     currentInvestigation,
     investigations,
     indicators,
     results,
     logs,
     isLoading,
-    
-    // Actions
+    isSocketConnected,
     createInvestigation,
     startInvestigation,
     stopInvestigation,
     deleteInvestigation,
     loadInvestigation,
-    refreshInvestigation,
     loadInvestigations,
-    loadIndicators,
-    loadResults,
-    loadLogs,
-    loadResultsByTool,
   };
 }

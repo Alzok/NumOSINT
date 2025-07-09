@@ -9,60 +9,65 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { 
-  ArrowLeft, 
-  Play, 
-  Square, 
-  Trash2, 
-  Clock, 
-  CheckCircle, 
-  XCircle, 
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import {
+  ArrowLeft,
+  Play,
+  Square,
+  Trash2,
+  Clock,
+  CheckCircle,
+  XCircle,
   Loader2,
   RefreshCw,
   FileText,
   Search,
   Activity,
-  AlertCircle
+  AlertCircle,
+  Mail,
+  User,
+  Phone,
+  Globe,
+  Wifi,
+  WifiOff,
+  Info
 } from 'lucide-react';
 import { useInvestigation } from '@/hooks/useInvestigation';
 import { useAppStore } from '@/lib/store';
 import { Investigation, Indicator, Result, InvestigationLog } from '@/lib/investigation-api';
+import EmailAnalysisView from '@/components/Investigation/EmailAnalysisView';
+import UsernameAnalysisView from '@/components/Investigation/UsernameAnalysisView';
+import PhoneAnalysisView from '@/components/Investigation/PhoneAnalysisView';
+import ComprehensiveReportView from '@/components/Investigation/ComprehensiveReportView';
+import RealTimeNotifications from '@/components/Investigation/RealTimeNotifications';
+import InvestigationReportView from '@/components/Investigation/InvestigationReportView';
 
 export default function InvestigationDetailPage() {
   const router = useRouter();
   const { id } = router.query;
-  
-  const { 
+  const investigationId = typeof id === 'string' ? id : undefined;
+
+  const {
     currentInvestigation,
-    indicators, 
-    results, 
+    indicators,
+    results,
     logs,
     isLoading,
+    isSocketConnected,
     loadInvestigation,
     startInvestigation,
     stopInvestigation,
     deleteInvestigation,
-    loadIndicators,
-    loadResults,
-    loadLogs
-  } = useInvestigation();
+  } = useInvestigation(investigationId);
   
   const { addNotification } = useAppStore();
   const [activeTab, setActiveTab] = useState('overview');
 
   useEffect(() => {
-    if (id && typeof id === 'string') {
-      loadInvestigation(id);
+    if (investigationId) {
+      loadInvestigation(investigationId);
     }
-  }, [id, loadInvestigation]);
-
-  useEffect(() => {
-    if (currentInvestigation) {
-      loadIndicators(currentInvestigation.id);
-      loadResults(currentInvestigation.id);
-      loadLogs(currentInvestigation.id);
-    }
-  }, [currentInvestigation, loadIndicators, loadResults, loadLogs]);
+  }, [investigationId, loadInvestigation]);
 
   const handleStartInvestigation = async () => {
     if (!currentInvestigation) return;
@@ -153,7 +158,100 @@ export default function InvestigationDetailPage() {
     }
   };
 
-  if (!currentInvestigation) {
+  const isAnalysisRunning = currentInvestigation?.status === 'SCANNING' || currentInvestigation?.status === 'ENRICHING';
+
+  // Filtrer les résultats par type d'outil
+  const emailResults = results.filter(result => result.toolSource.toLowerCase() === 'mosint');
+  const usernameResults = results.filter(result => result.toolSource.toLowerCase() === 'maigret');
+  const phoneResults = results.filter(result => result.toolSource.toLowerCase() === 'phoneinfoga');
+  const comprehensiveResults = results.filter(result => result.toolSource.toLowerCase() === 'spiderfoot');
+
+  // Transformer les résultats pour les vues spécialisées
+  const transformEmailResults = (results: Result[]) => {
+    return results.map(result => ({
+      email: result.data?.email || '',
+      breaches: result.data?.breaches || [],
+      reputation: result.data?.reputation || { score: 0, status: 'clean' as const, sources: [] },
+      social_profiles: result.data?.social_profiles || [],
+      metadata: result.data?.metadata || {
+        domain: '',
+        mx_records: [],
+        created_at: '',
+        last_seen: ''
+      }
+    }));
+  };
+
+  const transformUsernameResults = (results: Result[]) => {
+    return results.map(result => ({
+      search_username: result.data?.search_username || result.data?.username || '',
+      username_variations: result.data?.username_variations || [],
+      found_profiles: result.data?.found_profiles || result.data?.accounts || [],
+      related_usernames: result.data?.related_usernames || [],
+      statistics: result.data?.statistics || {
+        total_sites: 0,
+        found_sites: 0,
+        success_rate: 0,
+        by_category: {},
+        by_country: {},
+        top_platforms: []
+      }
+    }));
+  };
+
+  const transformPhoneResults = (results: Result[]) => {
+    return results.map(result => ({
+      phone_number: result.data?.phone_number || '',
+      country_info: result.data?.country_info || {
+        name: result.data?.country || '',
+        code: '',
+        calling_code: ''
+      },
+      carrier_info: result.data?.carrier_info || {
+        name: result.data?.carrier || '',
+        type: '',
+        country: ''
+      },
+      location_info: result.data?.location_info || result.data?.location || {},
+      validation: result.data?.validation || { is_valid: true, type: 'mobile' },
+      risk_assessment: result.data?.risk_assessment || {
+        score: 0,
+        level: 'low',
+        factors: []
+      },
+      social_media: result.data?.social_media || [],
+      metadata: result.data?.metadata || {}
+    }));
+  };
+
+  const transformComprehensiveResults = (results: Result[]) => {
+    return results.map(result => ({
+      scan_id: result.id,
+      target: result.data?.target || '',
+      start_time: result.createdAt,
+      end_time: result.createdAt,
+      duration: 0,
+      modules: result.data?.modules || [],
+      findings: result.data?.findings || [],
+      total_findings: result.data?.total_findings || 0,
+      high_risk_findings: result.data?.high_risk_findings || 0,
+      summary: result.data?.summary || {},
+      recommendations: result.data?.recommendations || [],
+      statistics: result.data?.statistics || {
+        total_modules: 0,
+        successful_modules: 0,
+        failed_modules: 0,
+        execution_time: 0
+      },
+      risk_assessment: result.data?.risk_assessment || {
+        overall_risk: 'low',
+        risk_factors: [],
+        mitigation_suggestions: []
+      }
+    }));
+  };
+
+  if (isLoading && !currentInvestigation) {
     return (
       <SidebarProvider defaultOpen={false}>
         <AppSidebar variant="sidebar" collapsible="icon" />
@@ -165,6 +263,27 @@ export default function InvestigationDetailPage() {
       </SidebarProvider>
     );
   }
+  
+  if (!currentInvestigation) {
+      return (
+      <SidebarProvider defaultOpen={false}>
+        <AppSidebar variant="sidebar" collapsible="icon" />
+        <SidebarInset>
+          <div className="flex flex-col items-center justify-center h-screen">
+            <AlertCircle className="h-12 w-12 text-red-500 mb-4" />
+            <h2 className="text-xl font-semibold mb-2">Investigation non trouvée</h2>
+            <p className="text-muted-foreground mb-4">L'investigation que vous cherchez n'existe pas ou a été supprimée.</p>
+            <Button onClick={() => router.push('/investigations')}>
+              <ArrowLeft className="h-4 w-4 mr-2" />
+              Retour à la liste
+            </Button>
+          </div>
+        </SidebarInset>
+      </SidebarProvider>
+    );
+  }
+
+  const analysisCardClass = isAnalysisRunning ? "border-blue-500 border-2 animate-pulse" : "";
 
   return (
     <SidebarProvider
@@ -199,22 +318,54 @@ export default function InvestigationDetailPage() {
                 </div>
               </div>
               <div className="flex items-center gap-2">
+                <Badge variant={isSocketConnected ? "default" : "destructive"}>
+                  {isSocketConnected ? <Wifi className="h-3 w-3 mr-1" /> : <WifiOff className="h-3 w-3 mr-1" />}
+                  {isSocketConnected ? 'Connecté' : 'Déconnecté'}
+                </Badge>
                 {getStatusBadge(currentInvestigation.status)}
-                <Button onClick={() => loadInvestigation(currentInvestigation.id)} disabled={isLoading}>
-                  <RefreshCw className="h-4 w-4 mr-2" />
-                  Actualiser
-                </Button>
               </div>
             </div>
           </div>
 
+          {isAnalysisRunning && (
+            <div className="px-4 lg:px-6">
+              <Alert className="border-blue-500 bg-blue-50 text-blue-800">
+                <Info className="h-4 w-4 !text-blue-800" />
+                <AlertTitle>Analyse en cours</AlertTitle>
+                <AlertDescription>
+                  Les résultats s'affichent en temps réel. De nouvelles informations peuvent apparaître à tout moment.
+                </AlertDescription>
+              </Alert>
+            </div>
+          )}
+
           <div className="px-4 lg:px-6">
             <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-              <TabsList>
+              <TabsList className="grid w-full grid-cols-8">
                 <TabsTrigger value="overview">Vue d'ensemble</TabsTrigger>
                 <TabsTrigger value="indicators">Indicateurs ({indicators.length})</TabsTrigger>
                 <TabsTrigger value="results">Résultats ({results.length})</TabsTrigger>
+                <TabsTrigger value="email-analysis">
+                  <Mail className="h-4 w-4 mr-1" />
+                  Emails ({emailResults.length})
+                </TabsTrigger>
+                <TabsTrigger value="username-analysis">
+                  <User className="h-4 w-4 mr-1" />
+                  Usernames ({usernameResults.length})
+                </TabsTrigger>
+                <TabsTrigger value="phone-analysis">
+                  <Phone className="h-4 w-4 mr-1" />
+                  Téléphones ({phoneResults.length})
+                </TabsTrigger>
+                <TabsTrigger value="comprehensive-analysis">
+                  <Globe className="h-4 w-4 mr-1" />
+                  Complet ({comprehensiveResults.length})
+                </TabsTrigger>
                 <TabsTrigger value="logs">Logs ({logs.length})</TabsTrigger>
+                <TabsTrigger value="report" disabled={currentInvestigation.status !== 'COMPLETED'}>
+                  <FileText className="h-4 w-4 mr-1" />
+                  Rapport
+                </TabsTrigger>
               </TabsList>
 
               <TabsContent value="overview" className="space-y-4">
@@ -251,7 +402,7 @@ export default function InvestigationDetailPage() {
                     <CardContent>
                       <div className="text-2xl font-bold">{indicators.length}</div>
                       <p className="text-xs text-muted-foreground">
-                        Analysés
+                        Trouvés
                       </p>
                     </CardContent>
                   </Card>
@@ -263,7 +414,7 @@ export default function InvestigationDetailPage() {
                     <CardContent>
                       <div className="text-2xl font-bold">{results.length}</div>
                       <p className="text-xs text-muted-foreground">
-                        Trouvés
+                        Générés
                       </p>
                     </CardContent>
                   </Card>
@@ -282,7 +433,7 @@ export default function InvestigationDetailPage() {
                         </Button>
                       )}
                       
-                      {(currentInvestigation.status === 'SCANNING' || currentInvestigation.status === 'ENRICHING') && (
+                      {isAnalysisRunning && (
                         <Button onClick={handleStopInvestigation} variant="destructive" className="w-full">
                           <Square className="h-4 w-4 mr-2" />
                           Arrêter l'investigation
@@ -337,7 +488,7 @@ export default function InvestigationDetailPage() {
                   </CardHeader>
                   <CardContent>
                     {indicators.length === 0 ? (
-                      <p className="text-muted-foreground">Aucun indicateur trouvé</p>
+                      <p className="text-muted-foreground">Aucun indicateur trouvé pour le moment...</p>
                     ) : (
                       <div className="space-y-2">
                         {indicators.map((indicator) => (
@@ -365,11 +516,11 @@ export default function InvestigationDetailPage() {
               <TabsContent value="results" className="space-y-4">
                 <Card>
                   <CardHeader>
-                    <CardTitle>Résultats trouvés</CardTitle>
+                    <CardTitle>Résultats bruts</CardTitle>
                   </CardHeader>
                   <CardContent>
                     {results.length === 0 ? (
-                      <p className="text-muted-foreground">Aucun résultat trouvé</p>
+                      <p className="text-muted-foreground">Aucun résultat trouvé pour le moment...</p>
                     ) : (
                       <div className="space-y-2">
                         {results.map((result) => (
@@ -396,36 +547,79 @@ export default function InvestigationDetailPage() {
                 </Card>
               </TabsContent>
 
-              <TabsContent value="logs" className="space-y-4">
-                <Card>
+              <TabsContent value="email-analysis" className="space-y-4">
+                <Card className={analysisCardClass}>
                   <CardHeader>
-                    <CardTitle>Logs d'exécution</CardTitle>
+                    <CardTitle>Analyse des emails (Mosint)</CardTitle>
                   </CardHeader>
                   <CardContent>
-                    {logs.length === 0 ? (
-                      <p className="text-muted-foreground">Aucun log disponible</p>
+                    {emailResults.length === 0 ? (
+                      <p className="text-muted-foreground">Aucun résultat d'email disponible pour le moment...</p>
                     ) : (
-                      <div className="space-y-2 max-h-96 overflow-y-auto">
-                        {logs.map((log) => (
-                          <div key={log.id} className="flex items-start gap-3 p-2 border rounded">
-                            <div className="flex-shrink-0">
-                              <Badge variant={log.level === 'ERROR' ? 'destructive' : log.level === 'WARNING' ? 'default' : 'outline'}>
-                                {log.level}
-                              </Badge>
-                            </div>
-                            <div className="flex-1">
-                              <p className="text-sm font-medium">{log.step}</p>
-                              <p className="text-sm text-muted-foreground">{log.message}</p>
-                              <p className="text-xs text-muted-foreground">
-                                {formatDate(log.timestamp)}
-                              </p>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
+                      <EmailAnalysisView data={transformEmailResults(emailResults)} />
                     )}
                   </CardContent>
                 </Card>
+              </TabsContent>
+
+              <TabsContent value="username-analysis" className="space-y-4">
+                <Card className={analysisCardClass}>
+                  <CardHeader>
+                    <CardTitle>Analyse des noms d'utilisateur (Maigret)</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    {usernameResults.length === 0 ? (
+                      <p className="text-muted-foreground">Aucun résultat de nom d'utilisateur disponible pour le moment...</p>
+                    ) : (
+                      <UsernameAnalysisView data={transformUsernameResults(usernameResults)} />
+                    )}
+                  </CardContent>
+                </Card>
+              </TabsContent>
+
+              <TabsContent value="phone-analysis" className="space-y-4">
+                <Card className={analysisCardClass}>
+                  <CardHeader>
+                    <CardTitle>Analyse des téléphones (PhoneInfoga)</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    {phoneResults.length === 0 ? (
+                      <p className="text-muted-foreground">Aucun résultat de téléphone disponible pour le moment...</p>
+                    ) : (
+                      <PhoneAnalysisView data={transformPhoneResults(phoneResults)} />
+                    )}
+                  </CardContent>
+                </Card>
+              </TabsContent>
+
+              <TabsContent value="comprehensive-analysis" className="space-y-4">
+                <Card className={analysisCardClass}>
+                  <CardHeader>
+                    <CardTitle>Analyse complète (SpiderFoot)</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    {comprehensiveResults.length === 0 ? (
+                      <p className="text-muted-foreground">Aucun résultat complet disponible pour le moment...</p>
+                    ) : (
+                      <ComprehensiveReportView data={transformComprehensiveResults(comprehensiveResults)} />
+                    )}
+                  </CardContent>
+                </Card>
+              </TabsContent>
+
+              <TabsContent value="logs" className="space-y-4">
+                <RealTimeNotifications
+                  logs={logs}
+                  investigationId={currentInvestigation.id}
+                />
+              </TabsContent>
+
+              <TabsContent value="report" className="space-y-4">
+                <InvestigationReportView
+                  investigation={currentInvestigation}
+                  results={results}
+                  indicators={indicators}
+                />
               </TabsContent>
             </Tabs>
           </div>

@@ -1,6 +1,6 @@
 import axios, { AxiosResponse, AxiosError } from 'axios';
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5001';
 
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -59,6 +59,11 @@ export interface Result {
   data: any;
   score: number;
   createdAt: string;
+  investigation?: {
+    id: string;
+    inputData: any;
+  };
+  indicator?: Indicator;
 }
 
 export interface InvestigationLog {
@@ -66,8 +71,14 @@ export interface InvestigationLog {
   investigationId: string;
   step: string;
   message: string;
-  level: 'INFO' | 'WARNING' | 'ERROR' | 'DEBUG';
+  level: 'INFO' | 'WARNING' | 'ERROR' | 'SUCCESS' | 'DEBUG';
   timestamp: string;
+  metadata?: {
+    progress?: number;
+    tool?: string;
+    duration?: number;
+    count?: number;
+  };
 }
 
 export interface ToolInfo {
@@ -97,9 +108,30 @@ export interface ToolStatus {
   };
 }
 
+export interface PaginationInfo {
+  page: number;
+  limit: number;
+  total: number;
+  totalPages: number;
+  hasNext: boolean;
+  hasPrev: boolean;
+}
+
+export interface PaginatedResponse<T> {
+  data: T[];
+  pagination: PaginationInfo;
+}
+
 export interface ApiResponse<T> {
   data?: T;
   error?: string;
+}
+
+export interface GlobalStats {
+  totalInvestigations: number;
+  totalResults: number;
+  resultsByTool: { toolSource: string; count: number }[];
+  indicatorsByType: { type: string; count: number }[];
 }
 
 export const investigationAPI = {
@@ -125,7 +157,7 @@ export const investigationAPI = {
   listInvestigations: async (): Promise<ApiResponse<Investigation[]>> => {
     try {
       const response = await api.get('/api/investigations');
-      return { data: response.data };
+      return { data: response.data.investigations || [] };
     } catch (error: any) {
       return { error: error.response?.data?.error || 'Erreur lors de la récupération des investigations' };
     }
@@ -184,6 +216,24 @@ export const investigationAPI = {
       return { data: response.data };
     } catch (error: any) {
       return { error: error.response?.data?.error || 'Erreur lors de la récupération des résultats' };
+    }
+  },
+
+  getAllResults: async (params: { page?: number; limit?: number; sortBy?: string; sortOrder?: string; toolSource?: string; indicatorType?: string; }): Promise<ApiResponse<PaginatedResponse<Result>>> => {
+    try {
+      const response = await api.get('/api/results', { params });
+      return { data: { data: response.data.results, pagination: response.data.pagination } };
+    } catch (error: any) {
+      return { error: error.response?.data?.error || 'Erreur lors de la récupération de tous les résultats' };
+    }
+  },
+
+  getRecentResults: async (limit: number = 10): Promise<ApiResponse<Result[]>> => {
+    try {
+      const response = await api.get(`/api/results/recent?limit=${limit}`);
+      return { data: response.data.results || [] };
+    } catch (error: any) {
+      return { error: error.response?.data?.error || 'Erreur lors de la récupération des résultats récents' };
     }
   },
 
@@ -295,6 +345,16 @@ export const investigationAPI = {
       return { data: response.data };
     } catch (error: any) {
       return { error: error.response?.data?.error || 'Service non vivant' };
+    }
+  },
+
+  // Statistiques
+  getGlobalStats: async (): Promise<ApiResponse<GlobalStats>> => {
+    try {
+      const response = await api.get('/api/statistics');
+      return { data: response.data };
+    } catch (error: any) {
+      return { error: error.response?.data?.error || 'Erreur lors de la récupération des statistiques globales' };
     }
   },
 };

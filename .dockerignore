@@ -2,6 +2,12 @@
 .git
 .gitignore
 
+# Node.js
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
 # Python
 __pycache__
 *.pyc
@@ -52,6 +58,9 @@ Dockerfile
 docker-compose.yml
 .dockerignore
 
-# Scripts de développement
+# Scripts de développement (sauf start-backend.sh)
 start.sh
-*.sh 
+setup.sh
+final-check.sh
+test-setup.sh
+!start-backend.sh 

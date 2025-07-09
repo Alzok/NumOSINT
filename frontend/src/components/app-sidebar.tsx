@@ -20,8 +20,8 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const navItems = [
     { href: '/', icon: <Search className="h-5 w-5" />, label: 'Accueil' },
     { href: '/investigations', icon: <FolderOpen className="h-5 w-5" />, label: 'Investigations' },
-    { href: '#stats-section', icon: <BarChart2 className="h-5 w-5" />, label: 'Statistiques' },
-    { href: '#results-section', icon: <Table className="h-5 w-5" />, label: 'Résultats' },
+    { href: '/statistics', icon: <BarChart2 className="h-5 w-5" />, label: 'Statistiques' },
+    { href: '/results', icon: <Table className="h-5 w-5" />, label: 'Résultats' },
   ];
 
   const secondaryNav = [

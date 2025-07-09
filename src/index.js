@@ -17,12 +17,14 @@ const { setupOrchestrator } = require('./services/orchestrator');
 const investigationRoutes = require('./routes/investigations');
 const toolRoutes = require('./routes/tools');
 const healthRoutes = require('./routes/health');
+const resultsRoutes = require('./routes/results');
+const statisticsRoutes = require('./routes/statistics');
 
 const app = express();
 const server = createServer(app);
 const io = new Server(server, {
   cors: {
-    origin: process.env.FRONTEND_URL || "http://localhost:3000",
+    origin: ["http://localhost:3001", "http://frontend:3001"],
     methods: ["GET", "POST"]
   }
 });
@@ -31,7 +33,7 @@ const io = new Server(server, {
 const prisma = new PrismaClient();
 
 // Configuration de base
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 5001;
 const NODE_ENV = process.env.NODE_ENV || 'development';
 
 // Middleware de sécurité
@@ -59,7 +61,7 @@ app.use('/api/', limiter);
 // Middleware de base
 app.use(compression());
 app.use(cors({
-  origin: process.env.FRONTEND_URL || "http://localhost:3000",
+  origin: ["http://localhost:3001", "http://frontend:3001"],
   credentials: true
 }));
 app.use(morgan('combined', { stream: { write: message => logger.info(message.trim()) } }));
@@ -73,6 +75,8 @@ setupSocketIO(io);
 app.use('/api/investigations', investigationRoutes);
 app.use('/api/tools', toolRoutes);
 app.use('/api/health', healthRoutes);
+app.use('/api/results', resultsRoutes);
+app.use('/api/statistics', statisticsRoutes);
 
 // Route racine
 app.get('/', (req, res) => {
@@ -110,7 +114,8 @@ async function initializeApp() {
     logger.info('✅ Connexion à PostgreSQL établie');
 
     // Initialisation de l'orchestrateur
-    await setupOrchestrator(prisma, io);
+    const orchestrator = await setupOrchestrator(prisma, io);
+    app.locals.orchestrator = orchestrator;
     logger.info('✅ Orchestrateur initialisé');
 
     // Démarrage du serveur
@@ -118,7 +123,7 @@ async function initializeApp() {
       logger.info(`🚀 Serveur NumOSINT démarré sur le port ${PORT}`);
       logger.info(`📊 Environnement: ${NODE_ENV}`);
       logger.info(`🔗 API disponible sur: http://localhost:${PORT}`);
-      logger.info(`🔗 Frontend attendu sur: ${process.env.FRONTEND_URL || 'http://localhost:3000'}`);
+      logger.info(`🔗 Frontend attendu sur: http://localhost:3001`);
     });
 
   } catch (error) {
