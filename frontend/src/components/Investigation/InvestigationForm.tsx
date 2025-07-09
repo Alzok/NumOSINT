@@ -5,6 +5,8 @@ import { Search, Loader2, Plus, X, Target, AlertCircle, User, AtSign, Mail, Phon
 import { motion, AnimatePresence } from 'framer-motion';
 import { InvestigationInput } from '@/lib/investigation-api';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import Dither from '@/components/ui/Dither';
+import '@/components/ui/Dither.css';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -112,7 +114,7 @@ export default function InvestigationForm({ onSubmit, isLoading = false }: Inves
         </Label>
         
         {sectionFields.map((field, index) => (
-          <div key={field.id} className="flex gap-2">
+          <div key={field.id} className="flex items-center gap-2">
             <Input
               type="text"
               placeholder={placeholder}
@@ -121,33 +123,34 @@ export default function InvestigationForm({ onSubmit, isLoading = false }: Inves
               disabled={isLoading}
               className="flex-1"
             />
-            {sectionFields.length > 1 ? (
-              <Button
-                type="button"
-                onClick={() => removeField(type, field.id)}
-                disabled={isLoading}
-                size="icon"
-                variant="ghost"
-                className="hover:bg-red-100 hover:text-red-600"
-              >
-                <X className="h-4 w-4" />
-              </Button>
-            ) : (
-              <div style={{ width: '40px' }} /> // Placeholder to keep alignment
-            )}
+            <div className="flex items-center gap-1">
+              {sectionFields.length > 1 && (
+                <Button
+                  type="button"
+                  onClick={() => removeField(type, field.id)}
+                  disabled={isLoading}
+                  size="icon"
+                  variant="ghost"
+                  className="h-8 w-8 hover:bg-red-100 hover:text-red-600"
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              )}
+              {index === sectionFields.length - 1 && (
+                <Button
+                  type="button"
+                  onClick={() => addField(type)}
+                  disabled={isLoading}
+                  size="icon"
+                  variant="ghost"
+                  className="h-8 w-8 hover:bg-green-100 hover:text-green-600"
+                >
+                  <Plus className="h-4 w-4" />
+                </Button>
+              )}
+            </div>
           </div>
         ))}
-        
-        <Button
-          type="button"
-          onClick={() => addField(type)}
-          disabled={isLoading}
-          variant="outline"
-          className="w-full"
-        >
-          <Plus className="h-4 w-4 mr-2" />
-          Ajouter un champ {label.toLowerCase()}
-        </Button>
       </div>
     );
   };
@@ -156,24 +159,40 @@ export default function InvestigationForm({ onSubmit, isLoading = false }: Inves
 
   return (
     <div className="w-full">
-      <Card className="shadow-lg border-2 hover:shadow-xl transition-all duration-300">
-        <CardHeader 
-          className="text-center space-y-2 cursor-pointer"
-          onClick={() => setIsExpanded(!isExpanded)}
-        >
-          <CardTitle className="text-2xl font-bold flex items-center justify-center gap-3">
-            <Target className="h-7 w-7 text-blue-600" />
-            Nouvelle Investigation OSINT
-            <div className="ml-auto">
-              {isExpanded ? <ChevronUp className="h-6 w-6" /> : <ChevronDown className="h-6 w-6" />}
-            </div>
-          </CardTitle>
-          {!isExpanded && totalIndicators > 0 && (
-             <p className="text-muted-foreground">
-              {totalIndicators} indicateur{totalIndicators > 1 ? 's' : ''} prêt{totalIndicators > 1 ? 's' : ''} à être investigué{totalIndicators > 1 ? 's' : ''}.
-            </p>
-          )}
-        </CardHeader>
+      <Card className="shadow-lg border-2 hover:shadow-xl transition-all duration-300 overflow-hidden">
+        <div className="relative">
+          <div className="absolute inset-0 z-0">
+            <Dither
+              waveColor={[0.5, 0.5, 0.5]}
+              colorNum={3}
+              waveAmplitude={0.44}
+              waveFrequency={2}
+              disableAnimation={true}
+              waveSpeed={0.02}
+              enableMouseInteraction={true}
+              mouseRadius={0.5}
+            />
+          </div>
+          <div className="relative z-10 bg-transparent">
+            <CardHeader
+              className="text-center space-y-2 cursor-pointer"
+              onClick={() => setIsExpanded(!isExpanded)}
+            >
+              <CardTitle className="text-2xl font-bold flex items-center justify-center gap-3">
+                <Target className="h-7 w-7 text-blue-600" />
+                Nouvelle Investigation OSINT
+                <div className="ml-auto">
+                  {isExpanded ? <ChevronUp className="h-6 w-6" /> : <ChevronDown className="h-6 w-6" />}
+                </div>
+              </CardTitle>
+              {!isExpanded && totalIndicators > 0 && (
+                 <p className="text-muted-foreground">
+                  {totalIndicators} indicateur{totalIndicators > 1 ? 's' : ''} prêt{totalIndicators > 1 ? 's' : ''} à être investigué{totalIndicators > 1 ? 's' : ''}.
+                </p>
+              )}
+            </CardHeader>
+          </div>
+        </div>
         
         <AnimatePresence>
           {isExpanded && (

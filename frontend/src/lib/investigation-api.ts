@@ -1,4 +1,5 @@
 import axios, { AxiosResponse, AxiosError } from 'axios';
+import { PersonResult } from '@/types';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5001';
 
@@ -234,6 +235,14 @@ export const investigationAPI = {
       return { data: response.data.results || [] };
     } catch (error: any) {
       return { error: error.response?.data?.error || 'Erreur lors de la récupération des résultats récents' };
+    }
+  },
+getGroupedResults: async (): Promise<ApiResponse<{ persons: PersonResult[] }>> => {
+    try {
+      const response = await api.get('/api/results/grouped');
+      return { data: response.data };
+    } catch (error: any) {
+      return { error: error.response?.data?.error || 'Erreur lors de la récupération des résultats groupés' };
     }
   },
 
