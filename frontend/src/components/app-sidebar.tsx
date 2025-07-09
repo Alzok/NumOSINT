@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from "react"
-import { Search, BarChart2, Table, Settings, HelpCircle, PanelLeft } from 'lucide-react';
+import { Search, BarChart2, Table, Settings, HelpCircle, PanelLeft, FolderOpen, Activity } from 'lucide-react';
 import {
   Sidebar,
   SidebarContent,
@@ -18,7 +18,8 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const { toggleSidebar } = useSidebar()
   
   const navItems = [
-    { href: '#search-section', icon: <Search className="h-5 w-5" />, label: 'Recherche' },
+    { href: '/', icon: <Search className="h-5 w-5" />, label: 'Accueil' },
+    { href: '/investigations', icon: <FolderOpen className="h-5 w-5" />, label: 'Investigations' },
     { href: '#stats-section', icon: <BarChart2 className="h-5 w-5" />, label: 'Statistiques' },
     { href: '#results-section', icon: <Table className="h-5 w-5" />, label: 'Résultats' },
   ];
@@ -28,14 +29,17 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       { href: '#', icon: <HelpCircle size={20} />, label: 'Aide' },
   ]
 
-  const handleScroll = (e: React.MouseEvent<HTMLAnchorElement, MouseEvent>, href: string) => {
-    e.preventDefault();
-    const targetId = href.replace(/.*#/, "");
-    if (!targetId || targetId === "app-sidebar") return;
-    const elem = document.getElementById(targetId);
-    elem?.scrollIntoView({
-      behavior: 'smooth',
-    });
+  const handleNavigation = (e: React.MouseEvent<HTMLAnchorElement, MouseEvent>, href: string) => {
+    if (href.startsWith('#')) {
+      e.preventDefault();
+      const targetId = href.replace(/.*#/, "");
+      if (!targetId || targetId === "app-sidebar") return;
+      const elem = document.getElementById(targetId);
+      elem?.scrollIntoView({
+        behavior: 'smooth',
+      });
+    }
+    // Pour les liens vers les pages, laisser le comportement par défaut
   };
 
   return (
@@ -58,7 +62,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
               <SidebarMenuButton asChild tooltip={item.label}>
                 <a
                   href={item.href}
-                  onClick={(e) => handleScroll(e, item.href)}
+                  onClick={(e) => handleNavigation(e, item.href)}
                   className="flex items-center gap-2"
                 >
                   {item.icon}

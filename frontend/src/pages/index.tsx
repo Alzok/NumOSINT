@@ -4,29 +4,58 @@ import { useEffect } from 'react';
 import { AppSidebar } from "@/components/app-sidebar";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { useAllResults, useIsLoading } from '@/lib/store';
-import { useSearch } from '@/hooks/useSearch';
+import { useInvestigation } from '@/hooks/useInvestigation';
+import { useAppStore } from '@/lib/store';
 
-import SearchForm from '@/components/Search/SearchForm';
+import InvestigationForm from '@/components/Investigation/InvestigationForm';
 import SearchLogs from '@/components/Search/SearchLogs';
-import ActiveSearches from '@/components/Search/ActiveSearches';
+import ActiveInvestigations from '@/components/Investigation/ActiveInvestigations';
 import AccountsTable from '@/components/Results/AccountsTable';
 import GlobalStats from '@/components/Results/GlobalStats';
 
 export default function DashboardPage() {
-  const { loadInitialData } = useSearch();
-  const allResults = useAllResults();
-  const isLoading = useIsLoading();
+  const { 
+    currentInvestigation, 
+    investigations, 
+    indicators, 
+    results, 
+    logs, 
+    isLoading,
+    loadInvestigations,
+    createInvestigation,
+    startInvestigation
+  } = useInvestigation();
+  
+  const { addNotification } = useAppStore();
 
   useEffect(() => {
-    loadInitialData();
-  }, [loadInitialData]);
+    loadInvestigations();
+  }, [loadInvestigations]);
 
-  const persons = allResults?.persons || [];
-  const totalPersons = persons.length;
-  const totalEmails = allResults?.stats?.total_emails || 0;
-  const totalAccounts = allResults?.stats?.total_accounts || 0;
-  const totalPlatforms = allResults?.stats?.total_platforms || 0;
+  // Calculer les statistiques à partir des investigations
+  const totalInvestigations = investigations.length;
+  const completedInvestigations = investigations.filter(inv => inv.status === 'COMPLETED').length;
+  const runningInvestigations = investigations.filter(inv => inv.status === 'SCANNING' || inv.status === 'ENRICHING').length;
+  const totalIndicators = indicators.length;
+  const totalResults = results.length;
+
+  // Convertir les résultats en format compatible avec les composants existants
+  const persons = results.map(result => ({
+    id: result.id,
+    firstName: result.data?.first_name || result.data?.firstName || '',
+    lastName: result.data?.last_name || result.data?.lastName || '',
+    emails: [{
+      email: result.data?.email || '',
+      accounts: [{
+        platform: result.toolSource,
+        url: result.data?.url || '',
+        status: 'active' as const,
+        category: result.data?.category || 'unknown',
+        method: result.data?.method || 'unknown'
+      }],
+      total_accounts: 1
+    }]
+  }));
 
   return (
     <SidebarProvider
@@ -51,50 +80,68 @@ export default function DashboardPage() {
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="text-sm text-muted-foreground">Plateforme d'investigation numérique</div>
+                  <div className="text-sm text-muted-foreground">Plateforme d'investigation numérique unifiée</div>
                 </CardContent>
               </Card>
               <Card>
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">Comptes Trouvés</CardTitle>
+                  <CardTitle className="text-sm font-medium">Investigations</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="text-2xl font-bold">{totalAccounts}</div>
+                  <div className="text-2xl font-bold">{totalInvestigations}</div>
+                  <p className="text-xs text-muted-foreground">
+                    {completedInvestigations} terminées, {runningInvestigations} en cours
+                  </p>
                 </CardContent>
               </Card>
               <Card>
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">Emails Analysés</CardTitle>
+                  <CardTitle className="text-sm font-medium">Indicateurs</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="text-2xl font-bold">{totalEmails}</div>
+                  <div className="text-2xl font-bold">{totalIndicators}</div>
+                  <p className="text-xs text-muted-foreground">
+                    Analysés
+                  </p>
                 </CardContent>
               </Card>
               <Card>
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">Plateformes</CardTitle>
+                  <CardTitle className="text-sm font-medium">Résultats</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="text-2xl font-bold">{totalPlatforms}</div>
+                  <div className="text-2xl font-bold">{totalResults}</div>
+                  <p className="text-xs text-muted-foreground">
+                    Trouvés
+                  </p>
                 </CardContent>
               </Card>
             </div>
             
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 px-4 lg:px-6">
-              <div id="search-section">
-                <SearchForm />
+              <div id="investigation-section">
+                <InvestigationForm onSubmit={async (input) => {
+                  const investigation = await createInvestigation(input);
+                  if (investigation) {
+                    await startInvestigation(investigation.id);
+                  }
+                }} />
               </div>
               <SearchLogs />
             </div>
 
             <div className="grid gap-8 px-4 lg:px-6">
-              <ActiveSearches />
-              <div id="stats-section">
-                <GlobalStats persons={persons} />
-              </div>
-              <div id="results-section">
-                <AccountsTable persons={persons} />
-              </div>
+              <ActiveInvestigations />
+              {persons.length > 0 && (
+                <>
+                  <div id="stats-section">
+                    <GlobalStats persons={persons} />
+                  </div>
+                  <div id="results-section">
+                    <AccountsTable persons={persons} />
+                  </div>
+                </>
+              )}
             </div>
         </div>
       </SidebarInset>
