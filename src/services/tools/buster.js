@@ -1,10 +1,8 @@
-const { PrismaClient } = require('@prisma/client');
 const { IndicatorType } = require('@prisma/client');
 const logger = require('../../utils/logger');
-const { exec } = require('child_process');
-const { promisify } = require('util');
+const axios = require('axios');
 
-const execAsync = promisify(exec);
+const busterServiceUrl = process.env.BUSTER_SERVICE_URL;
 
 class BusterService {
   constructor(prisma) {
@@ -13,204 +11,103 @@ class BusterService {
   }
 
   /**
-   * Génère des emails pour un indicateur de nom spécifique.
+   * Génère des emails potentiels à partir d'un nom et les ajoute comme indicateurs.
    */
   async generateEmails(investigationId, nameIndicator) {
+    if (!busterServiceUrl) {
+      logger.toolError(this.toolName, investigationId, "La variable d'environnement BUSTER_SERVICE_URL n'est pas définie.");
+      return;
+    }
+
     const name = nameIndicator.value;
-    try {
-      logger.tool(this.toolName, investigationId, `Traitement du nom: ${name}`);
+    const parts = name.split(' ');
+    const firstName = parts[0];
+    const lastName = parts.length > 1 ? parts.slice(1).join(' ') : '';
 
-      // Génération d'emails avec Buster
-      const emails = await this.findEmailsForName(name);
-
-      // Les emails générés sont ajoutés directement comme indicateurs.
-      // La validation est retirée car elle n'est pas le but premier de Buster.
-      
-      // Sauvegarde des résultats
-      await this.prisma.result.create({
-        data: {
-          investigationId,
-          indicatorId: nameIndicator.id,
-          toolSource: this.toolName,
-          data: {
-            name,
-            generatedEmails: emails,
-          },
-          score: emails.length > 0 ? Math.min(emails.length / 20, 1) : 0,
-        },
-      });
-
-      // Ajout des emails générés comme nouveaux indicateurs
-      if (emails.length > 0) {
-        const indicatorData = emails.map(email => ({
-          investigationId,
-          type: IndicatorType.EMAIL,
-          value: email,
-          source: this.toolName,
-          confidence: 0.7,
-          verified: false,
-          processed: false,
-        }));
-
-        await this.prisma.indicator.createMany({
-          data: indicatorData,
-          skipDuplicates: true,
-        });
-      }
-
-      logger.tool(this.toolName, investigationId, `Nom ${name}: ${emails.length} emails générés.`);
-
-      return {
-        generatedEmails: emails.length,
-      };
-
-    } catch (error) {
-      logger.toolError(this.toolName, investigationId, error);
-      await this.prisma.result.create({
-        data: {
-          investigationId,
-          indicatorId: nameIndicator.id,
-          toolSource: this.toolName,
-          data: {
-            name,
-            error: error.message,
-          },
-          score: 0,
-        },
-      });
-    }
-  }
-
-  /**
-   * Recherche des emails pour un nom donné en utilisant Buster.
-   */
-  async findEmailsForName(name, domains = []) {
-    try {
-      logger.tool(this.toolName, null, `Recherche d'emails pour: ${name}`);
-      const rawOutput = await this.executeBusterCommand(name, domains);
-      const foundEmails = this.parseBusterOutput(rawOutput);
-      
-      logger.tool(this.toolName, null, `${foundEmails.length} emails trouvés pour ${name}`);
-      return foundEmails;
-
-    } catch (error) {
-      logger.error(`Erreur lors de la recherche d'emails pour ${name}:`, error);
-      throw error;
-    }
-  }
-
-  /**
-   * Exécute Buster en ligne de commande.
-   */
-  async executeBusterCommand(name, domains = []) {
-    const safeName = name.replace(/(["'$`\\])/g, '\\$1');
-    let command = `buster -n "${safeName}"`;
-
-    if (domains.length > 0) {
-      const safeDomains = domains.map(d => `"${d.replace(/(["'$`\\])/g, '\\$1')}"`).join(' ');
-      command += ` -d ${safeDomains}`;
+    if (!lastName) {
+      logger.tool(this.toolName, investigationId, `Nom incomplet pour la génération d'emails: ${name}`);
+      return;
     }
 
-    try {
-      const { stdout, stderr } = await execAsync(command, {
-        timeout: 180000, // 3 minutes
-        maxBuffer: 2 * 1024 * 1024 // 2MB
-      });
-
-      if (stderr) {
-        logger.warn(`Buster stderr for name "${safeName}": ${stderr}`);
-      }
-
-      return stdout;
-
-    } catch (error) {
-      if (error.killed) {
-        throw new Error('Buster a dépassé le temps limite d\'exécution.');
-      }
-      logger.error(`Erreur lors de l'exécution de Buster pour "${safeName}":`, error);
-      throw error;
+    // Pour l'instant, on se base sur les domaines déjà découverts dans l'investigation
+    const domains = await this.getDomainsForInvestigation(investigationId);
+    if (domains.length === 0) {
+      logger.tool(this.toolName, investigationId, `Aucun domaine trouvé pour générer des emails pour ${name}.`);
+      return;
     }
-  }
 
-  /**
-   * Analyse la sortie de Buster pour extraire les emails.
-   */
-  parseBusterOutput(output) {
-    const emailRegex = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
-    const emails = output.match(emailRegex) || [];
-    return [...new Set(emails)];
-  }
+    for (const domain of domains) {
+      try {
+        logger.tool(this.toolName, investigationId, `Recherche d'emails pour ${name} sur le domaine ${domain}`);
+        
+        const response = await axios.post(`${busterServiceUrl}/scan`, {
+          firstName,
+          lastName,
+          domain,
+        }, { timeout: 60000 }); // 1 minute timeout
 
-  /**
-   * Récupère les statistiques d'utilisation de Buster
-   */
-  async getStats(investigationId) {
-    try {
-      const results = await this.prisma.result.findMany({
-        where: {
-          investigationId,
-          toolSource: this.toolName
+        const result = response.data;
+
+        if (result.emails && result.emails.length > 0) {
+          await this.saveNewEmailIndicators(investigationId, result.emails, nameIndicator.generation + 1);
+          logger.tool(this.toolName, investigationId, `${result.emails.length} email(s) trouvé(s) pour ${name} sur ${domain}.`);
         }
-      });
-
-      const stats = {
-        totalExecutions: results.length,
-        totalEmailsGenerated: 0,
-        averageScore: 0,
-      };
-
-      if (results.length > 0) {
-        for (const result of results) {
-          const data = result.data;
-          if (data.generatedEmails) {
-            stats.totalEmailsGenerated += data.generatedEmails.length;
-          }
-        }
-        stats.averageScore = results.reduce((sum, result) => sum + result.score, 0) / results.length;
+      } catch (error) {
+        const errorMessage = error.response ? JSON.stringify(error.response.data) : error.message;
+        logger.toolError(this.toolName, investigationId, `Erreur lors de l'appel au service Buster pour ${name} sur ${domain}: ${errorMessage}`);
       }
-
-      return stats;
-
-    } catch (error) {
-      logger.error('Erreur lors de la récupération des statistiques Buster:', error);
-      throw error;
     }
   }
 
-  /**
-   * Teste la configuration de Buster.
-   */
+  async getDomainsForInvestigation(investigationId) {
+    const domainIndicators = await this.prisma.indicator.findMany({
+      where: {
+        investigationId,
+        type: IndicatorType.DOMAIN,
+      },
+      select: {
+        value: true,
+      },
+    });
+    return [...new Set(domainIndicators.map(d => d.value))];
+  }
+
+  async saveNewEmailIndicators(investigationId, emails, generation) {
+    const newIndicators = emails.map(email => ({
+      investigationId,
+      type: IndicatorType.EMAIL,
+      value: email,
+      source: this.toolName,
+      confidence: 0.6, // Confiance moyenne pour un email généré et trouvé
+      generation,
+      verified: false,
+      processed: false,
+    }));
+
+    if (newIndicators.length > 0) {
+      await this.prisma.indicator.createMany({
+        data: newIndicators,
+        skipDuplicates: true,
+      });
+    }
+  }
+
   async testConfiguration() {
+    if (!busterServiceUrl) {
+        return { status: 'error', message: "La variable d'environnement BUSTER_SERVICE_URL n'est pas définie." };
+    }
     try {
-      const { stdout, stderr } = await execAsync('buster -h');
-      
-      if (stderr && !stdout.includes('Usage')) {
-        return {
-          status: 'error',
-          message: 'Buster a retourné une erreur lors du test.',
-          error: stderr
-        };
-      }
-
-      if (stdout.includes('buster')) {
-        return {
-          status: 'success',
-          message: 'Buster est correctement configuré et accessible.'
-        };
-      }
-
-      return {
-        status: 'error',
-        message: 'La sortie de la commande de test Buster est inattendue.',
-        details: stdout
-      };
-
+      await axios.post(`${busterServiceUrl}/scan`, {}, { timeout: 5000 });
+      return { status: 'success', message: 'Le service Buster est accessible.' };
     } catch (error) {
-      logger.error('Erreur lors du test de configuration Buster:', error);
+      if (error.response && error.response.status === 400) {
+        return { status: 'success', message: 'Le service Buster est correctement configuré et répond.' };
+      }
+      logger.error('Erreur lors du test de configuration Buster:', error.message);
       return {
         status: 'error',
-        message: 'Impossible d\'exécuter la commande buster. Assurez-vous qu\'elle est installée et dans le PATH.',
-        error: error.message
+        message: 'Impossible de contacter le service Buster.',
+        error: error.message,
       };
     }
   }

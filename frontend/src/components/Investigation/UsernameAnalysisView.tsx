@@ -3,17 +3,17 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { 
-  User, 
-  Globe, 
-  Shield, 
-  CheckCircle, 
-  XCircle,
-  Clock,
+import {
+  Person,
+  Language,
+  Security,
+  CheckCircleOutline,
+  Cancel,
+  Schedule,
   Star,
-  Users,
-  ExternalLink
-} from 'lucide-react';
+  Group,
+  OpenInNew
+} from '@mui/icons-material';
 
 interface UsernameProfile {
   platform: string;
@@ -72,7 +72,7 @@ const UsernameAnalysisView: React.FC<UsernameAnalysisViewProps> = ({ data, loadi
   if (!data || data.length === 0) {
     return (
       <Alert>
-        <User className="h-4 w-4" />
+        <Person className="h-4 w-4" />
         <AlertDescription>
           Aucune analyse de nom d'utilisateur disponible pour cette investigation.
         </AlertDescription>
@@ -106,7 +106,7 @@ const UsernameAnalysisView: React.FC<UsernameAnalysisViewProps> = ({ data, loadi
   return (
     <div className="space-y-6">
       <div className="flex items-center space-x-2">
-        <User className="h-5 w-5 text-blue-600" />
+        <Person className="h-5 w-5 text-blue-600" />
         <h2 className="text-xl font-semibold">Analyse des Noms d'Utilisateur</h2>
         <Badge variant="outline">{data.length} recherche(s)</Badge>
       </div>
@@ -116,7 +116,7 @@ const UsernameAnalysisView: React.FC<UsernameAnalysisViewProps> = ({ data, loadi
           <CardHeader>
             <CardTitle className="flex items-center justify-between">
               <div className="flex items-center space-x-2">
-                <User className="h-5 w-5" />
+                <Person className="h-5 w-5" />
                 <span className="font-mono text-sm">{analysis.search_username}</span>
               </div>
               <div className="flex items-center space-x-2">
@@ -164,7 +164,7 @@ const UsernameAnalysisView: React.FC<UsernameAnalysisViewProps> = ({ data, loadi
             {analysis.username_variations && analysis.username_variations.length > 0 && (
               <div className="space-y-2">
                 <div className="flex items-center space-x-2">
-                  <Users className="h-4 w-4 text-gray-500" />
+                  <Group className="h-4 w-4 text-gray-500" />
                   <span className="font-medium">Variations testées</span>
                 </div>
                 <div className="flex flex-wrap gap-1">
@@ -181,7 +181,7 @@ const UsernameAnalysisView: React.FC<UsernameAnalysisViewProps> = ({ data, loadi
             {analysis.found_profiles && analysis.found_profiles.length > 0 && (
               <div className="space-y-4">
                 <div className="flex items-center space-x-2">
-                  <Globe className="h-4 w-4 text-green-500" />
+                  <Language className="h-4 w-4 text-green-500" />
                   <span className="font-medium">Profils trouvés</span>
                   <Badge variant="outline">{analysis.found_profiles.length}</Badge>
                 </div>
@@ -194,26 +194,26 @@ const UsernameAnalysisView: React.FC<UsernameAnalysisViewProps> = ({ data, loadi
                           <div className={`w-3 h-3 rounded-full ${getPlatformColor(profile.platform)}`} />
                           <span className="font-medium">{profile.platform}</span>
                           {profile.verified && (
-                            <CheckCircle className="h-4 w-4 text-blue-500" />
+                            <CheckCircleOutline className="h-4 w-4 text-blue-500" />
                           )}
                         </div>
                         <div className="flex items-center space-x-2">
                           <Badge variant="outline" className="text-xs">
                             {Math.round(profile.confidence_score * 100)}% confiance
                           </Badge>
-                          <a 
-                            href={profile.url} 
-                            target="_blank" 
+                          <a
+                            href={profile.url}
+                            target="_blank"
                             rel="noopener noreferrer"
                             className="text-blue-600 hover:text-blue-800"
                           >
-                            <ExternalLink className="h-4 w-4" />
+                            <OpenInNew className="h-4 w-4" />
                           </a>
                         </div>
                       </div>
 
                       <div className="flex items-center space-x-2">
-                        <User className="h-4 w-4 text-gray-500" />
+                        <Person className="h-4 w-4 text-gray-500" />
                         <span className="font-mono text-sm">{profile.username}</span>
                       </div>
 
@@ -293,7 +293,7 @@ const UsernameAnalysisView: React.FC<UsernameAnalysisViewProps> = ({ data, loadi
             {analysis.related_usernames && analysis.related_usernames.length > 0 && (
               <div className="space-y-2">
                 <div className="flex items-center space-x-2">
-                  <Users className="h-4 w-4 text-blue-500" />
+                  <Group className="h-4 w-4 text-blue-500" />
                   <span className="font-medium">Noms d'utilisateur liés</span>
                 </div>
                 <div className="flex flex-wrap gap-1">

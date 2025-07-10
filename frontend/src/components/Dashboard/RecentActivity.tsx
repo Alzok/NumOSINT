@@ -3,7 +3,7 @@ import { investigationAPI, Result } from '@/lib/investigation-api';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { FileText, AlertCircle } from 'lucide-react';
+import { Article, ErrorOutline } from '@mui/icons-material';
 import Link from 'next/link';
 import { Badge } from '@/components/ui/badge';
 import { formatDistanceToNow } from 'date-fns';
@@ -61,7 +61,7 @@ const RecentActivity = () => {
   if (error) {
     return (
       <Alert variant="destructive">
-        <AlertCircle className="h-4 w-4" />
+        <ErrorOutline className="h-4 w-4" />
         <AlertTitle>Erreur</AlertTitle>
         <AlertDescription>{error}</AlertDescription>
       </Alert>
@@ -78,7 +78,7 @@ const RecentActivity = () => {
           {results.map((result) => (
             <li key={result.id} className="flex items-center space-x-4">
               <div className="p-2 bg-secondary rounded-md">
-                <FileText className="h-5 w-5 text-secondary-foreground" />
+                <Article className="h-5 w-5 text-secondary-foreground" />
               </div>
               <div className="flex-grow">
                 <p className="text-sm font-medium">

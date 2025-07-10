@@ -1,0 +1,132 @@
+# Page snapshot
+
+```yaml
+- button:
+  - img
+- list:
+  - listitem:
+    - link "Accueil":
+      - /url: /
+      - img
+      - text: Accueil
+  - listitem:
+    - link "Investigations":
+      - /url: /investigations
+      - img
+      - text: Investigations
+  - listitem:
+    - link "Statistiques":
+      - /url: /statistics
+      - img
+      - text: Statistiques
+  - listitem:
+    - link "Résultats":
+      - /url: /results
+      - img
+      - text: Résultats
+- list:
+  - listitem:
+    - link "Notifications 1":
+      - /url: /notifications
+      - img
+      - text: Notifications 1
+  - listitem:
+    - link "Paramètres":
+      - /url: "#"
+      - img
+      - text: Paramètres
+  - listitem:
+    - link "Aide":
+      - /url: "#"
+      - img
+      - text: Aide
+  - listitem:
+    - button "Toggle theme"
+- main:
+  - img
+  - text: NumOSINT Plateforme d'investigation numérique unifiée
+  - img
+  - text: Nouvelle Investigation OSINT
+  - img
+  - paragraph: Tous les champs sont optionnels. Plus vous fournissez d'informations, plus les chances de trouver des résultats pertinents sont élevées.
+  - img
+  - text: Noms complets
+  - 'textbox "ex: Jean Dupont"'
+  - button:
+    - img
+  - img
+  - text: Noms d'utilisateur
+  - 'textbox "ex: jdupont123"'
+  - button:
+    - img
+  - img
+  - text: Adresses email 1
+  - 'textbox "ex: jean.dupont@email.com"': test@example.com
+  - button:
+    - img
+  - img
+  - text: Numéros de téléphone
+  - 'textbox "ex: +33 6 12 34 56 78"'
+  - button:
+    - img
+  - img
+  - text: Adresses IP
+  - 'textbox "ex: 192.168.1.1"'
+  - button:
+    - img
+  - img
+  - text: Noms de domaine
+  - 'textbox "ex: exemple.com"'
+  - button:
+    - img
+  - img
+  - text: URLs complètes
+  - 'textbox "ex: https://exemple.com/profil"'
+  - button:
+    - img
+  - alert:
+    - img
+    - heading "Erreur" [level=5]
+    - text: Une erreur est survenue lors du lancement de l'investigation.
+  - button "Lancer l'investigation (1 indicateur)":
+    - img
+    - text: Lancer l'investigation (1 indicateur)
+  - text: Logs de Recherche Suivez l'avancement de la recherche en temps réel.
+  - button:
+    - img
+  - progressbar
+  - text: "[3:08:20 PM] Création de l'investigation... Investigations actives"
+  - paragraph: Aucune investigation active
+  - button "Actualiser"
+  - text: Activité Récente
+  - list
+  - text: Investigations 0
+  - paragraph: 0 terminées, 0 en cours
+  - text: Indicateurs 0
+  - paragraph: Analysés
+  - text: Résultats 0
+  - paragraph: Trouvés
+  - text: Taux de succès 0%
+  - paragraph: Basé sur les investigations terminées
+- paragraph: Erreur
+- paragraph: Données invalides
+- button
+- alert
+- dialog "Unhandled Runtime Error":
+  - navigation:
+    - button "previous" [disabled]:
+      - img "previous"
+    - button "next" [disabled]:
+      - img "next"
+    - text: 1 of 1 error
+  - button "Close"
+  - heading "Unhandled Runtime Error" [level=1]
+  - paragraph: "AxiosError: Request failed with status code 400"
+  - heading "Source" [level=2]
+  - link "src/lib/investigation-api.ts (154:34) @ post":
+    - text: src/lib/investigation-api.ts (154:34) @ post
+    - img
+  - text: "152 | createInvestigation: async (input: InvestigationInput): Promise<ApiResponse<Investigation>> => { 153 | try { > 154 | const response = await api.post('/api/investigations', { inputData: input }); | ^ 155 | return { data: response.data }; 156 | } catch (error: any) { 157 | return { error: error.response?.data?.error || 'Erreur lors de la création de l\\'investigation' };"
+  - heading "Call Stack" [level=2]
+  - button "Show collapsed frames"
+```

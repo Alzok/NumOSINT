@@ -11,36 +11,44 @@ import { Progress } from "@/components/ui/progress";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
-  ArrowLeft,
-  Play,
-  Square,
-  Trash2,
-  Clock,
-  CheckCircle,
-  XCircle,
-  Loader2,
-  RefreshCw,
-  FileText,
+  ArrowBack,
+  PlayArrow,
+  Stop,
+  Delete,
+  Schedule,
+  CheckCircleOutline,
+  Cancel,
+  Refresh,
+  Article,
   Search,
-  Activity,
-  AlertCircle,
-  Mail,
-  User,
-  Phone,
-  Globe,
+  Timeline,
+  ErrorOutline,
+  Email,
+  Person,
+  Phone as PhoneIcon,
+  Language,
   Wifi,
   WifiOff,
-  Info
-} from 'lucide-react';
+  InfoOutlined
+} from '@mui/icons-material';
+import { CircularProgress } from '@mui/material';
 import { useInvestigation } from '@/hooks/useInvestigation';
 import { useAppStore } from '@/lib/store';
-import { Investigation, Indicator, Result, InvestigationLog } from '@/lib/investigation-api';
+import { investigationAPI, Investigation, Indicator, Result, InvestigationLog } from '@/lib/investigation-api';
+import { mapStatusToPhase } from '@/lib/utils';
 import EmailAnalysisView from '@/components/Investigation/EmailAnalysisView';
+import { saveAs } from 'file-saver';
 import UsernameAnalysisView from '@/components/Investigation/UsernameAnalysisView';
 import PhoneAnalysisView from '@/components/Investigation/PhoneAnalysisView';
 import ComprehensiveReportView from '@/components/Investigation/ComprehensiveReportView';
 import RealTimeNotifications from '@/components/Investigation/RealTimeNotifications';
 import InvestigationReportView from '@/components/Investigation/InvestigationReportView';
+import InvestigationTimeline from '@/components/Investigation/InvestigationTimeline';
+import WaybackResults from '@/components/Investigation/WaybackResults';
+import { SocialProfiles } from '@/components/Investigation/Buster/SocialProfiles';
+import { ReverseWhoisResults } from '@/components/Investigation/Buster/ReverseWhoisResults';
+import { EmailSummary } from '@/components/Investigation/Email/EmailSummary';
+import ProfilesGrid from '@/components/Investigation/Maigret/ProfilesGrid';
 
 export default function InvestigationDetailPage() {
   const router = useRouter();
@@ -62,6 +70,16 @@ export default function InvestigationDetailPage() {
   
   const { addNotification } = useAppStore();
   const [activeTab, setActiveTab] = useState('overview');
+
+  const handleExport = async (format: 'pdf' | 'csv') => {
+    if (!investigationId) return;
+    try {
+      const blob = await investigationAPI.exportInvestigation(investigationId, format);
+      saveAs(blob, `rapport-investigation-${investigationId}.${format}`);
+    } catch (err) {
+      console.error('Failed to export investigation', err);
+    }
+  };
 
   useEffect(() => {
     if (investigationId) {
@@ -109,14 +127,14 @@ export default function InvestigationDetailPage() {
   const getStatusIcon = (status: string) => {
     switch (status) {
       case 'COMPLETED':
-        return <CheckCircle className="h-5 w-5 text-green-500" />;
+        return <CheckCircleOutline className="h-5 w-5 text-green-500" />;
       case 'FAILED':
-        return <XCircle className="h-5 w-5 text-red-500" />;
+        return <Cancel className="h-5 w-5 text-red-500" />;
       case 'SCANNING':
       case 'ENRICHING':
-        return <Loader2 className="h-5 w-5 text-blue-500 animate-spin" />;
+        return <CircularProgress size={20} className="text-blue-500" />;
       default:
-        return <Clock className="h-5 w-5 text-gray-500" />;
+        return <Schedule className="h-5 w-5 text-gray-500" />;
     }
   };
 
@@ -146,15 +164,15 @@ export default function InvestigationDetailPage() {
       case 'buster':
         return <Search className="h-4 w-4" />;
       case 'mosint':
-        return <FileText className="h-4 w-4" />;
+        return <Article className="h-4 w-4" />;
       case 'maigret':
-        return <Activity className="h-4 w-4" />;
+        return <Timeline className="h-4 w-4" />;
       case 'phoneinfoga':
-        return <AlertCircle className="h-4 w-4" />;
+        return <ErrorOutline className="h-4 w-4" />;
       case 'spiderfoot':
         return <Search className="h-4 w-4" />;
       default:
-        return <FileText className="h-4 w-4" />;
+        return <Article className="h-4 w-4" />;
     }
   };
 
@@ -165,8 +183,14 @@ export default function InvestigationDetailPage() {
   const usernameResults = results.filter(result => result.toolSource.toLowerCase() === 'maigret');
   const phoneResults = results.filter(result => result.toolSource.toLowerCase() === 'phoneinfoga');
   const comprehensiveResults = results.filter(result => result.toolSource.toLowerCase() === 'spiderfoot');
+  const waybackRawResults = results.filter(result => result.toolSource.toLowerCase() === 'waybulk');
+  const busterResults = results.filter(result => result.toolSource.toLowerCase() === 'buster');
 
   // Transformer les résultats pour les vues spécialisées
+  const transformBusterResults = (results: Result[]) => {
+    return results.flatMap(result => result.data?.accounts || []);
+  };
+
   const transformEmailResults = (results: Result[]) => {
     return results.map(result => ({
       email: result.data?.email || '',
@@ -251,13 +275,31 @@ export default function InvestigationDetailPage() {
     }));
   };
 
+  const waybackResults = waybackRawResults.flatMap(r => Array.isArray(r.data) ? r.data.map((url: string) => ({ url })) : []);
+  const socialProfiles = transformBusterResults(busterResults);
+  const reverseWhoisDomains = busterResults.flatMap(result => result.data?.reverse_whois || []);
+  const dummyReverseWhoisDomains = ['example.com', 'another-domain.net'];
+
+  const maigretResults = results.filter(result => result.toolSource.toLowerCase() === 'maigret');
+
+  // Données factices pour le développement de ProfilesGrid
+  const dummyProfiles = [
+    { siteName: 'GitHub', profileUrl: 'https://github.com/user', siteLogoUrl: '/github-logo.png' },
+    { siteName: 'Twitter', profileUrl: 'https://twitter.com/user', siteLogoUrl: '/twitter-logo.png' },
+    { siteName: 'Instagram', profileUrl: 'https://instagram.com/user', siteLogoUrl: '/instagram-logo.png' },
+    { siteName: 'Facebook', profileUrl: 'https://facebook.com/user', siteLogoUrl: '/facebook-logo.png' },
+    { siteName: 'LinkedIn', profileUrl: 'https://linkedin.com/in/user', siteLogoUrl: '/linkedin-logo.png' },
+    { siteName: 'Reddit', profileUrl: 'https://reddit.com/u/user', siteLogoUrl: '/reddit-logo.png' },
+  ];
+
+
   if (isLoading && !currentInvestigation) {
     return (
       <SidebarProvider defaultOpen={false}>
         <AppSidebar variant="sidebar" collapsible="icon" />
         <SidebarInset>
           <div className="flex items-center justify-center h-screen">
-            <Loader2 className="h-8 w-8 animate-spin" />
+            <CircularProgress size={32} />
           </div>
         </SidebarInset>
       </SidebarProvider>
@@ -270,11 +312,11 @@ export default function InvestigationDetailPage() {
         <AppSidebar variant="sidebar" collapsible="icon" />
         <SidebarInset>
           <div className="flex flex-col items-center justify-center h-screen">
-            <AlertCircle className="h-12 w-12 text-red-500 mb-4" />
+            <ErrorOutline className="h-12 w-12 text-red-500 mb-4" />
             <h2 className="text-xl font-semibold mb-2">Investigation non trouvée</h2>
             <p className="text-muted-foreground mb-4">L'investigation que vous cherchez n'existe pas ou a été supprimée.</p>
             <Button onClick={() => router.push('/investigations')}>
-              <ArrowLeft className="h-4 w-4 mr-2" />
+              <ArrowBack className="h-4 w-4 mr-2" />
               Retour à la liste
             </Button>
           </div>
@@ -305,7 +347,7 @@ export default function InvestigationDetailPage() {
                   size="sm"
                   onClick={() => router.push('/investigations')}
                 >
-                  <ArrowLeft className="h-4 w-4 mr-2" />
+                  <ArrowBack className="h-4 w-4 mr-2" />
                   Retour
                 </Button>
                 <div>
@@ -323,14 +365,23 @@ export default function InvestigationDetailPage() {
                   {isSocketConnected ? 'Connecté' : 'Déconnecté'}
                 </Badge>
                 {getStatusBadge(currentInvestigation.status)}
+                <Button onClick={() => handleExport('pdf')} size="sm">Exporter PDF</Button>
+                <Button onClick={() => handleExport('csv')} size="sm" variant="outline">Exporter CSV</Button>
               </div>
             </div>
+          </div>
+
+          <div className="px-4 lg:px-6">
+            <InvestigationTimeline
+              currentPhase={mapStatusToPhase(currentInvestigation.status)}
+              status={currentInvestigation.status}
+            />
           </div>
 
           {isAnalysisRunning && (
             <div className="px-4 lg:px-6">
               <Alert className="border-blue-500 bg-blue-50 text-blue-800">
-                <Info className="h-4 w-4 !text-blue-800" />
+                <InfoOutlined className="h-4 w-4 !text-blue-800" />
                 <AlertTitle>Analyse en cours</AlertTitle>
                 <AlertDescription>
                   Les résultats s'affichent en temps réel. De nouvelles informations peuvent apparaître à tout moment.
@@ -341,29 +392,41 @@ export default function InvestigationDetailPage() {
 
           <div className="px-4 lg:px-6">
             <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-              <TabsList className="grid w-full grid-cols-8">
+              <TabsList className="grid w-full grid-cols-11">
                 <TabsTrigger value="overview">Vue d'ensemble</TabsTrigger>
                 <TabsTrigger value="indicators">Indicateurs ({indicators.length})</TabsTrigger>
                 <TabsTrigger value="results">Résultats ({results.length})</TabsTrigger>
                 <TabsTrigger value="email-analysis">
-                  <Mail className="h-4 w-4 mr-1" />
+                  <Email className="h-4 w-4 mr-1" />
                   Emails ({emailResults.length})
                 </TabsTrigger>
                 <TabsTrigger value="username-analysis">
-                  <User className="h-4 w-4 mr-1" />
+                  <Person className="h-4 w-4 mr-1" />
                   Usernames ({usernameResults.length})
                 </TabsTrigger>
+                <TabsTrigger value="maigret-profiles">
+                  <Person className="h-4 w-4 mr-1" />
+                  Maigret ({maigretResults.length})
+                </TabsTrigger>
                 <TabsTrigger value="phone-analysis">
-                  <Phone className="h-4 w-4 mr-1" />
+                  <PhoneIcon className="h-4 w-4 mr-1" />
                   Téléphones ({phoneResults.length})
                 </TabsTrigger>
                 <TabsTrigger value="comprehensive-analysis">
-                  <Globe className="h-4 w-4 mr-1" />
+                  <Language className="h-4 w-4 mr-1" />
                   Complet ({comprehensiveResults.length})
+                </TabsTrigger>
+                <TabsTrigger value="wayback-archives">
+                  <Article className="h-4 w-4 mr-1" />
+                  Archives ({waybackResults.length})
+                </TabsTrigger>
+                <TabsTrigger value="buster-results">
+                  <Search className="h-4 w-4 mr-1" />
+                  Buster ({socialProfiles.length})
                 </TabsTrigger>
                 <TabsTrigger value="logs">Logs ({logs.length})</TabsTrigger>
                 <TabsTrigger value="report" disabled={currentInvestigation.status !== 'COMPLETED'}>
-                  <FileText className="h-4 w-4 mr-1" />
+                  <Article className="h-4 w-4 mr-1" />
                   Rapport
                 </TabsTrigger>
               </TabsList>
@@ -428,20 +491,20 @@ export default function InvestigationDetailPage() {
                     <CardContent className="space-y-2">
                       {currentInvestigation.status === 'INITIALIZING' && (
                         <Button onClick={handleStartInvestigation} className="w-full">
-                          <Play className="h-4 w-4 mr-2" />
+                          <PlayArrow className="h-4 w-4 mr-2" />
                           Démarrer l'investigation
                         </Button>
                       )}
                       
                       {isAnalysisRunning && (
                         <Button onClick={handleStopInvestigation} variant="destructive" className="w-full">
-                          <Square className="h-4 w-4 mr-2" />
+                          <Stop className="h-4 w-4 mr-2" />
                           Arrêter l'investigation
                         </Button>
                       )}
                       
                       <Button onClick={handleDeleteInvestigation} variant="outline" className="w-full text-red-600">
-                        <Trash2 className="h-4 w-4 mr-2" />
+                        <Delete className="h-4 w-4 mr-2" />
                         Supprimer l'investigation
                       </Button>
                     </CardContent>
@@ -478,6 +541,12 @@ export default function InvestigationDetailPage() {
                       )}
                     </CardContent>
                   </Card>
+                </div>
+
+                <div className="grid gap-4 md:grid-cols-1 lg:grid-cols-3">
+                    <EmailSummary email="test.good@example.com" reputation="Good" />
+                    <EmailSummary email="test.suspicious@example.com" reputation="Suspicious" />
+                    <EmailSummary email="test.bad@example.com" reputation="Bad" />
                 </div>
               </TabsContent>
 
@@ -577,6 +646,17 @@ export default function InvestigationDetailPage() {
                 </Card>
               </TabsContent>
 
+              <TabsContent value="maigret-profiles" className="space-y-4">
+                <Card className={analysisCardClass}>
+                  <CardHeader>
+                    <CardTitle>Profils trouvés (Maigret)</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <ProfilesGrid profiles={dummyProfiles} />
+                  </CardContent>
+                </Card>
+              </TabsContent>
+
               <TabsContent value="phone-analysis" className="space-y-4">
                 <Card className={analysisCardClass}>
                   <CardHeader>
@@ -605,6 +685,47 @@ export default function InvestigationDetailPage() {
                     )}
                   </CardContent>
                 </Card>
+              </TabsContent>
+
+              <TabsContent value="wayback-archives" className="space-y-4">
+                <Card className={analysisCardClass}>
+                  <CardHeader>
+                    <CardTitle>Archives du site (Wayback Machine)</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    {waybackResults.length === 0 ? (
+                      <p className="text-muted-foreground">Aucune archive trouvée pour le moment...</p>
+                    ) : (
+                      <WaybackResults results={waybackResults} />
+                    )}
+                  </CardContent>
+                </Card>
+              </TabsContent>
+
+              <TabsContent value="buster-results" className="space-y-4">
+                <div className="space-y-4">
+                  <Card className={analysisCardClass}>
+                    <CardHeader>
+                      <CardTitle>Profils Sociaux (Buster)</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      {socialProfiles.length === 0 ? (
+                        <p className="text-muted-foreground">Aucun profil social trouvé pour le moment...</p>
+                      ) : (
+                        <SocialProfiles profiles={socialProfiles} />
+                      )}
+                    </CardContent>
+                  </Card>
+                  <Card className={analysisCardClass}>
+                    <CardHeader>
+                      <CardTitle>Reverse Whois (Buster)</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      {/* TODO: Replace dummy data with real data */}
+                      <ReverseWhoisResults domains={dummyReverseWhoisDomains} />
+                    </CardContent>
+                  </Card>
+                </div>
               </TabsContent>
 
               <TabsContent value="logs" className="space-y-4">

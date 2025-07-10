@@ -1,27 +1,13 @@
-const { exec } = require('child_process');
-const { promisify } = require('util');
-const fs = require('fs').promises;
-const path = require('path');
-const os = require('os');
 const logger = require('../../utils/logger');
 const { IndicatorType } = require('@prisma/client');
+const axios = require('axios');
 
-const execAsync = promisify(exec);
+const phoneinfogaServiceUrl = process.env.PHONEINFOGA_SERVICE_URL;
 
 class PhoneInfogaService {
   constructor(prisma) {
     this.prisma = prisma;
     this.name = 'phoneinfoga';
-    this.reportsDir = path.join(os.tmpdir(), 'numosint_reports', 'phoneinfoga');
-    this.init();
-  }
-
-  async init() {
-    try {
-      await fs.mkdir(this.reportsDir, { recursive: true });
-    } catch (error) {
-      logger.error(`Impossible de créer le répertoire pour les rapports PhoneInfoga: ${error.message}`);
-    }
   }
 
   /**
@@ -29,28 +15,59 @@ class PhoneInfogaService {
    */
   async analyzePhone(investigationId, phoneIndicator) {
     const phoneNumber = phoneIndicator.value;
+    if (!phoneinfogaServiceUrl) {
+        logger.toolError(this.name, investigationId, "La variable d'environnement PHONEINFOGA_SERVICE_URL n'est pas définie.");
+        return;
+    }
+
     try {
-      logger.info(`📱 PhoneInfoga: Démarrage de l'analyse pour ${phoneNumber}`);
+      logger.tool(this.name, investigationId, `Démarrage de l'analyse pour ${phoneNumber}`);
       
-      const phoneAnalysis = await this.analyzeSinglePhone(phoneNumber);
+      const normalizedPhone = this.normalizePhoneNumber(phoneNumber);
+
+      const response = await axios.post(`${phoneinfogaServiceUrl}/scan`, { phoneNumber: normalizedPhone }, {
+        timeout: 180000, // 3 minutes
+      });
+
+      const analysis = response.data;
       
-      // Sauvegarder le résultat
-      await this.prisma.result.create({
-        data: {
+      const phoneAnalysisResult = {
+        phoneNumber: normalizedPhone,
+        originalNumber: phoneNumber,
+        analysis,
+        timestamp: new Date().toISOString(),
+      };
+
+      // Vérification des doublons avant de sauvegarder les résultats
+      const existingResult = await this.prisma.result.findFirst({
+        where: {
           investigationId,
           indicatorId: phoneIndicator.id,
           toolSource: this.name,
-          data: phoneAnalysis,
-          score: this.calculateScore(phoneAnalysis),
-        },
+        }
       });
 
+      if (!existingResult) {
+        await this.prisma.result.create({
+          data: {
+            investigationId,
+            indicatorId: phoneIndicator.id,
+            toolSource: this.name,
+            data: phoneAnalysisResult,
+            score: this.calculateScore(phoneAnalysisResult),
+          },
+        });
+      } else {
+        logger.tool(this.name, investigationId, `Résultat déjà existant pour ${phoneNumber}. Pas de nouvelle sauvegarde.`);
+      }
+
       // Extraire et sauvegarder les nouveaux indicateurs
-      const extractedIndicators = this.extractIndicators(phoneAnalysis);
+      const extractedIndicators = this.extractIndicators(phoneAnalysisResult);
       if (extractedIndicators.length > 0) {
         const dataToCreate = extractedIndicators.map(ind => ({
             ...ind,
             investigationId,
+            generation: phoneIndicator.generation + 1,
             processed: false,
         }));
         await this.prisma.indicator.createMany({
@@ -59,10 +76,11 @@ class PhoneInfogaService {
         });
       }
 
-      logger.info(`📱 PhoneInfoga: Analyse terminée pour ${phoneNumber}`);
+      logger.tool(this.name, investigationId, `Analyse terminée pour ${phoneNumber}`);
 
     } catch (error) {
-      logger.error(`📱 PhoneInfoga: Erreur lors de l'analyse de ${phoneNumber}: ${error.message}`);
+      const errorMessage = error.response ? JSON.stringify(error.response.data) : error.message;
+      logger.toolError(this.name, investigationId, `Erreur lors de l'appel au service PhoneInfoga pour ${phoneNumber}: ${errorMessage}`);
       await this.prisma.result.create({
         data: {
           investigationId,
@@ -70,67 +88,23 @@ class PhoneInfogaService {
           toolSource: this.name,
           data: {
             phoneNumber,
-            error: error.message,
+            error: `Erreur du service PhoneInfoga: ${errorMessage}`,
           },
           score: 0,
         },
       });
     }
   }
-
-  /**
-   * Analyse un numéro de téléphone individuel en utilisant la CLI de PhoneInfoga.
-   */
-  async analyzeSinglePhone(phoneNumber) {
-    const normalizedPhone = this.normalizePhoneNumber(phoneNumber);
-    const reportPath = path.join(this.reportsDir, `${normalizedPhone.replace('+', '')}_${Date.now()}.json`);
-
-    try {
-      await this.executePhoneInfogaCommand(normalizedPhone, reportPath);
-      const analysis = await this.parsePhoneInfogaOutput(reportPath);
-      
-      return {
-        phoneNumber: normalizedPhone,
-        originalNumber: phoneNumber,
-        analysis,
-        timestamp: new Date().toISOString(),
-      };
-    } catch (error) {
-      logger.error(`📱 PhoneInfoga: Erreur d'analyse pour ${phoneNumber}: ${error.message}`);
-      throw error;
-    } finally {
-      await fs.unlink(reportPath).catch(() => {});
-    }
-  }
   
-  async executePhoneInfogaCommand(phoneNumber, reportPath) {
-    const command = `phoneinfoga scan -n "${phoneNumber}" --output "${reportPath}"`;
-    try {
-        await execAsync(command, { timeout: 180000 }); // 3 min timeout
-    } catch(error) {
-        // PhoneInfoga peut retourner un code d'erreur même si un rapport est généré
-        logger.warn(`PhoneInfoga a terminé avec une erreur potentielle pour ${phoneNumber}: ${error.message}`);
-        // On continue car le rapport peut exister
-    }
-  }
-
-  async parsePhoneInfogaOutput(reportPath) {
-    try {
-        const reportContent = await fs.readFile(reportPath, 'utf8');
-        return JSON.parse(reportContent);
-    } catch (error) {
-        logger.error(`Impossible de lire ou parser le rapport PhoneInfoga à ${reportPath}:`, error);
-        // Retourner un objet vide pour ne pas bloquer le flux
-        return {};
-    }
-  }
-
   normalizePhoneNumber(phoneNumber) {
     let normalized = phoneNumber.replace(/[^\d+]/g, '');
     if (!normalized.startsWith('+')) {
+      // Suppose un code pays par défaut si non fourni, ici la France.
+      // Une logique plus complexe pourrait être nécessaire pour l'international.
       if (normalized.startsWith('0')) {
         normalized = '+33' + normalized.substring(1);
       } else {
+        // Ne peut pas deviner, on préfixe juste avec '+'
         normalized = '+' + normalized;
       }
     }
@@ -193,17 +167,21 @@ class PhoneInfogaService {
   }
 
   async testConfiguration() {
+    if (!phoneinfogaServiceUrl) {
+        return { status: 'error', message: "La variable d'environnement PHONEINFOGA_SERVICE_URL n'est pas définie." };
+    }
     try {
-      const { stdout } = await execAsync('phoneinfoga version');
-      if (stdout.includes('PhoneInfoga')) {
-        return { status: 'success', message: `PhoneInfoga est accessible. Version: ${stdout.trim()}` };
-      }
-      return { status: 'error', message: 'La commande phoneinfoga a retourné une sortie inattendue.' };
+      // Teste avec une requête vide qui devrait échouer avec un 400
+      await axios.post(`${phoneinfogaServiceUrl}/scan`, {}, { timeout: 5000 });
+      return { status: 'success', message: 'Le service PhoneInfoga est accessible.' };
     } catch (error) {
-      logger.error('Erreur lors du test de configuration PhoneInfoga:', error);
+      if (error.response && error.response.status === 400) {
+        return { status: 'success', message: 'Le service PhoneInfoga est correctement configuré et répond.' };
+      }
+      logger.error('Erreur lors du test de configuration PhoneInfoga:', error.message);
       return {
         status: 'error',
-        message: 'Impossible d\'exécuter la commande phoneinfoga.',
+        message: 'Impossible de contacter le service PhoneInfoga.',
         error: error.message,
       };
     }

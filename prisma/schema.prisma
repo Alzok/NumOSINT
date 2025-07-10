@@ -16,17 +16,34 @@ model Investigation {
   status      InvestigationStatus @default(INITIALIZING)
   progress    Int      @default(0)
   currentStep String?
+  currentPhase String  @default("ENRICHMENT")
   inputData   Json?
   finalReport Json?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+  maxGeneration Int    @default(3)
+  minConfidence Float  @default(0.7)
   
   // Relations
   indicators  Indicator[]
   results     Result[]
   logs        InvestigationLog[]
+  caseId      String?
+  case        Case?      @relation(fields: [caseId], references: [id], onDelete: SetNull)
   
   @@map("investigations")
+}
+
+model Case {
+  id            String   @id @default(cuid())
+  name          String
+  description   String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  
+  investigations Investigation[]
+  
+  @@map("cases")
 }
 
 model Indicator {
@@ -38,11 +55,13 @@ model Indicator {
   confidence      Float         @default(0.5)
   verified        Boolean       @default(false)
   processed       Boolean       @default(false) // Ajout pour le suivi du traitement
+  generation      Int           @default(0)
   createdAt       DateTime      @default(now())
 
   investigation Investigation @relation(fields: [investigationId], references: [id], onDelete: Cascade)
   results       Result[]
 
+  @@index([investigationId])
   @@unique([investigationId, type, value])
   @@map("indicators")
 }
@@ -59,6 +78,8 @@ model Result {
   investigation  Investigation @relation(fields: [investigationId], references: [id], onDelete: Cascade)
   indicator      Indicator?     @relation(fields: [indicatorId], references: [id], onDelete: SetNull)
   
+  @@index([investigationId])
+  @@index([toolSource])
   @@map("results")
 }
 
@@ -72,6 +93,7 @@ model InvestigationLog {
   
   investigation  Investigation @relation(fields: [investigationId], references: [id], onDelete: Cascade)
   
+  @@index([investigationId])
   @@map("investigation_logs")
 }
 
@@ -82,6 +104,7 @@ enum InvestigationStatus {
   CONSOLIDATING
   COMPLETED
   FAILED
+  CANCELLED
 }
 
 enum IndicatorType {

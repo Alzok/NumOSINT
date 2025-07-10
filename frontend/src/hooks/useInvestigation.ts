@@ -3,6 +3,16 @@ import { investigationAPI, InvestigationInput, Investigation, Indicator, Result,
 import { useAppStore } from '@/lib/store';
 import { io, Socket } from 'socket.io-client';
 
+// Type pour le nouvel événement unifié
+interface InvestigationUpdatePayload {
+  id: string;
+  status?: Investigation['status'];
+  progress?: number;
+  currentPhase?: Investigation['currentPhase'];
+  currentStep?: string;
+  error?: string;
+}
+
 interface ProgressUpdate {
   investigationId: string;
   progress: number;
@@ -286,12 +296,22 @@ export function useInvestigation(investigationId?: string) {
       setIsSocketConnected(false);
     });
 
-    socket.on('investigation:progress', (data: ProgressUpdate) => {
-      if (data.investigationId === investigationId) {
-        setCurrentInvestigation(prev => prev ? { ...prev, status: data.status as Investigation['status'], progress: data.progress, currentStep: data.currentStep } : null);
-        setSearchProgress(data.progress);
+    const handleUpdate = (data: InvestigationUpdatePayload) => {
+      if (data.id === investigationId) {
+        setCurrentInvestigation(prev => {
+          if (!prev) return null;
+          const updated = { ...prev };
+          if (data.status) updated.status = data.status;
+          if (data.progress) updated.progress = data.progress;
+          if (data.currentPhase) updated.currentPhase = data.currentPhase;
+          if (data.currentStep) updated.currentStep = data.currentStep;
+          return updated;
+        });
+        if (data.progress) setSearchProgress(data.progress);
       }
-    });
+    };
+
+    socket.on('investigation:update', handleUpdate);
 
     socket.on('investigation:log', (log: InvestigationLog) => {
       if (log.investigationId === investigationId) {
@@ -314,6 +334,22 @@ export function useInvestigation(investigationId?: string) {
     socket.on('investigation:completed', (data: { investigationId: string }) => {
       if (data.investigationId === investigationId) {
         refreshInvestigation(investigationId);
+        addNotification({
+          type: 'success',
+          title: 'Analyse terminée',
+          message: `L'investigation ${data.investigationId} est terminée.`,
+          duration: 10000, // 10 secondes
+          actions: [
+            {
+              label: 'Voir les résultats',
+              href: `/investigation/${data.investigationId}` // Utiliser href pour la navigation
+            },
+            {
+              label: 'Fermer',
+              onClick: () => {} // Garder onClick pour les actions sans navigation
+            }
+          ]
+        });
       }
     });
 
@@ -326,6 +362,40 @@ export function useInvestigation(investigationId?: string) {
   useEffect(() => {
     loadInvestigations();
   }, [loadInvestigations]);
+
+  // Gestion des mises à jour globales par WebSocket pour la liste des investigations
+  useEffect(() => {
+    const socket = io(process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5001', {
+      transports: ['websocket']
+    });
+
+    const handleInvestigationUpdate = (data: InvestigationUpdatePayload) => {
+      setInvestigations(prev =>
+        prev.map(inv => {
+          if (inv.id === data.id) {
+            const updatedInv: Investigation = { ...inv };
+            if (data.status) updatedInv.status = data.status;
+            if (data.progress !== undefined) updatedInv.progress = data.progress;
+            if (data.currentPhase) updatedInv.currentPhase = data.currentPhase;
+            if (data.currentStep) updatedInv.currentStep = data.currentStep;
+            // Ajout de la gestion du message d'erreur
+            if (data.error) {
+              updatedInv.error = data.error;
+            }
+            return updatedInv;
+          }
+          return inv;
+        })
+      );
+    };
+
+    socket.on('investigation:update', handleInvestigationUpdate);
+
+    return () => {
+      socket.off('investigation:update', handleInvestigationUpdate);
+      socket.disconnect();
+    };
+  }, []); // Le tableau de dépendances est vide pour ne s'exécuter qu'une fois
 
   return {
     currentInvestigation,

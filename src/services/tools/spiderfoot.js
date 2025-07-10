@@ -1,12 +1,10 @@
 const { exec } = require('child_process');
-const { promisify } = require('util');
 const fs = require('fs').promises;
 const path = require('path');
 const os = require('os');
 const logger = require('../../utils/logger');
 const { IndicatorType } = require('@prisma/client');
-
-const execAsync = promisify(exec);
+const eventBus = require('../../utils/eventBus');
 
 class SpiderFootService {
   constructor(prisma) {
@@ -26,60 +24,73 @@ class SpiderFootService {
   }
 
   /**
-   * Démarre un scan SpiderFoot pour un indicateur spécifique.
+   * Démarre un scan SpiderFoot pour une liste d'indicateurs.
+   * Le scan est lancé en arrière-plan et un événement est émis à la fin.
    */
-  async startScan(investigationId, indicator) {
-    const target = indicator.value;
-    logger.info(`🕷️ SpiderFoot: Démarrage du scan pour ${target} (investigation ${investigationId})`);
-
-    try {
-      const reportPath = path.join(this.reportsDir, `sf_report_${indicator.id}_${Date.now()}.json`);
-      await this.executeScanCommand(target, reportPath);
-      const scanData = await this.parseScanResults(reportPath);
-      
-      await this.processAndSaveResults(investigationId, indicator.id, scanData);
-      const newIndicatorsCount = await this.extractAndSaveNewIndicators(investigationId, scanData);
-
-      logger.info(`🕷️ SpiderFoot: Scan terminé pour ${target}. ${newIndicatorsCount} nouveaux indicateurs trouvés.`);
-      await fs.unlink(reportPath).catch(() => {});
-
-    } catch (error) {
-      logger.error(`🕷️ SpiderFoot: Échec du scan pour l'indicateur ${target}: ${error.message}`);
-       await this.prisma.result.create({
-        data: {
-          investigationId,
-          indicatorId: indicator.id,
-          toolSource: this.name,
-          data: {
-            target,
-            error: error.message,
-          },
-          score: 0,
-        },
-      });
+  startScan(investigationId, indicators) {
+    if (!indicators || indicators.length === 0) {
+      logger.warn('🕷️ SpiderFoot: Aucun indicateur fourni pour le scan.');
+      // Émettre un événement d'échec ou de complétion immédiate pour ne pas bloquer le flux
+      eventBus.emit('tool:scan_completed', { investigationId, tool: this.name, success: true, message: 'Aucun indicateur à scanner.' });
+      return;
     }
+
+    const scanId = `inv_${investigationId}_${Date.now()}`;
+    const targets = indicators.map(ind => ind.value).join(',');
+    const reportPath = path.join(this.reportsDir, `sf_report_${scanId}.json`);
+
+    logger.info(`🕷️ SpiderFoot: Démarrage du scan pour ${indicators.length} indicateurs (investigation ${investigationId})`);
+    
+    this.executeScanCommand(investigationId, targets, reportPath);
   }
 
   /**
-   * Exécute une commande de scan SpiderFoot.
+   * Exécute une commande de scan SpiderFoot en arrière-plan.
    */
-  async executeScanCommand(target, reportPath) {
-    const safeTarget = target.replace(/(["'$`\\])/g, '\\$1');
-    const command = `${this.spiderfootPath} -s "${safeTarget}" -o json -F "${reportPath}"`;
+  executeScanCommand(investigationId, targets, reportPath) {
+    const safeTargets = targets.replace(/(["'$`\\])/g, '\\$1');
+    const command = `${this.spiderfootPath} -s "${safeTargets}" -o json -F "${reportPath}"`;
 
     logger.info(`🕷️ SpiderFoot: Exécution de la commande: ${command}`);
 
-    try {
-      const { stderr } = await execAsync(command, {
-        timeout: 900000, // 15 minutes
-      });
-      if (stderr) {
-        logger.warn(`🕷️ SpiderFoot stderr for target ${safeTarget}: ${stderr}`);
+    const child = exec(command, { timeout: 900000 /* 15 minutes */ });
+
+    // --- Début de l'implémentation du "pulse" ---
+    const pulseInterval = setInterval(() => {
+      eventBus.emit('tool:pulse', { investigationId, tool: this.name });
+    }, 5000); // Émettre une pulsation toutes les 5 secondes
+    // --- Fin de l'implémentation du "pulse" ---
+
+    child.stdout.on('data', (data) => {
+      logger.debug(`🕷️ SpiderFoot stdout: ${data.trim()}`);
+    });
+
+    child.stderr.on('data', (data) => {
+      logger.warn(`🕷️ SpiderFoot stderr: ${data.trim()}`);
+    });
+
+    child.on('close', async (code) => {
+      clearInterval(pulseInterval); // Arrêter les pulsations à la fin du scan
+
+      if (code === 0) {
+        logger.info(`🕷️ SpiderFoot: Scan terminé avec succès pour l'investigation ${investigationId}.`);
+        try {
+          const scanData = await this.parseScanResults(reportPath);
+          await this.processAndSaveResults(investigationId, null, scanData); // indicatorId est null car multi-indicateurs
+          await this.extractAndSaveNewIndicators(investigationId, scanData);
+          eventBus.emit('tool:scan_completed', { investigationId, tool: this.name, success: true });
+        } catch (processingError) {
+          logger.error(`🕷️ SpiderFoot: Erreur lors du traitement des résultats pour ${investigationId}:`, processingError);
+          eventBus.emit('tool:scan_completed', { investigationId, tool: this.name, success: false, error: processingError.message });
+        } finally {
+            await fs.unlink(reportPath).catch(() => {});
+        }
+      } else {
+        const errorMessage = `L'exécution de SpiderFoot a échoué avec le code ${code}.`;
+        logger.error(`🕷️ SpiderFoot: ${errorMessage} pour l'investigation ${investigationId}.`);
+        eventBus.emit('tool:scan_completed', { investigationId, tool: this.name, success: false, error: errorMessage });
       }
-    } catch (error) {
-      logger.error(`Erreur lors de l'exécution de SpiderFoot pour ${safeTarget}:`, error);
-      throw new Error(`L'exécution de SpiderFoot a échoué: ${error.message}`);
-    }
+    });
   }
 
   /**
@@ -104,15 +115,28 @@ class SpiderFootService {
       typesFound: [...new Set(scanData.map(item => item.type))],
     };
 
-    return this.prisma.result.create({
-      data: {
-        investigationId,
-        indicatorId,
-        toolSource: this.name,
-        data: summary,
-        score: this.calculateScore(scanData),
-      },
+    const existingResult = await this.prisma.result.findFirst({
+        where: {
+            investigationId,
+            indicatorId,
+            toolSource: this.name,
+        }
     });
+
+    if (!existingResult) {
+        return this.prisma.result.create({
+          data: {
+            investigationId,
+            indicatorId,
+            toolSource: this.name,
+            data: summary,
+            score: this.calculateScore(scanData),
+          },
+        });
+    } else {
+        logger.info(`🕷️ SpiderFoot: Résultat déjà existant pour l'indicateur ${indicatorId}. Pas de nouvelle sauvegarde.`);
+        return existingResult;
+    }
   }
 
   /**

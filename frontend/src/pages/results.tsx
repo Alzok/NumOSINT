@@ -1,11 +1,9 @@
 "use client";
 
 import { useEffect, useState } from 'react';
-import { AppSidebar } from "@/components/app-sidebar";
-import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { AlertCircle } from 'lucide-react';
+import { ErrorOutline } from '@mui/icons-material';
 import { investigationAPI } from '@/lib/investigation-api';
 import { PersonResult } from '@/types';
 import AccountsTable from '@/components/Results/AccountsTable';
@@ -38,9 +36,6 @@ export default function AllResultsPage() {
   }, []);
 
   return (
-    <SidebarProvider>
-      <AppSidebar />
-      <SidebarInset>
         <div className="p-4 sm:p-6 lg:p-8">
           {loading && (
             <Card>
@@ -57,7 +52,7 @@ export default function AllResultsPage() {
           )}
           {error && (
             <Alert variant="destructive">
-              <AlertCircle className="h-4 w-4" />
+              <ErrorOutline className="h-4 w-4" />
               <AlertTitle>Erreur</AlertTitle>
               <AlertDescription>{error}</AlertDescription>
             </Alert>
@@ -66,7 +61,5 @@ export default function AllResultsPage() {
             <AccountsTable persons={persons} />
           )}
         </div>
-      </SidebarInset>
-    </SidebarProvider>
   );
 }

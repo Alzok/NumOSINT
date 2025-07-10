@@ -19,6 +19,9 @@ const toolRoutes = require('./routes/tools');
 const healthRoutes = require('./routes/health');
 const resultsRoutes = require('./routes/results');
 const statisticsRoutes = require('./routes/statistics');
+const casesRoutes = require('./routes/cases.js');
+const reportRoutes = require('./routes/reports.js');
+const v1InvestigationRoutes = require('./routes/v1/investigations.js');
 
 const app = express();
 const server = createServer(app);
@@ -77,6 +80,9 @@ app.use('/api/tools', toolRoutes);
 app.use('/api/health', healthRoutes);
 app.use('/api/results', resultsRoutes);
 app.use('/api/statistics', statisticsRoutes);
+app.use('/api/cases', casesRoutes);
+app.use('/api/reports', reportRoutes);
+app.use('/api/v1/investigations', v1InvestigationRoutes);
 
 // Route racine
 app.get('/', (req, res) => {

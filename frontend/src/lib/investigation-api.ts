@@ -28,17 +28,32 @@ export interface InvestigationInput {
   ips?: string[];
   domains?: string[];
   urls?: string[];
+  maxGeneration?: number;
+  minConfidence?: number;
 }
 
 export interface Investigation {
   id: string;
-  status: 'INITIALIZING' | 'ENRICHING' | 'SCANNING' | 'CONSOLIDATING' | 'COMPLETED' | 'FAILED';
+  status: 'INITIALIZING' | 'ENRICHING' | 'SCANNING' | 'CONSOLIDATING' | 'COMPLETED' | 'FAILED' | 'CANCELLED';
   progress: number;
+  currentPhase: 'ENRICHMENT' | 'SCANNING' | 'CONSOLIDATION' | 'FINISHED';
   currentStep?: string;
   inputData?: InvestigationInput;
   finalReport?: any;
   createdAt: string;
   updatedAt: string;
+  caseId?: string | null;
+  results?: Result[];
+  indicators?: Indicator[];
+}
+
+export interface Case {
+    id: string;
+    name: string;
+    description: string | null;
+    createdAt: string;
+    updatedAt: string;
+    investigations: Investigation[];
 }
 
 export interface Indicator {
@@ -139,8 +154,10 @@ export const investigationAPI = {
   // Investigations
   createInvestigation: async (input: InvestigationInput): Promise<ApiResponse<Investigation>> => {
     try {
-      const response = await api.post('/api/investigations', { inputData: input });
-      return { data: response.data };
+      const response = await api.post('/api/investigations', input);
+      // La réponse de l'API contient { message: string, investigation: Investigation }
+      // Nous retournons directement l'objet investigation.
+      return { data: response.data.investigation };
     } catch (error: any) {
       return { error: error.response?.data?.error || 'Erreur lors de la création de l\'investigation' };
     }
@@ -365,6 +382,55 @@ getGroupedResults: async (): Promise<ApiResponse<{ persons: PersonResult[] }>> =
     } catch (error: any) {
       return { error: error.response?.data?.error || 'Erreur lors de la récupération des statistiques globales' };
     }
+  },
+
+  // Case Management
+  getCases: async (): Promise<ApiResponse<Case[]>> => {
+    try {
+      const response = await api.get('/api/cases');
+      return { data: response.data };
+    } catch (error: any) {
+      return { error: error.response?.data?.error || 'Erreur lors de la récupération des dossiers' };
+    }
+  },
+  createCase: async (data: { name: string; description?: string; investigationIds?: string[] }): Promise<ApiResponse<Case>> => {
+    try {
+      const response = await api.post('/api/cases', data);
+      return { data: response.data };
+    } catch (error: any) {
+      return { error: error.response?.data?.error || 'Erreur lors de la création du dossier' };
+    }
+  },
+  getCase: async (id: string): Promise<ApiResponse<Case>> => {
+    try {
+      const response = await api.get(`/api/cases/${id}`);
+      return { data: response.data };
+    } catch (error: any) {
+      return { error: error.response?.data?.error || 'Erreur lors de la récupération du dossier' };
+    }
+  },
+  updateCaseInvestigations: async (caseId: string, data: { investigationIdsToConnect?: string[]; investigationIdsToDisconnect?: string[] }): Promise<ApiResponse<Case>> => {
+    try {
+      const response = await api.put(`/api/cases/${caseId}/investigations`, data);
+      return { data: response.data };
+    } catch (error: any) {
+      return { error: error.response?.data?.error || 'Erreur lors de la mise à jour du dossier' };
+    }
+  },
+
+  // Reports
+  exportInvestigation: async (id: string, format: 'pdf' | 'csv') => {
+    const response = await api.get(`/api/reports/investigation/${id}/export?format=${format}`, {
+      responseType: 'blob',
+    });
+    return response.data;
+  },
+
+  exportCase: async (id: string, format: 'pdf' | 'csv') => {
+    const response = await api.get(`/api/reports/case/${id}/export?format=${format}`, {
+      responseType: 'blob',
+    });
+    return response.data;
   },
 };
 

@@ -3,14 +3,14 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
-  CheckCircle,
-  XCircle,
-  AlertCircle,
-  Info,
-  Clock,
-  Zap,
-  X
-} from 'lucide-react';
+  CheckCircleOutline,
+  Cancel,
+  ErrorOutline,
+  InfoOutlined,
+  Schedule,
+  OfflineBolt,
+  Close
+} from '@mui/icons-material';
 import { motion, AnimatePresence } from 'framer-motion';
 import { InvestigationLog } from '@/lib/investigation-api';
 
@@ -27,11 +27,11 @@ const RealTimeNotifications: React.FC<RealTimeNotificationsProps> = ({
 
   const getLogIcon = (level: string) => {
     switch (level) {
-      case 'SUCCESS': return <CheckCircle className="h-4 w-4 text-green-500" />;
-      case 'ERROR': return <XCircle className="h-4 w-4 text-red-500" />;
-      case 'WARNING': return <AlertCircle className="h-4 w-4 text-yellow-500" />;
-      case 'INFO': return <Info className="h-4 w-4 text-blue-500" />;
-      default: return <Info className="h-4 w-4 text-gray-500" />;
+      case 'SUCCESS': return <CheckCircleOutline className="h-4 w-4 text-green-500" />;
+      case 'ERROR': return <Cancel className="h-4 w-4 text-red-500" />;
+      case 'WARNING': return <ErrorOutline className="h-4 w-4 text-yellow-500" />;
+      case 'INFO': return <InfoOutlined className="h-4 w-4 text-blue-500" />;
+      default: return <InfoOutlined className="h-4 w-4 text-gray-500" />;
     }
   };
 
@@ -62,7 +62,7 @@ const RealTimeNotifications: React.FC<RealTimeNotificationsProps> = ({
         <CardHeader className="pb-3">
           <CardTitle className="flex items-center justify-between">
             <div className="flex items-center space-x-2">
-              <Zap className="h-5 w-5" />
+              <OfflineBolt className="h-5 w-5" />
               <span>Logs en temps réel</span>
               <Badge variant="outline">{visibleLogs.length}</Badge>
             </div>
@@ -72,7 +72,7 @@ const RealTimeNotifications: React.FC<RealTimeNotificationsProps> = ({
               onClick={clearLogs}
               className="flex items-center space-x-1"
             >
-              <X className="h-4 w-4" />
+              <Close className="h-4 w-4" />
               <span>Effacer</span>
             </Button>
           </CardTitle>
@@ -125,7 +125,7 @@ const RealTimeNotifications: React.FC<RealTimeNotificationsProps> = ({
             
             {visibleLogs.length === 0 && (
               <div className="text-center py-8 text-gray-500">
-                <Clock className="h-8 w-8 mx-auto mb-2" />
+                <Schedule className="h-8 w-8 mx-auto mb-2" />
                 <p>En attente des logs d'investigation...</p>
               </div>
             )}

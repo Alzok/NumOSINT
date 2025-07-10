@@ -5,18 +5,18 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import { 
-  Play, 
-  Square, 
-  Trash2, 
-  Eye, 
-  Clock, 
-  CheckCircle, 
-  XCircle, 
-  Loader2,
-  RefreshCw,
-  Activity
-} from 'lucide-react';
+import {
+  PlayArrow,
+  Stop,
+  Delete,
+  Visibility,
+  Schedule,
+  CheckCircleOutline,
+  Cancel,
+  Refresh,
+  Timeline
+} from '@mui/icons-material';
+import { CircularProgress } from '@mui/material';
 import { useInvestigation } from '@/hooks/useInvestigation';
 import { useAppStore } from '@/lib/store';
 import { Investigation } from '@/lib/investigation-api';
@@ -79,14 +79,14 @@ export default function ActiveInvestigations() {
   const getStatusIcon = (status: string) => {
     switch (status) {
       case 'COMPLETED':
-        return <CheckCircle className="h-4 w-4 text-green-500" />;
+        return <CheckCircleOutline className="h-4 w-4 text-green-500" />;
       case 'FAILED':
-        return <XCircle className="h-4 w-4 text-red-500" />;
+        return <Cancel className="h-4 w-4 text-red-500" />;
       case 'SCANNING':
       case 'ENRICHING':
-        return <Loader2 className="h-4 w-4 text-blue-500 animate-spin" />;
+        return <CircularProgress size={16} className="text-blue-500" />;
       default:
-        return <Clock className="h-4 w-4 text-gray-500" />;
+        return <Schedule className="h-4 w-4 text-gray-500" />;
     }
   };
 
@@ -116,7 +116,7 @@ export default function ActiveInvestigations() {
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <Activity className="h-5 w-5" />
+            <Timeline className="h-5 w-5" />
             Investigations actives
           </CardTitle>
         </CardHeader>
@@ -126,7 +126,7 @@ export default function ActiveInvestigations() {
               Aucune investigation active
             </p>
             <Button onClick={() => loadInvestigations()} disabled={isLoading}>
-              <RefreshCw className="h-4 w-4 mr-2" />
+              <Refresh className="h-4 w-4 mr-2" />
               Actualiser
             </Button>
           </div>
@@ -140,11 +140,11 @@ export default function ActiveInvestigations() {
       <CardHeader>
         <CardTitle className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <Activity className="h-5 w-5" />
+            <Timeline className="h-5 w-5" />
             Investigations actives ({activeInvestigations.length})
           </div>
           <Button onClick={() => loadInvestigations()} disabled={isLoading} size="sm">
-            <RefreshCw className="h-4 w-4 mr-2" />
+            <Refresh className="h-4 w-4 mr-2" />
             Actualiser
           </Button>
         </CardTitle>
@@ -187,7 +187,7 @@ export default function ActiveInvestigations() {
                     variant="outline"
                     onClick={() => window.location.href = `/investigation/${investigation.id}`}
                   >
-                    <Eye className="h-4 w-4 mr-1" />
+                    <Visibility className="h-4 w-4 mr-1" />
                     Voir
                   </Button>
                   
@@ -197,7 +197,7 @@ export default function ActiveInvestigations() {
                       onClick={() => handleStartInvestigation(investigation.id)}
                       disabled={isLoading}
                     >
-                      <Play className="h-4 w-4 mr-1" />
+                      <PlayArrow className="h-4 w-4 mr-1" />
                       Démarrer
                     </Button>
                   )}
@@ -209,7 +209,7 @@ export default function ActiveInvestigations() {
                       variant="destructive"
                       disabled={isLoading}
                     >
-                      <Square className="h-4 w-4 mr-1" />
+                      <Stop className="h-4 w-4 mr-1" />
                       Arrêter
                     </Button>
                   )}
@@ -221,7 +221,7 @@ export default function ActiveInvestigations() {
                   variant="ghost"
                   className="text-red-600 hover:text-red-700 hover:bg-red-50"
                 >
-                  <Trash2 className="h-4 w-4" />
+                  <Delete className="h-4 w-4" />
                 </Button>
               </div>
             </div>

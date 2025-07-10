@@ -1,28 +1,14 @@
 const { PrismaClient } = require('@prisma/client');
 const { IndicatorType } = require('@prisma/client');
 const logger = require('../../utils/logger');
-const { exec } = require('child_process');
-const { promisify } = require('util');
-const fs = require('fs').promises;
-const path = require('path');
-const os = require('os');
+const axios = require('axios');
 
-const execAsync = promisify(exec);
+const mosintServiceUrl = process.env.MOSINT_SERVICE_URL;
 
 class MosintService {
   constructor(prisma) {
     this.prisma = prisma;
     this.toolName = 'mosint';
-    this.reportsDir = path.join(os.tmpdir(), 'numosint_reports', 'mosint');
-    this.init();
-  }
-
-  async init() {
-    try {
-      await fs.mkdir(this.reportsDir, { recursive: true });
-    } catch (error) {
-      logger.error(`Impossible de créer le répertoire pour les rapports Mosint: ${error.message}`);
-    }
   }
 
   /**
@@ -30,30 +16,51 @@ class MosintService {
    */
   async analyzeEmail(investigationId, emailIndicator) {
     const email = emailIndicator.value;
+    if (!mosintServiceUrl) {
+        logger.toolError(this.toolName, investigationId, "La variable d'environnement MOSINT_SERVICE_URL n'est pas définie.");
+        return;
+    }
+
     try {
       logger.tool(this.toolName, investigationId, `Analyse de l'email: ${email}`);
 
-      const reportPath = path.join(this.reportsDir, `${email.replace(/[^a-zA-Z0-9]/g, '_')}_${Date.now()}.json`);
-      const analysis = await this.executeMosintCommand(email, reportPath);
+      const response = await axios.post(`${mosintServiceUrl}/scan`, { email }, {
+        timeout: 180000, // 3 minutes
+      });
+      
+      const analysis = response.data;
 
-      // Sauvegarde des résultats
-      await this.prisma.result.create({
-        data: {
+      // Vérification des doublons avant de sauvegarder les résultats
+      const existingResult = await this.prisma.result.findFirst({
+        where: {
           investigationId,
           indicatorId: emailIndicator.id,
           toolSource: this.toolName,
-          data: analysis,
-          score: this.calculateEmailScore(analysis),
-        },
+        }
       });
 
+      if (!existingResult) {
+        await this.prisma.result.create({
+          data: {
+            investigationId,
+            indicatorId: emailIndicator.id,
+            toolSource: this.toolName,
+            data: analysis,
+            score: this.calculateEmailScore(analysis),
+          },
+        });
+      } else {
+        logger.tool(this.toolName, investigationId, `Résultat déjà existant pour l'email ${email}. Pas de nouvelle sauvegarde.`);
+      }
+
       // Ajout des nouveaux indicateurs découverts
-      await this.addDiscoveredIndicators(investigationId, analysis);
+      await this.addDiscoveredIndicators(investigationId, analysis, emailIndicator);
 
       logger.tool(this.toolName, investigationId, `Email ${email}: ${analysis.breaches?.length || 0} fuites, ${analysis.social_media?.length || 0} profils sociaux`);
 
     } catch (error) {
-      logger.toolError(this.toolName, investigationId, error);
+      const errorMessage = error.response ? JSON.stringify(error.response.data) : error.message;
+      logger.toolError(this.toolName, investigationId, `Erreur lors de l'appel au service Mosint pour ${email}: ${errorMessage}`);
       await this.prisma.result.create({
         data: {
           investigationId,
@@ -61,52 +68,11 @@ class MosintService {
           toolSource: this.toolName,
           data: {
             email,
-            error: error.message,
+            error: `Erreur du service Mosint: ${errorMessage}`,
           },
           score: 0,
         },
       });
-    }
-  }
-
-  /**
-   * Exécute Mosint en ligne de commande.
-   */
-  async executeMosintCommand(email, reportPath) {
-    const safeEmail = email.replace(/(["'$`\\])/g, '\\$1');
-    // La configuration de Mosint doit être faite en amont (ex: via un fichier config.json)
-    const command = `mosint -j "${safeEmail}" > "${reportPath}"`;
-
-    try {
-      const { stderr } = await execAsync(command, {
-        timeout: 180000, // 3 minutes
-      });
-
-      if (stderr) {
-        logger.warn(`Mosint stderr for email ${safeEmail}: ${stderr}`);
-      }
-
-      return this.parseMosintOutput(reportPath);
-
-    } catch (error) {
-      logger.error(`Erreur lors de l'exécution de Mosint pour ${safeEmail}:`, error);
-      throw error;
-    } finally {
-        await fs.unlink(reportPath).catch(() => {});
-    }
-  }
-
-  /**
-   * Parse la sortie JSON de Mosint.
-   */
-  async parseMosintOutput(reportPath) {
-    try {
-      const fileContent = await fs.readFile(reportPath, 'utf-8');
-      if (!fileContent) return {};
-      return JSON.parse(fileContent);
-    } catch (error) {
-      logger.error(`Erreur lors du parsing du rapport Mosint ${reportPath}:`, error);
-      return {};
     }
   }
 
@@ -132,8 +98,9 @@ class MosintService {
   /**
    * Ajoute les indicateurs découverts à l'investigation.
    */
-  async addDiscoveredIndicators(investigationId, analysis) {
+  async addDiscoveredIndicators(investigationId, analysis, parentIndicator) {
     const indicators = [];
+    const newGeneration = parentIndicator.generation + 1;
 
     if (analysis.social_media) {
       for (const profile of analysis.social_media) {
@@ -142,6 +109,8 @@ class MosintService {
                 type: IndicatorType.URL,
                 value: profile.url,
                 source: this.toolName,
+                confidence: 0.7, // Confiance haute pour un profil social trouvé
+                generation: newGeneration,
             });
         }
       }
@@ -153,6 +122,8 @@ class MosintService {
                 type: IndicatorType.EMAIL,
                 value: relEmail,
                 source: this.toolName,
+                confidence: 0.8, // Confiance très haute pour un email relié
+                generation: newGeneration,
             });
         }
     }
@@ -161,7 +132,6 @@ class MosintService {
         const dataToCreate = indicators.map(ind => ({
             ...ind,
             investigationId,
-            confidence: 0.8,
             verified: false,
             processed: false,
         }));
@@ -177,17 +147,22 @@ class MosintService {
    * Teste la configuration de Mosint.
    */
   async testConfiguration() {
+    if (!mosintServiceUrl) {
+        return { status: 'error', message: "La variable d'environnement MOSINT_SERVICE_URL n'est pas définie." };
+    }
     try {
-      const { stdout, stderr } = await execAsync('mosint -h');
-      if (stderr && !stdout) {
-        throw new Error(stderr);
-      }
-      return { status: 'success', message: 'Mosint est correctement configuré.' };
+      // Le service mosint n'a pas de route /health, on teste avec une requête vide qui devrait échouer avec un 400
+      await axios.post(`${mosintServiceUrl}/scan`, {}, { timeout: 5000 });
+      // Si on arrive ici, c'est inattendu, mais le service répond
+      return { status: 'success', message: 'Le service Mosint est accessible.' };
     } catch (error) {
-      logger.error('Erreur lors du test de configuration Mosint:', error);
+      if (error.response && error.response.status === 400) {
+        return { status: 'success', message: 'Le service Mosint est correctement configuré et répond.' };
+      }
+      logger.error('Erreur lors du test de configuration Mosint:', error.message);
       return {
         status: 'error',
-        message: 'Impossible d\'exécuter la commande mosint.',
+        message: 'Impossible de contacter le service Mosint.',
         error: error.message,
       };
     }

@@ -3,7 +3,7 @@
 import * as React from "react"
 import { Slot } from "@radix-ui/react-slot"
 import { VariantProps, cva } from "class-variance-authority"
-import { PanelLeft } from "lucide-react"
+import { MenuOpen } from "@mui/icons-material"
 
 import { useIsMobile } from "@/hooks/use-mobile"
 import { cn } from "@/lib/utils"
@@ -63,7 +63,7 @@ const SidebarProvider = React.forwardRef<
 >(
   (
     {
-      defaultOpen = true,
+      defaultOpen,
       open: openProp,
       onOpenChange: setOpenProp,
       className,
@@ -76,9 +76,25 @@ const SidebarProvider = React.forwardRef<
     const isMobile = useIsMobile()
     const [openMobile, setOpenMobile] = React.useState(false)
 
+    const [initialOpen, setInitialOpen] = React.useState(defaultOpen)
+
+    React.useEffect(() => {
+      const cookie = document.cookie
+        .split(";")
+        .find((c) => c.trim().startsWith(`${SIDEBAR_COOKIE_NAME}=`))
+      if (cookie) {
+        setInitialOpen(cookie.split("=")[1] === "true")
+      } else if (defaultOpen !== undefined) {
+        setInitialOpen(defaultOpen)
+      } else {
+        setInitialOpen(true)
+      }
+    }, [defaultOpen])
+
+
     // This is the internal state of the sidebar.
     // We use openProp and setOpenProp for control from outside the component.
-    const [_open, _setOpen] = React.useState(defaultOpen)
+    const [_open, _setOpen] = React.useState(initialOpen)
     const open = openProp ?? _open
     const setOpen = React.useCallback(
       (value: boolean | ((value: boolean) => boolean)) => {
@@ -288,7 +304,7 @@ const SidebarTrigger = React.forwardRef<
       }}
       {...props}
     >
-      <PanelLeft />
+      <MenuOpen />
       <span className="sr-only">Toggle Sidebar</span>
     </Button>
   )
@@ -514,7 +530,7 @@ const SidebarMenuItem = React.forwardRef<
   <li
     ref={ref}
     data-sidebar="menu-item"
-    className={cn("group/menu-item relative", className)}
+    className={cn("group/menu-item relative group-data-[collapsible=icon]:flex group-data-[collapsible=icon]:justify-center", className)}
     {...props}
   />
 ))

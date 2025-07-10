@@ -1,158 +1,131 @@
-const { PrismaClient } = require('@prisma/client');
 const { IndicatorType } = require('@prisma/client');
 const logger = require('../../utils/logger');
-const { exec } = require('child_process');
-const { promisify } = require('util');
-const fs = require('fs').promises;
-const path = require('path');
+const axios = require('axios');
 
-const execAsync = promisify(exec);
+const MAIGRET_SERVICE_URL = process.env.MAIGRET_SERVICE_URL || 'http://localhost:5002';
 
 class MaigretService {
   constructor(prisma) {
     this.prisma = prisma;
     this.toolName = 'maigret';
-    this.reportsDir = path.join(process.cwd(), 'reports', 'maigret');
-    this.initialize();
-  }
-
-  async initialize() {
-    try {
-      await fs.mkdir(this.reportsDir, { recursive: true });
-    } catch (error) {
-      logger.error(`Failed to create Maigret reports directory: ${error.message}`);
-    }
+    this.serviceUrl = MAIGRET_SERVICE_URL;
   }
 
   /**
-   * Recherche des profils pour un username spécifique.
+   * Recherche des profils pour un username spécifique en appelant le microservice Maigret.
    */
   async searchProfiles(investigationId, usernameIndicator) {
     const username = usernameIndicator.value;
     try {
-      logger.tool(this.toolName, investigationId, `Recherche de profils pour le username: ${username}`);
+      logger.tool(this.toolName, investigationId, `Recherche de profils pour le username: ${username} via le microservice`);
 
       const profiles = await this.executeMaigretCommand(username);
       
-      // Sauvegarde des résultats
-      await this.prisma.result.create({
-        data: {
+      // La logique de sauvegarde des résultats et de création de nouveaux indicateurs reste la même.
+      const existingResult = await this.prisma.result.findFirst({
+        where: {
           investigationId,
           indicatorId: usernameIndicator.id,
           toolSource: this.toolName,
-          data: {
-            username,
-            profiles,
-          },
-          score: profiles.length > 0 ? Math.min(profiles.length / 50, 1) : 0, // Score basé sur le nombre de profils
-        },
+        }
       });
 
-      // Ajout des URLs de profil comme nouveaux indicateurs
-      if (profiles.length > 0) {
-        const indicatorData = profiles.map(profile => ({
-          investigationId,
-          type: IndicatorType.URL,
-          value: profile.url,
-          source: this.toolName,
-          confidence: 0.9,
-          verified: true, // Maigret a confirmé l'existence
-          processed: false,
-        }));
-
-        await this.prisma.indicator.createMany({
-          data: indicatorData,
-          skipDuplicates: true,
+      if (!existingResult) {
+        await this.prisma.result.create({
+          data: {
+            investigationId,
+            indicatorId: usernameIndicator.id,
+            toolSource: this.toolName,
+            data: {
+              username,
+              profiles,
+            },
+            score: profiles.length > 0 ? Math.min(profiles.length / 50, 1) : 0,
+          },
         });
+      } else {
+        logger.tool(this.toolName, investigationId, `Résultat déjà existant pour le username ${username}. Pas de nouvelle sauvegarde.`);
       }
 
-      logger.tool(this.toolName, investigationId, `Username ${username}: ${profiles.length} profils trouvés`);
+      if (profiles.length > 0) {
+        const indicatorData = profiles
+          .filter(profile => profile && profile.url) // S'assurer que le profil et l'URL existent
+          .map(profile => ({
+            investigationId,
+            type: IndicatorType.URL,
+            value: profile.url,
+            source: this.toolName,
+            confidence: 0.9,
+            generation: usernameIndicator.generation + 1,
+            verified: true,
+            processed: false,
+          }));
+
+        if (indicatorData.length > 0) {
+            await this.prisma.indicator.createMany({
+                data: indicatorData,
+                skipDuplicates: true,
+            });
+        }
+      }
+
+      logger.tool(this.toolName, investigationId, `Username ${username}: ${profiles.length} profils trouvés via le microservice`);
 
     } catch (error) {
       logger.toolError(this.toolName, investigationId, error);
-      await this.prisma.result.create({
-        data: {
-          investigationId,
-          indicatorId: usernameIndicator.id,
-          toolSource: this.toolName,
-          data: {
-            username,
-            error: error.message,
-          },
-          score: 0,
-        },
-      });
-    }
-  }
-
-  /**
-   * Exécute Maigret en ligne de commande.
-   */
-  async executeMaigretCommand(username, options = {}) {
-    const safeUsername = username.replace(/(["'$`\\])/g, '\\$1');
-    const reportPath = path.join(this.reportsDir, `${safeUsername}_${Date.now()}.json`);
-
-    try {
-      // Utilisation de l'option --json-file pour une sortie structurée
-      let command = `maigret --json-file "${reportPath}" "${safeUsername}"`;
-      
-      if (options.timeout) {
-        command += ` --timeout ${options.timeout}`;
-      }
-
-      const { stderr } = await execAsync(command, {
-        timeout: (options.timeout || 300) * 1000, // 5 minutes timeout par défaut
-      });
-
-      if (stderr) {
-        logger.warn(`Maigret stderr for ${safeUsername}: ${stderr}`);
-      }
-
-      return await this.parseMaigretOutput(reportPath);
-
-    } catch (error) {
-      logger.error(`Erreur lors de l'exécution de Maigret pour ${safeUsername}:`, error);
+      // On ne crée plus de résultat d'erreur ici, car l'orchestrateur va marquer l'investigation comme FAILED.
+      // Cela évite de polluer les résultats avec des entrées d'erreur.
+      // On propage l'erreur pour que l'orchestrateur la traite.
       throw error;
-    } finally {
-      await fs.unlink(reportPath).catch(() => {});
     }
   }
 
   /**
-   * Parse la sortie JSON de Maigret.
+   * Appelle le microservice Maigret.
    */
-  async parseMaigretOutput(reportPath) {
+  async executeMaigretCommand(username) {
     try {
-      const fileContent = await fs.readFile(reportPath, 'utf-8');
-      const report = JSON.parse(fileContent);
+      const response = await axios.post(`${this.serviceUrl}/scan`, { username }, {
+        timeout: 300000 // 5 minutes timeout
+      });
       
-      if (report && report.sites) {
-        return Object.values(report.sites).filter(site => site.status === 'found' && site.url);
+      // Le microservice retourne directement la liste des profils trouvés.
+      // On s'assure de retourner un tableau même si la réponse est vide ou malformée.
+      const data = response.data;
+      if (data && data.sites && typeof data.sites === 'object') {
+        return Object.values(data.sites).filter(site => site.status === 'found' && site.url);
       }
-
       return [];
 
     } catch (error) {
-      logger.error(`Erreur lors du parsing du rapport Maigret ${reportPath}:`, error);
-      return [];
+      const errorMessage = error.response ? JSON.stringify(error.response.data) : error.message;
+      logger.error(`Erreur lors de l'appel au microservice Maigret pour ${username}: ${errorMessage}`);
+      // Propage une erreur plus explicite pour l'orchestrateur.
+      throw new Error(`Maigret service failed for ${username}: ${errorMessage}`);
     }
   }
 
   /**
-   * Teste la configuration de Maigret.
+   * Teste la connexion au microservice Maigret.
    */
   async testConfiguration() {
     try {
-      const { stdout, stderr } = await execAsync('maigret --version');
-      if (stderr && !stdout) {
-        throw new Error(stderr);
+      // On pourrait ajouter un endpoint /health au microservice pour un meilleur test.
+      // Pour l'instant, on se contente de vérifier que l'URL est définie.
+      if (!this.serviceUrl) {
+          throw new Error('MAIGRET_SERVICE_URL is not defined');
       }
-      return { status: 'success', message: `Maigret est accessible. Version: ${stdout.trim()}` };
+      // Un test plus approfondi pourrait faire un appel à un endpoint /health
+      // const response = await axios.get(`${this.serviceUrl}/health`);
+      // if (response.status !== 200) {
+      //     throw new Error(`Maigret service health check failed with status ${response.status}`);
+      // }
+      return { status: 'success', message: `Maigret service est configuré à l'adresse: ${this.serviceUrl}` };
     } catch (error) {
-      logger.error('Erreur lors du test de configuration Maigret:', error);
+      logger.error('Erreur lors du test de configuration Maigret service:', error);
       return {
         status: 'error',
-        message: 'Impossible d\'exécuter la commande maigret.',
+        message: 'Impossible de contacter le microservice Maigret.',
         error: error.message,
       };
     }

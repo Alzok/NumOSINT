@@ -15,7 +15,9 @@ const createInvestigationSchema = Joi.object({
   phones: Joi.array().items(Joi.string().pattern(/^[\+]?[0-9\s\-\(\)]+$/)).optional(),
   domains: Joi.array().items(Joi.string().domain()).optional(),
   ips: Joi.array().items(Joi.string().ip()).optional(),
-  urls: Joi.array().items(Joi.string().uri()).optional()
+  urls: Joi.array().items(Joi.string().uri()).optional(),
+  maxGeneration: Joi.number().integer().min(1).max(10).optional(),
+  minConfidence: Joi.number().min(0).max(1).optional()
 }).min(1);
 
 const updateInvestigationSchema = Joi.object({
@@ -195,14 +197,17 @@ router.post('/', async (req, res) => {
     }
 
     // Création de l'investigation
+    const { maxGeneration, minConfidence, ...inputData } = value;
     const investigation = await prisma.investigation.create({
       data: {
         status: InvestigationStatus.INITIALIZING,
         progress: 0,
         currentStep: 'initialization',
-        inputData: value,
+        inputData: inputData,
+        maxGeneration: maxGeneration,
+        minConfidence: minConfidence,
         indicators: {
-          create: extractInitialIndicators(value)
+          create: extractInitialIndicators(inputData)
         }
       },
       include: {
@@ -372,7 +377,7 @@ router.post('/:id/start', async (req, res) => {
     }
 
     // Démarrage asynchrone de l'investigation
-    orchestrator.runEnrichmentFlow(id);
+    orchestrator.runInvestigationFlow(id);
 
     logger.investigation(id, 'Investigation démarrée');
 
@@ -397,45 +402,23 @@ router.post('/:id/start', async (req, res) => {
 router.post('/:id/stop', async (req, res) => {
   try {
     const { id } = req.params;
-
-    // Vérification de l'existence de l'investigation
-    const investigation = await prisma.investigation.findUnique({
-      where: { id }
-    });
-
-    if (!investigation) {
-      return res.status(404).json({
-        error: 'Investigation non trouvée',
-        message: `Aucune investigation trouvée avec l'ID ${id}`
-      });
-    }
-
-    // Vérification que l'investigation est en cours
-    if (investigation.status !== InvestigationStatus.ENRICHING && 
-        investigation.status !== InvestigationStatus.SCANNING &&
-        investigation.status !== InvestigationStatus.CONSOLIDATING) {
-      return res.status(400).json({
-        error: 'Investigation non en cours',
-        message: 'Cette investigation n\'est pas en cours d\'exécution'
-      });
-    }
-
-    // Arrêt de l'investigation via l'orchestrateur
     const { orchestrator } = req.app.locals;
-    
-    if (orchestrator) {
-      await orchestrator.stopInvestigation(id);
+
+    if (!orchestrator) {
+      return res.status(500).json({
+        error: 'Orchestrateur non disponible',
+        message: 'Le service d\'orchestration n\'est pas disponible'
+      });
     }
 
-    logger.investigation(id, 'Investigation arrêtée');
+    const result = await orchestrator.stopInvestigation(id);
+    
+    logger.investigation(id, 'Demande d\'arrêt de l\'investigation');
 
-    res.json({
-      message: 'Investigation arrêtée avec succès',
-      investigationId: id
-    });
+    res.status(202).json(result);
 
   } catch (error) {
-    logger.error('Erreur lors de l\'arrêt de l\'investigation:', error);
+    logger.error(`Erreur lors de la demande d'arrêt de l'investigation ${req.params.id}:`, error);
     res.status(500).json({
       error: 'Erreur interne du serveur',
       message: error.message

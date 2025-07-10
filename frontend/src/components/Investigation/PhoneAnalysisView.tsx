@@ -3,19 +3,19 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { 
-  Phone, 
-  MapPin, 
-  Globe, 
-  Shield, 
-  AlertTriangle, 
-  CheckCircle, 
-  XCircle,
-  Clock,
+import {
+  Phone as PhoneIcon,
+  LocationOn,
+  Language,
+  Security,
+  Warning,
+  CheckCircleOutline,
+  Cancel,
+  Schedule,
   Wifi,
-  Building,
-  Users
-} from 'lucide-react';
+  Business,
+  Group
+} from '@mui/icons-material';
 
 interface PhoneAnalysisData {
   phone_number: string;
@@ -93,7 +93,7 @@ const PhoneAnalysisView: React.FC<PhoneAnalysisViewProps> = ({ data, loading = f
   if (!data || data.length === 0) {
     return (
       <Alert>
-        <Phone className="h-4 w-4" />
+        <PhoneIcon className="h-4 w-4" />
         <AlertDescription>
           Aucune analyse de numéro de téléphone disponible pour cette investigation.
         </AlertDescription>
@@ -112,10 +112,10 @@ const PhoneAnalysisView: React.FC<PhoneAnalysisViewProps> = ({ data, loading = f
 
   const getRiskIcon = (level: string) => {
     switch (level) {
-      case 'Low': return <CheckCircle className="h-4 w-4 text-green-600" />;
-      case 'Medium': return <AlertTriangle className="h-4 w-4 text-yellow-600" />;
-      case 'High': return <XCircle className="h-4 w-4 text-red-600" />;
-      default: return <Shield className="h-4 w-4 text-gray-600" />;
+      case 'Low': return <CheckCircleOutline className="h-4 w-4 text-green-600" />;
+      case 'Medium': return <Warning className="h-4 w-4 text-yellow-600" />;
+      case 'High': return <Cancel className="h-4 w-4 text-red-600" />;
+      default: return <Security className="h-4 w-4 text-gray-600" />;
     }
   };
 
@@ -140,7 +140,7 @@ const PhoneAnalysisView: React.FC<PhoneAnalysisViewProps> = ({ data, loading = f
   return (
     <div className="space-y-6">
       <div className="flex items-center space-x-2">
-        <Phone className="h-5 w-5 text-blue-600" />
+        <PhoneIcon className="h-5 w-5 text-blue-600" />
         <h2 className="text-xl font-semibold">Analyse des Numéros de Téléphone</h2>
         <Badge variant="outline">{data.length} numéro(s)</Badge>
       </div>
@@ -150,7 +150,7 @@ const PhoneAnalysisView: React.FC<PhoneAnalysisViewProps> = ({ data, loading = f
           <CardHeader>
             <CardTitle className="flex items-center justify-between">
               <div className="flex items-center space-x-2">
-                <Phone className="h-5 w-5" />
+                <PhoneIcon className="h-5 w-5" />
                 <span className="font-mono text-sm">{analysis.validation.format_international}</span>
                 <span className="text-lg">{analysis.country_info.flag}</span>
               </div>
@@ -168,7 +168,7 @@ const PhoneAnalysisView: React.FC<PhoneAnalysisViewProps> = ({ data, loading = f
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <div className="flex items-center space-x-2">
-                  <Shield className="h-4 w-4 text-gray-500" />
+                  <Security className="h-4 w-4 text-gray-500" />
                   <span className="font-medium">Validation</span>
                 </div>
                 <div className="space-y-1 text-sm">
@@ -189,7 +189,7 @@ const PhoneAnalysisView: React.FC<PhoneAnalysisViewProps> = ({ data, loading = f
 
               <div className="space-y-2">
                 <div className="flex items-center space-x-2">
-                  <Globe className="h-4 w-4 text-gray-500" />
+                  <Language className="h-4 w-4 text-gray-500" />
                   <span className="font-medium">Formats</span>
                 </div>
                 <div className="space-y-1 text-sm">
@@ -208,7 +208,7 @@ const PhoneAnalysisView: React.FC<PhoneAnalysisViewProps> = ({ data, loading = f
             {/* Informations du pays */}
             <div className="space-y-3">
               <div className="flex items-center space-x-2">
-                <MapPin className="h-4 w-4 text-green-500" />
+                <LocationOn className="h-4 w-4 text-green-500" />
                 <span className="font-medium">Informations géographiques</span>
               </div>
               
@@ -265,7 +265,7 @@ const PhoneAnalysisView: React.FC<PhoneAnalysisViewProps> = ({ data, loading = f
             {/* Informations de l'opérateur */}
             <div className="space-y-3">
               <div className="flex items-center space-x-2">
-                <Building className="h-4 w-4 text-blue-500" />
+                <Business className="h-4 w-4 text-blue-500" />
                 <span className="font-medium">Informations de l'opérateur</span>
               </div>
               
@@ -296,7 +296,7 @@ const PhoneAnalysisView: React.FC<PhoneAnalysisViewProps> = ({ data, loading = f
             {/* Évaluation des risques */}
             <div className="space-y-3">
               <div className="flex items-center space-x-2">
-                <Shield className="h-4 w-4 text-orange-500" />
+                <Security className="h-4 w-4 text-orange-500" />
                 <span className="font-medium">Évaluation des risques</span>
               </div>
               
@@ -332,7 +332,7 @@ const PhoneAnalysisView: React.FC<PhoneAnalysisViewProps> = ({ data, loading = f
             {analysis.social_media && analysis.social_media.length > 0 && (
               <div className="space-y-3">
                 <div className="flex items-center space-x-2">
-                  <Users className="h-4 w-4 text-purple-500" />
+                  <Group className="h-4 w-4 text-purple-500" />
                   <span className="font-medium">Profils sociaux associés</span>
                 </div>
                 
@@ -351,9 +351,9 @@ const PhoneAnalysisView: React.FC<PhoneAnalysisViewProps> = ({ data, loading = f
                           {Math.round(social.confidence * 100)}%
                         </Badge>
                         {social.found && social.profile_url && (
-                          <a 
-                            href={social.profile_url} 
-                            target="_blank" 
+                          <a
+                            href={social.profile_url}
+                            target="_blank"
                             rel="noopener noreferrer"
                             className="text-blue-600 hover:text-blue-800 text-sm"
                           >
@@ -361,9 +361,9 @@ const PhoneAnalysisView: React.FC<PhoneAnalysisViewProps> = ({ data, loading = f
                           </a>
                         )}
                         {social.found ? (
-                          <CheckCircle className="h-3 w-3 text-green-500" />
+                          <CheckCircleOutline className="h-3 w-3 text-green-500" />
                         ) : (
-                          <XCircle className="h-3 w-3 text-red-500" />
+                          <Cancel className="h-3 w-3 text-red-500" />
                         )}
                       </div>
                     </div>
@@ -375,7 +375,7 @@ const PhoneAnalysisView: React.FC<PhoneAnalysisViewProps> = ({ data, loading = f
             {/* Métadonnées */}
             <div className="space-y-3">
               <div className="flex items-center space-x-2">
-                <Clock className="h-4 w-4 text-gray-500" />
+                <Schedule className="h-4 w-4 text-gray-500" />
                 <span className="font-medium">Informations techniques</span>
               </div>
               

@@ -4,7 +4,7 @@ import React, { useMemo } from 'react';
 import { Investigation, Result, Indicator } from '@/lib/investigation-api';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { User, Mail, Phone, MapPin, Link as LinkIcon, Globe, Image as ImageIcon } from 'lucide-react';
+import { Person, Email, Phone as PhoneIcon, LocationOn, Link as MuiLink, Language, Image } from '@mui/icons-material';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Carousel, CarouselContent, CarouselItem, CarouselNext, CarouselPrevious } from '@/components/ui/carousel';
 
@@ -141,10 +141,10 @@ const InvestigationReportView: React.FC<InvestigationReportViewProps> = ({
               <CardTitle>Informations Clés</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              <InfoItem icon={<User className="h-5 w-5" />} label="Noms" value={keyInfo.names} />
-              <InfoItem icon={<Mail className="h-5 w-5" />} label="Emails" value={keyInfo.emails} />
-              <InfoItem icon={<Phone className="h-5 w-5" />} label="Téléphones" value={keyInfo.phones} />
-              <InfoItem icon={<MapPin className="h-5 w-5" />} label="Localisations" value={keyInfo.locations} />
+              <InfoItem icon={<Person className="h-5 w-5" />} label="Noms" value={keyInfo.names} />
+              <InfoItem icon={<Email className="h-5 w-5" />} label="Emails" value={keyInfo.emails} />
+              <InfoItem icon={<PhoneIcon className="h-5 w-5" />} label="Téléphones" value={keyInfo.phones} />
+              <InfoItem icon={<LocationOn className="h-5 w-5" />} label="Localisations" value={keyInfo.locations} />
             </CardContent>
           </Card>
           
@@ -198,7 +198,7 @@ const InvestigationReportView: React.FC<InvestigationReportViewProps> = ({
                         </TableCell>
                         <TableCell>
                           <a href={account.url} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline">
-                            <LinkIcon className="h-4 w-4 inline-block" />
+                            <MuiLink className="h-4 w-4 inline-block" />
                           </a>
                         </TableCell>
                       </TableRow>
@@ -207,7 +207,7 @@ const InvestigationReportView: React.FC<InvestigationReportViewProps> = ({
                 </Table>
               ) : (
                 <div className="text-center py-8 text-muted-foreground">
-                  <Globe className="h-8 w-8 mx-auto mb-2" />
+                  <Language className="h-8 w-8 mx-auto mb-2" />
                   <p>Aucun compte en ligne trouvé.</p>
                 </div>
               )}

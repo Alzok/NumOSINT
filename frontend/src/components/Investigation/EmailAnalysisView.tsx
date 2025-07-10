@@ -3,17 +3,17 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { 
-  Mail, 
-  Shield, 
-  AlertTriangle, 
-  CheckCircle, 
-  XCircle,
-  Globe,
-  User,
-  Calendar,
-  Database
-} from 'lucide-react';
+import {
+  Email,
+  Security,
+  Warning,
+  CheckCircleOutline,
+  Cancel,
+  Language,
+  Person,
+  CalendarToday,
+  Storage
+} from '@mui/icons-material';
 
 interface EmailAnalysisData {
   email: string;
@@ -65,7 +65,7 @@ const EmailAnalysisView: React.FC<EmailAnalysisViewProps> = ({ data, loading = f
   if (!data || data.length === 0) {
     return (
       <Alert>
-        <Mail className="h-4 w-4" />
+        <Email className="h-4 w-4" />
         <AlertDescription>
           Aucune analyse d'email disponible pour cette investigation.
         </AlertDescription>
@@ -93,17 +93,17 @@ const EmailAnalysisView: React.FC<EmailAnalysisViewProps> = ({ data, loading = f
 
   const getReputationIcon = (status: string) => {
     switch (status) {
-      case 'clean': return <CheckCircle className="h-4 w-4 text-green-600" />;
-      case 'suspicious': return <AlertTriangle className="h-4 w-4 text-yellow-600" />;
-      case 'malicious': return <XCircle className="h-4 w-4 text-red-600" />;
-      default: return <Shield className="h-4 w-4 text-gray-600" />;
+      case 'clean': return <CheckCircleOutline className="h-4 w-4 text-green-600" />;
+      case 'suspicious': return <Warning className="h-4 w-4 text-yellow-600" />;
+      case 'malicious': return <Cancel className="h-4 w-4 text-red-600" />;
+      default: return <Security className="h-4 w-4 text-gray-600" />;
     }
   };
 
   return (
     <div className="space-y-6">
       <div className="flex items-center space-x-2">
-        <Mail className="h-5 w-5 text-blue-600" />
+        <Email className="h-5 w-5 text-blue-600" />
         <h2 className="text-xl font-semibold">Analyse des Emails</h2>
         <Badge variant="outline">{data.length} email(s)</Badge>
       </div>
@@ -113,7 +113,7 @@ const EmailAnalysisView: React.FC<EmailAnalysisViewProps> = ({ data, loading = f
           <CardHeader>
             <CardTitle className="flex items-center justify-between">
               <div className="flex items-center space-x-2">
-                <Mail className="h-5 w-5" />
+                <Email className="h-5 w-5" />
                 <span className="font-mono text-sm">{analysis.email}</span>
               </div>
               <div className="flex items-center space-x-2">
@@ -146,7 +146,7 @@ const EmailAnalysisView: React.FC<EmailAnalysisViewProps> = ({ data, loading = f
             {analysis.breaches && analysis.breaches.length > 0 && (
               <div className="space-y-3">
                 <div className="flex items-center space-x-2">
-                  <Database className="h-4 w-4 text-red-500" />
+                  <Storage className="h-4 w-4 text-red-500" />
                   <span className="font-medium">Fuites de données détectées</span>
                   <Badge variant="destructive">{analysis.breaches.length}</Badge>
                 </div>
@@ -163,7 +163,7 @@ const EmailAnalysisView: React.FC<EmailAnalysisViewProps> = ({ data, loading = f
                       </div>
                       
                       <div className="flex items-center space-x-2 text-sm text-gray-600">
-                        <Calendar className="h-3 w-3" />
+                        <CalendarToday className="h-3 w-3" />
                         <span>{breach.date}</span>
                         {breach.verified && (
                           <Badge variant="outline" className="text-xs">
@@ -191,7 +191,7 @@ const EmailAnalysisView: React.FC<EmailAnalysisViewProps> = ({ data, loading = f
             {analysis.social_profiles && analysis.social_profiles.length > 0 && (
               <div className="space-y-3">
                 <div className="flex items-center space-x-2">
-                  <User className="h-4 w-4 text-blue-500" />
+                  <Person className="h-4 w-4 text-blue-500" />
                   <span className="font-medium">Profils sociaux associés</span>
                   <Badge variant="outline">{analysis.social_profiles.length}</Badge>
                 </div>
@@ -200,20 +200,20 @@ const EmailAnalysisView: React.FC<EmailAnalysisViewProps> = ({ data, loading = f
                   {analysis.social_profiles.map((profile, i) => (
                     <div key={i} className="flex items-center justify-between p-2 border rounded">
                       <div className="flex items-center space-x-2">
-                        <Globe className="h-4 w-4 text-gray-500" />
+                        <Language className="h-4 w-4 text-gray-500" />
                         <span className="font-medium">{profile.platform}</span>
                       </div>
                       <div className="flex items-center space-x-2">
-                        <a 
-                          href={profile.url} 
-                          target="_blank" 
+                        <a
+                          href={profile.url}
+                          target="_blank"
                           rel="noopener noreferrer"
                           className="text-blue-600 hover:text-blue-800 text-sm"
                         >
                           Voir le profil
                         </a>
                         {profile.verified && (
-                          <CheckCircle className="h-3 w-3 text-green-500" />
+                          <CheckCircleOutline className="h-3 w-3 text-green-500" />
                         )}
                       </div>
                     </div>
@@ -225,7 +225,7 @@ const EmailAnalysisView: React.FC<EmailAnalysisViewProps> = ({ data, loading = f
             {/* Métadonnées */}
             <div className="space-y-3">
               <div className="flex items-center space-x-2">
-                <Shield className="h-4 w-4 text-gray-500" />
+                <Security className="h-4 w-4 text-gray-500" />
                 <span className="font-medium">Informations techniques</span>
               </div>
               

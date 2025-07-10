@@ -1,5 +1,6 @@
 const logger = require('../utils/logger');
 const { InvestigationStatus, IndicatorType } = require('@prisma/client');
+const eventBus = require('../utils/eventBus');
 
 // Services des outils OSINT
 const BusterService = require('./tools/buster');
@@ -20,287 +21,380 @@ class OrchestratorService {
     this.maigretService = new MaigretService(prisma);
     this.phoneinfogaService = new PhoneInfogaService(prisma);
     this.spiderfootService = new SpiderFootService(prisma);
+
+    // Écoute des événements globaux de l'application
+    eventBus.on('tool:scan_completed', this.handleToolCompletion.bind(this));
+    eventBus.on('tool:pulse', this.handleToolPulse.bind(this));
   }
 
   /**
-   * Démarre une nouvelle investigation
+   * Démarre et pilote le flux d'une investigation en fonction de sa phase.
+   * C'est le routeur principal de la machine à états.
    */
-  async startInvestigation(inputData) {
+  async runInvestigationFlow(investigationId) {
     try {
-      logger.info(`🚀 Démarrage d'une nouvelle investigation`, { inputData });
+      let investigation = await this.prisma.investigation.findUnique({ where: { id: investigationId } });
+      if (!investigation) {
+        logger.error(`Investigation ${investigationId} non trouvée pour le démarrage du flux.`);
+        return;
+      }
 
-      const investigation = await this.prisma.investigation.create({
-        data: {
-          status: InvestigationStatus.INITIALIZING,
-          progress: 0,
-          currentStep: 'initialization',
-          inputData: inputData,
-          indicators: {
-            create: this.extractInitialIndicators(inputData)
-          }
-        },
-        include: {
-          indicators: true
-        }
-      });
+      // Vérification d'annulation ou d'échec
+      if (this.isCancelled(investigationId)) {
+        await this.cancelInvestigation(investigationId);
+        return;
+      }
+      if (investigation.status === 'FAILED') {
+        logger.warn(`Arrêt du flux pour l'investigation ${investigationId} car son statut est FAILED.`);
+        this.activeInvestigations.delete(investigationId);
+        return;
+      }
 
-      this.activeInvestigations.set(investigation.id, {
-        investigation,
-        status: 'running',
-        startTime: new Date()
-      });
+      logger.info(`Investigation ${investigationId} - Phase actuelle: ${investigation.currentPhase}`);
 
-      this.io.to(investigation.id).emit('investigation:started', {
-        id: investigation.id,
-        status: investigation.status,
-        progress: investigation.progress
-      });
-
-      // Démarrage de la boucle d'enrichissement en arrière-plan
-      this.runEnrichmentLoop(investigation.id).catch(err => {
-        logger.error(`Erreur non capturée dans la boucle d'enrichissement pour ${investigation.id}:`, err);
-        this.handleInvestigationError(investigation.id, err);
-      });
-
-      return investigation;
-
+      switch (investigation.currentPhase) {
+        case 'ENRICHMENT':
+          await this.runPhaseEnrichment(investigationId);
+          break;
+        case 'SCANNING':
+          await this.runPhaseScanning(investigationId);
+          break;
+        case 'CONSOLIDATION':
+          await this.runPhaseConsolidation(investigationId);
+          break;
+        default:
+          logger.error(`Phase inconnue "${investigation.currentPhase}" pour l'investigation ${investigationId}.`);
+          await this.handleInvestigationError(investigationId, new Error(`Phase inconnue: ${investigation.currentPhase}`));
+      }
     } catch (error) {
-      logger.error('❌ Erreur lors du démarrage de l\'investigation:', error);
-      throw error;
+      logger.error(`Erreur dans le flux principal de l'investigation ${investigationId}:`, error);
+      await this.handleInvestigationError(investigationId, error);
     }
-  }
-
-  /**
-   * Extrait les indicateurs initiaux depuis les données d'entrée
-   */
-  extractInitialIndicators(inputData) {
-    const indicators = [];
-    const processInput = (items, type) => {
-        if (items && Array.isArray(items)) {
-            items.forEach(value => {
-                if (value && value.trim()) {
-                    indicators.push({
-                        type,
-                        value: value.trim(),
-                        source: 'input',
-                        confidence: 1.0,
-                        verified: true,
-                        processed: false,
-                    });
-                }
-            });
-        }
-    };
-
-    processInput(inputData.names, IndicatorType.NAME);
-    processInput(inputData.emails, IndicatorType.EMAIL);
-    processInput(inputData.usernames, IndicatorType.USERNAME);
-    processInput(inputData.phones, IndicatorType.PHONE);
-    processInput(inputData.domains, IndicatorType.DOMAIN);
-
-    return indicators;
-  }
-
-  /**
-   * Exécute la boucle d'enrichissement récursive.
-   */
-  async runEnrichmentLoop(investigationId) {
+    }
+    
+    /**
+     * Gère les pulsations des outils longue durée pour montrer une progression.
+     */
+    async handleToolPulse(data) {
+    const { investigationId, tool } = data;
     try {
-      logger.info(`🔄 Démarrage de la boucle d'enrichissement pour l'investigation ${investigationId}`);
-      await this.updateInvestigationStatus(investigationId, InvestigationStatus.ENRICHING, 5, 'enrichment_started');
+      const investigation = await this.prisma.investigation.findUnique({
+        where: { id: investigationId },
+        select: { progress: true, currentPhase: true, status: true }
+      });
+    
+      // On ne met à jour que si l'investigation est en cours et dans la bonne phase
+      if (investigation && investigation.status === 'SCANNING' && investigation.currentPhase === 'SCANNING') {
+        const newProgress = Math.min(investigation.progress + 1, 94); // Plafonne à 94%
+        if (newProgress > investigation.progress) {
+          await this.updateInvestigationStatus(investigationId, undefined, newProgress, `scanning_pulse_from_${tool}`);
+        }
+      }
+    } catch (error) {
+      logger.warn(`Impossible de traiter la pulsation pour l'investigation ${investigationId}:`, error);
+    }
+    }
 
-      let unprocessedIndicator = await this.findNextIndicator(investigationId);
+  /**
+   * PHASE 1: Enrichissement spécialisé ("Frappes Chirurgicales")
+   */
+  async runPhaseEnrichment(investigationId) {
+    await this.updateInvestigationStatus(investigationId, InvestigationStatus.ENRICHING, 5, 'enrichment_started');
 
-      while (unprocessedIndicator) {
+    while (true) {
+      if (this.isCancelled(investigationId)) {
+        logger.info(`[Enrichment] Annulation détectée pour l'investigation ${investigationId}. Arrêt de la phase.`);
+        await this.cancelInvestigation(investigationId);
+        return;
+      }
+
+      const indicator = await this.findNextSpecializedIndicator(investigationId);
+
+      if (indicator) {
         await this.prisma.indicator.update({
-          where: { id: unprocessedIndicator.id },
+          where: { id: indicator.id },
           data: { processed: true },
         });
 
-        await this.dispatchIndicatorToTool(unprocessedIndicator);
-        
-        await this.updateProgress(investigationId);
-
-        unprocessedIndicator = await this.findNextIndicator(investigationId);
+        await this.dispatchForEnrichment(indicator);
+        await this.updateProgress(investigationId, 5, 70);
+      } else {
+        // Plus d'indicateurs à enrichir, la phase est terminée.
+        logger.info(`Phase d'enrichissement terminée pour ${investigationId}. Passage au scanning.`);
+        await this.updateInvestigationPhase(investigationId, 'SCANNING');
+        this.runInvestigationFlow(investigationId);
+        break; // Sortir de la boucle while
       }
-
-      logger.info(`✅ Boucle d'enrichissement terminée pour l'investigation ${investigationId}`);
-      await this.runConsolidationStep(investigationId);
-      await this.finalizeInvestigation(investigationId);
-
-    } catch (error) {
-      logger.error(`❌ Erreur dans la boucle d'enrichissement pour ${investigationId}:`, error);
-      await this.handleInvestigationError(investigationId, error);
     }
   }
 
   /**
-   * Trouve le prochain indicateur non traité.
+   * PHASE 2: Scan exhaustif ("Couverture Totale")
    */
-  async findNextIndicator(investigationId) {
+  async runPhaseScanning(investigationId) {
+    await this.updateInvestigationStatus(investigationId, InvestigationStatus.SCANNING, 75, 'scanning_started');
+    
+    const indicatorsForScan = await this.prisma.indicator.findMany({
+      where: {
+        investigationId,
+        type: { in: [IndicatorType.DOMAIN, IndicatorType.IP, IndicatorType.URL, IndicatorType.EMAIL] }
+      }
+    });
+
+    if (indicatorsForScan.length > 0) {
+      logger.info(`Lancement du scan SpiderFoot pour ${investigationId} avec ${indicatorsForScan.length} indicateurs.`);
+      await this.logStep(investigationId, 'scanning', `Démarrage du scan exhaustif avec ${indicatorsForScan.length} indicateurs.`);
+      
+      // Le service SpiderFoot est maintenant asynchrone et notifiera via eventBus
+      this.spiderfootService.startScan(investigationId, indicatorsForScan);
+    } else {
+      logger.warn(`Aucun indicateur pertinent pour le scan SpiderFoot dans l'investigation ${investigationId}.`);
+      await this.logStep(investigationId, 'scanning', 'Aucun indicateur pour le scan exhaustif, passage direct à la consolidation.', 'WARNING');
+      // S'il n'y a rien à scanner, on passe manuellement à la phase suivante pour ne pas bloquer le flux.
+      await this.updateInvestigationPhase(investigationId, 'CONSOLIDATION');
+      this.runInvestigationFlow(investigationId);
+    }
+    // On ne fait plus rien ici, on attend l'événement de complétion du scan.
+  }
+
+  /**
+   * PHASE 3: Consolidation et Rapport
+   */
+  async runPhaseConsolidation(investigationId) {
+    await this.updateInvestigationStatus(investigationId, InvestigationStatus.CONSOLIDATING, 95, 'consolidation_started');
+    await this.logStep(investigationId, 'consolidation', 'Démarrage de la consolidation des résultats.');
+
+    const allResults = await this.prisma.result.findMany({
+      where: { investigationId },
+      include: { indicator: true }
+    });
+
+    const consolidatedResults = this.consolidateResults(allResults);
+    await this.generateFinalReport(investigationId, consolidatedResults);
+    
+    await this.logStep(investigationId, 'consolidation', 'Consolidation terminée.');
+    await this.finalizeInvestigation(investigationId);
+  }
+
+  /**
+   * Dispatch un indicateur vers les outils d'enrichissement spécialisés.
+   */
+  async handleToolCompletion(data) {
+    const { investigationId, tool, success, error } = data;
+    logger.info(`Événement de complétion reçu pour l'outil ${tool} sur l'investigation ${investigationId}. Succès: ${success}`);
+
+    if (!success) {
+      await this.logStep(investigationId, 'tool_completion_error', `L'outil ${tool} a échoué: ${error}`, 'ERROR');
+      // Décider si l'échec d'un outil doit faire échouer toute l'investigation.
+      // Pour l'instant, on continue le flux.
+    }
+
+    // Pour l'instant, seul SpiderFoot est géré. On pourrait ajouter une logique plus complexe ici.
+    if (tool === 'spiderfoot') {
+      await this.updateInvestigationPhase(investigationId, 'CONSOLIDATION');
+      this.runInvestigationFlow(investigationId);
+    }
+  }
+
+  async dispatchForEnrichment(indicator) {
+    const { investigationId, type } = indicator;
+    const toolName = this.getToolForIndicator(type);
+    await this.logStep(investigationId, 'enrichment_dispatch', `Traitement de l'indicateur ${type} '${indicator.value}' avec ${toolName || 'plusieurs outils'}.`);
+
+    try {
+      switch (type) {
+        case IndicatorType.NAME:
+          // Double stratégie: Buster pour les emails, Maigret pour les usernames
+          await this._runToolWithRetry(this.busterService.generateEmails.bind(this.busterService), investigationId, indicator);
+          await this._runToolWithRetry(this.maigretService.searchProfiles.bind(this.maigretService), investigationId, indicator);
+          break;
+        case IndicatorType.EMAIL:
+          await this._runToolWithRetry(this.mosintService.analyzeEmail.bind(this.mosintService), investigationId, indicator);
+          break;
+        case IndicatorType.USERNAME:
+          await this._runToolWithRetry(this.maigretService.searchProfiles.bind(this.maigretService), investigationId, indicator);
+          break;
+        case IndicatorType.PHONE:
+          await this._runToolWithRetry(this.phoneinfogaService.analyzePhone.bind(this.phoneinfogaService), investigationId, indicator);
+          break;
+        default:
+          logger.warn(`Type d'indicateur non traité en phase d'enrichissement: ${type}`);
+      }
+    } catch (error) {
+        logger.error(`Erreur lors du dispatch de l'indicateur ${indicator.id} pour enrichissement. L'investigation va être marquée comme échouée.`, error);
+        await this.handleInvestigationError(investigationId, error);
+    }
+  }
+
+  /**
+   * Trouve le prochain indicateur pour la phase d'enrichissement.
+   */
+  async findNextSpecializedIndicator(investigationId) {
+    const investigation = await this.prisma.investigation.findUnique({
+      where: { id: investigationId },
+      select: { maxGeneration: true }
+    });
+
+    if (!investigation) return null;
+
     return this.prisma.indicator.findFirst({
       where: {
         investigationId: investigationId,
         processed: false,
+        type: { in: [IndicatorType.NAME, IndicatorType.EMAIL, IndicatorType.USERNAME, IndicatorType.PHONE] },
+        generation: { lte: investigation.maxGeneration }
       },
+      orderBy: [
+        { confidence: 'desc' },
+        { generation: 'asc' },
+        { createdAt: 'asc' }
+      ]
     });
   }
 
   /**
-   * Met à jour la progression de l'investigation.
+   * Met à jour la phase de l'investigation.
    */
-  async updateProgress(investigationId) {
+  async updateInvestigationPhase(investigationId, newPhase) {
+    await this.logStep(investigationId, 'phase_update', `Passage à la phase: ${newPhase}`);
+    // On ne met pas à jour la DB ici, on délègue à updateInvestigationStatus
+    // pour centraliser la mise à jour et l'émission de l'événement.
+    const investigation = await this.prisma.investigation.findUnique({ where: { id: investigationId } });
+    await this.updateInvestigationStatus(investigationId, investigation.status, investigation.progress, `phase_change:${newPhase}`, newPhase);
+  }
+
+  // ... [Les autres méthodes comme stopInvestigation, _runToolWithRetry, logStep, etc. restent ici]
+  // ... [Il faudra adapter updateProgress pour qu'il prenne en compte les bornes de progression par phase]
+
+  async updateProgress(investigationId, phaseStart, phaseEnd) {
     const totalCount = await this.prisma.indicator.count({ where: { investigationId } });
     const processedCount = await this.prisma.indicator.count({ where: { investigationId, processed: true } });
-    // La progression va de 5% à 95% pendant l'enrichissement.
-    const progress = totalCount > 0 ? 5 + Math.round((processedCount / totalCount) * 90) : 5;
     
-    await this.updateInvestigationStatus(investigationId, InvestigationStatus.ENRICHING, progress, `processing_indicator_${processedCount}_of_${totalCount}`);
+    const phaseProgress = totalCount > 0 ? (processedCount / totalCount) : 1;
+    const overallProgress = phaseStart + Math.round(phaseProgress * (phaseEnd - phaseStart));
+    
+    await this.updateInvestigationStatus(investigationId, undefined, overallProgress, `processing_indicator_${processedCount}_of_${totalCount}`);
   }
 
-  /**
-   * Appelle le bon outil en fonction du type d'indicateur.
-   */
-  async dispatchIndicatorToTool(indicator) {
-    const { investigationId } = indicator;
-    logger.info(`Dispatching indicator ${indicator.value} of type ${indicator.type}`);
-    await this.logStep(investigationId, 'dispatcher', `Traitement de l'indicateur ${indicator.type}: ${indicator.value}`);
-
-    try {
-      switch (indicator.type) {
-        case IndicatorType.NAME:
-          await this.busterService.generateEmails(investigationId, indicator);
-          break;
-        case IndicatorType.EMAIL:
-          await this.mosintService.analyzeEmail(investigationId, indicator);
-          break;
-        case IndicatorType.USERNAME:
-          await this.maigretService.searchProfiles(investigationId, indicator);
-          break;
-        case IndicatorType.PHONE:
-          await this.phoneinfogaService.analyzePhone(investigationId, indicator);
-          break;
-        case IndicatorType.DOMAIN:
-        case IndicatorType.IP:
-        case IndicatorType.URL:
-          await this.spiderfootService.startScan(investigationId, indicator);
-          break;
-        default:
-          logger.warn(`Aucun outil configuré pour le type d'indicateur: ${indicator.type}`);
-          await this.logStep(investigationId, 'dispatcher', `Aucun outil pour le type ${indicator.type}`, 'WARN');
-      }
-    } catch (error) {
-        logger.error(`❌ Erreur de l'outil pour l'indicateur ${indicator.id}:`, error);
-        await this.logStep(investigationId, 'tool_error', `Erreur pour ${indicator.type} ${indicator.value}: ${error.message}`, 'ERROR');
-    }
+  isCancelled(investigationId) {
+    const activeInvestigation = this.activeInvestigations.get(investigationId);
+    return activeInvestigation?.status === 'cancelled';
   }
 
-  /**
-   * Étape de Consolidation des résultats
-   */
-  async runConsolidationStep(investigationId) {
-    try {
-      logger.info(`🔗 Étape Consolidation pour l'investigation ${investigationId}`);
-      await this.updateInvestigationStatus(investigationId, InvestigationStatus.CONSOLIDATING, 95, 'consolidation_started');
-      await this.logStep(investigationId, 'consolidation', 'Démarrage de la consolidation des résultats');
-      
-      const allResults = await this.prisma.result.findMany({
-        where: { investigationId },
-        include: { indicator: true }
-      });
-
-      const consolidatedResults = this.consolidateResults(allResults);
-      await this.generateFinalReport(investigationId, consolidatedResults);
-      
-      await this.logStep(investigationId, 'consolidation', 'Consolidation terminée avec succès');
-    } catch (error) {
-      logger.error(`❌ Erreur Consolidation pour ${investigationId}:`, error);
-      await this.logStep(investigationId, 'consolidation', `Erreur: ${error.message}`, 'ERROR');
-      throw error;
-    }
+  async cancelInvestigation(investigationId) {
+    logger.info(`🛑 Annulation de l'investigation ${investigationId} confirmée.`);
+    await this.updateInvestigationStatus(investigationId, InvestigationStatus.CANCELLED, undefined, 'cancelled');
+    this.activeInvestigations.delete(investigationId);
   }
   
-  /**
-   * Finalise l'investigation
-   */
+  async stopInvestigation(investigationId) {
+    logger.info(`🛑 Tentative d'arrêt de l'investigation ${investigationId}`);
+    const activeInvestigation = this.activeInvestigations.get(investigationId);
+
+    if (activeInvestigation) {
+      activeInvestigation.status = 'cancelled';
+      await this.logStep(investigationId, 'cancellation', 'Demande d\'annulation reçue.');
+      return { message: 'Annulation de l\'investigation demandée.' };
+    } else {
+      logger.warn(`Tentative d'arrêt d'une investigation non active: ${investigationId}`);
+      const investigation = await this.prisma.investigation.findUnique({ where: { id: investigationId } });
+      if (investigation && investigation.status !== 'COMPLETED' && investigation.status !== 'FAILED' && investigation.status !== 'CANCELLED') {
+        await this.updateInvestigationStatus(investigationId, InvestigationStatus.CANCELLED, undefined, 'cancelled_by_user');
+        return { message: 'Investigation annulée.' };
+      }
+      return { message: 'L\'investigation n\'est pas active ou est déjà terminée.' };
+    }
+  }
+
+  getToolForIndicator(indicatorType) {
+    switch (indicatorType) {
+      case IndicatorType.EMAIL: return 'Mosint';
+      case IndicatorType.USERNAME: return 'Maigret';
+      case IndicatorType.PHONE: return 'PhoneInfoga';
+      case IndicatorType.NAME: return 'Buster/Maigret';
+      default: return 'Inconnu';
+    }
+  }
+
+  async _runToolWithRetry(toolFunction, investigationId, indicator) {
+    const maxRetries = 3;
+    let attempt = 1;
+    let delay = 1000;
+    const toolName = this.getToolForIndicator(indicator.type);
+
+    while (attempt <= maxRetries) {
+      try {
+        await this.logStep(investigationId, 'tool_attempt', `[${toolName}] Tentative ${attempt}/${maxRetries} pour ${indicator.value}`);
+        await toolFunction(investigationId, indicator);
+        await this.logStep(investigationId, 'tool_success', `[${toolName}] Succès pour ${indicator.value}`);
+        return;
+      } catch (error) {
+        logger.warn(`[Tentative ${attempt}/${maxRetries}] Échec pour l'indicateur ${indicator.id}`, { error: error.message });
+        await this.logStep(investigationId, 'tool_warning', `[Tentative ${attempt}/${maxRetries}] Échec pour ${indicator.type} ${indicator.value}: ${error.message}`, 'WARNING');
+        
+        if (attempt === maxRetries) {
+          logger.error(`❌ Échec final de l'outil après ${maxRetries} tentatives pour l'indicateur ${indicator.id}:`, error);
+          await this.logStep(investigationId, 'tool_error', `Échec final de l'outil pour ${indicator.type} ${indicator.value} après ${maxRetries} tentatives.`, 'ERROR');
+          throw error;
+        }
+
+        await new Promise(resolve => setTimeout(resolve, delay));
+        delay *= 2;
+        attempt++;
+      }
+    }
+  }
+
   async finalizeInvestigation(investigationId) {
     try {
       logger.info(`✅ Finalisation de l'investigation ${investigationId}`);
-      
-      await this.prisma.investigation.update({
-        where: { id: investigationId },
-        data: {
-          status: InvestigationStatus.COMPLETED,
-          progress: 100,
-          currentStep: 'completed'
-        }
-      });
-
+      await this.updateInvestigationStatus(investigationId, InvestigationStatus.COMPLETED, 100, 'completed');
       this.activeInvestigations.delete(investigationId);
-
-      this.io.to(investigationId).emit('investigation:completed', {
-        id: investigationId,
-        status: 'COMPLETED',
-        progress: 100
-      });
-
       await this.logStep(investigationId, 'finalization', 'Investigation terminée avec succès');
-
     } catch (error) {
       logger.error(`❌ Erreur lors de la finalisation de ${investigationId}:`, error);
       throw error;
     }
   }
 
-  /**
-   * Gère les erreurs d'investigation
-   */
   async handleInvestigationError(investigationId, error) {
     try {
       logger.error(`❌ Gestion d'erreur pour l'investigation ${investigationId}:`, error);
-
-      await this.prisma.investigation.update({
-        where: { id: investigationId },
-        data: {
-          status: InvestigationStatus.FAILED,
-          currentStep: 'error'
-        }
-      });
-
+      await this.updateInvestigationStatus(investigationId, InvestigationStatus.FAILED, undefined, 'error');
       await this.logStep(investigationId, 'error', `Erreur: ${error.message}`, 'ERROR');
-
       this.activeInvestigations.delete(investigationId);
-
-      this.io.to(investigationId).emit('investigation:failed', {
+      this.io.emit('investigation:update', {
         id: investigationId,
         status: 'FAILED',
-        error: error.message
+        error: error.message,
       });
-
     } catch (finalizationError) {
       logger.error(`❌ Erreur lors de la gestion d'erreur pour ${investigationId}:`, finalizationError);
     }
   }
 
-  /**
-   * Met à jour le statut d'une investigation
-   */
-  async updateInvestigationStatus(investigationId, status, progress, currentStep) {
+  async updateInvestigationStatus(investigationId, status, progress, currentStep, phase) {
     try {
-      await this.prisma.investigation.update({
+      const data = {};
+      if (currentStep) data.currentStep = currentStep;
+      if (status) data.status = status;
+      if (progress !== undefined) data.progress = progress;
+      if (phase) data.currentPhase = phase;
+      
+      if (Object.keys(data).length === 0) return;
+
+      const updatedInvestigation = await this.prisma.investigation.update({
         where: { id: investigationId },
-        data: {
-          status,
-          progress,
-          currentStep
-        }
+        data,
       });
 
-      this.io.to(investigationId).emit('investigation:status_update', {
+      // Émettre un seul événement avec toutes les informations à jour
+      this.io.emit('investigation:update', {
         id: investigationId,
-        status,
-        progress,
-        currentStep
+        status: updatedInvestigation.status,
+        progress: updatedInvestigation.progress,
+        currentPhase: updatedInvestigation.currentPhase,
+        currentStep: updatedInvestigation.currentStep,
       });
 
     } catch (error) {
@@ -308,38 +402,19 @@ class OrchestratorService {
     }
   }
 
-  /**
-   * Enregistre un log d'étape
-   */
   async logStep(investigationId, step, message, level = 'INFO') {
     try {
-      await this.prisma.investigationLog.create({
-        data: {
-          investigationId,
-          step,
-          message,
-          level
-        }
+      const log = await this.prisma.investigationLog.create({
+        data: { investigationId, step, message, level }
       });
-
-      this.io.to(investigationId).emit('investigation:log', {
-        step,
-        message,
-        level,
-        timestamp: new Date()
-      });
-
+      this.io.emit('investigation:log', { ...log, investigationId });
     } catch (error) {
       logger.error(`❌ Erreur lors de l'enregistrement du log pour ${investigationId}:`, error);
     }
   }
-
-  /**
-   * Consolide les résultats de tous les outils
-   */
+  
   consolidateResults(results) {
     const consolidated = {};
-
     results.forEach(result => {
         const tool = result.toolSource;
         if (!consolidated[tool]) {
@@ -347,20 +422,13 @@ class OrchestratorService {
         }
         consolidated[tool].push(result.data);
     });
-
     return consolidated;
   }
 
-  /**
-   * Génère le rapport final
-   */
   async generateFinalReport(investigationId, consolidatedResults) {
     const investigation = await this.prisma.investigation.findUnique({
       where: { id: investigationId },
-      include: {
-        indicators: true,
-        results: true
-      }
+      include: { indicators: true, results: true }
     });
 
     const finalReport = {
@@ -378,7 +446,6 @@ class OrchestratorService {
       where: { id: investigationId },
       data: { finalReport }
     });
-
     return finalReport;
   }
 }
@@ -386,6 +453,9 @@ class OrchestratorService {
 function setupOrchestrator(prisma, io) {
   const orchestrator = new OrchestratorService(prisma, io);
   
+  // L'enregistrement des listeners d'événements est maintenant dans le constructeur de l'OrchestratorService.
+  // La logique ci-dessous reste pour la gestion des connexions Socket.IO spécifiques.
+
   io.on('connection', (socket) => {
     logger.info(`🔌 Nouvelle connexion Socket.IO: ${socket.id}`);
 

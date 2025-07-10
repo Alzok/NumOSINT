@@ -1,5 +1,9 @@
 # 🚀 NumOSINT - Plateforme d'Investigation Numérique Unifiée
 
+**NumOSINT est une solution open-source complète conçue pour les professionnels de la cybersécurité, les analystes du renseignement et les enquêteurs numériques. Notre mission est de simplifier et d'accélérer le processus d'Open Source Intelligence (OSINT) en unifiant plusieurs outils de pointe au sein d'une interface unique, intuitive et puissante.**
+
+Le projet intègre un orchestrateur intelligent qui automatise la collecte et la corrélation de données à partir de diverses sources, permettant aux utilisateurs de transformer des informations brutes en renseignements exploitables. Avec son architecture moderne et modulaire, NumOSINT est conçu pour être à la fois performant, extensible et facile à déployer.
+
 **Plateforme OSINT moderne avec orchestrateur multi-outils, interface React/Next.js et backend Node.js/PostgreSQL.**
 
 ## 🎯 Vue d'Ensemble
@@ -19,21 +23,6 @@ NumOSINT est une plateforme d'investigation numérique qui unifie 5 outils OSINT
 - **Cache** : Redis
 - **Conteneurisation** : Docker + Docker Compose
 - **Temps réel** : WebSocket (Socket.IO)
-
-## 🚀 Installation Rapide
-
-### Prérequis
-- Docker et Docker Compose
-- 8GB RAM recommandés
-- Ports disponibles : 3000, 5000, 5432, 6379
-
-### Démarrage
-```bash
-# Cloner et démarrer en une commande
-git clone <repo-url>
-cd NumOSINT
-docker-compose up
-```
 
 ## 🌐 Accès aux Services
 
@@ -63,7 +52,9 @@ Après démarrage (< 2 minutes) :
 ### 3. Résultats
 - **Vue unifiée** : Tous les résultats dans une interface
 - **Par outil** : Résultats détaillés par service OSINT
-- **Export** : Données disponibles en JSON
+- **Gestion de Dossiers** : Regroupez vos investigations dans des dossiers pour une meilleure organisation.
+- **Centre de Notifications** : Un historique de toutes les alertes et notifications de l'application.
+- **Export de Rapports** : Exportez les résultats de vos investigations et dossiers aux formats PDF et CSV.
 - **Historique** : Toutes les investigations sauvegardées
 
 ## 🏗️ Architecture Technique

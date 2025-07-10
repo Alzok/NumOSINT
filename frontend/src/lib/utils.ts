@@ -45,3 +45,22 @@ export const getCategoryColorClass = (category: string): string => {
     const foundCategory = Object.keys(CATEGORY_COLORS).find(key => key.toLowerCase() === category.toLowerCase());
     return (foundCategory && CATEGORY_COLORS[foundCategory]?.class) || CATEGORY_COLORS['Other'].class;
 };
+
+export const mapStatusToPhase = (status: string) => {
+  switch (status) {
+    case 'INITIALIZING':
+      return 'INITIALIZING';
+    case 'ENRICHING':
+      return 'ENRICHMENT';
+    case 'SCANNING':
+      return 'SCANNING';
+    case 'CONSOLIDATING':
+      return 'CONSOLIDATION';
+    case 'COMPLETED':
+    case 'FAILED':
+    case 'CANCELLED':
+      return 'COMPLETED';
+    default:
+      return 'INITIALIZING'; // Fallback for initial states
+  }
+};

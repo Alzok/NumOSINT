@@ -1,98 +1,67 @@
-const { BusterService } = require('../../../src/services/tools/buster');
-const { PrismaClient } = require('@prisma/client');
+const BusterService = require('../../../src/services/tools/buster');
+const { PrismaClient, IndicatorType } = require('@prisma/client');
+const axios = require('axios');
 
-// Mock Prisma
-jest.mock('@prisma/client');
+jest.mock('axios');
+
+const prisma = new PrismaClient();
 
 describe('BusterService', () => {
-  let service;
-  let mockPrisma;
-  
-  beforeEach(() => {
-    mockPrisma = new PrismaClient();
-    service = new BusterService(mockPrisma);
+  let busterService;
+
+  beforeAll(() => {
+    busterService = new BusterService(prisma);
+    process.env.BUSTER_SERVICE_URL = 'http://buster-service:5003';
   });
 
   afterEach(() => {
     jest.clearAllMocks();
   });
 
-  describe('generate', () => {
-    it('should generate email variations for a given name', async () => {
-      const firstName = 'John';
-      const lastName = 'Doe';
-      
-      const result = await service.generate(firstName, lastName);
-      
-      expect(result).toBeDefined();
-      expect(Array.isArray(result.emails)).toBe(true);
-      expect(result.emails.length).toBeGreaterThan(0);
-      
-      // Check for expected email patterns
-      expect(result.emails).toContain('john.doe@gmail.com');
-      expect(result.emails).toContain('j.doe@gmail.com');
-      expect(result.emails).toContain('john_doe@gmail.com');
-    });
+  it('should generate and save emails when domains are found', async () => {
+    const investigationId = 1;
+    const nameIndicator = { id: 1, value: 'John Doe', generation: 0 };
+    const domains = [{ value: 'example.com' }];
+    const foundEmails = ['john.doe@example.com'];
 
-    it('should handle empty names gracefully', async () => {
-      const result = await service.generate('', '');
-      
-      expect(result).toBeDefined();
-      expect(Array.isArray(result.emails)).toBe(true);
-      expect(result.emails.length).toBe(0);
+    busterService.getDomainsForInvestigation = jest.fn().mockResolvedValue(domains.map(d => d.value));
+    axios.post.mockResolvedValue({ data: { emails: foundEmails } });
+    prisma.indicator.createMany = jest.fn().mockResolvedValue({});
+
+    await busterService.generateEmails(investigationId, nameIndicator);
+
+    expect(busterService.getDomainsForInvestigation).toHaveBeenCalledWith(investigationId);
+    expect(axios.post).toHaveBeenCalledWith(
+      'http://buster-service:5003/scan',
+      { firstName: 'John', lastName: 'Doe', domain: 'example.com' },
+      { timeout: 60000 }
+    );
+    expect(prisma.indicator.createMany).toHaveBeenCalledWith({
+      data: [
+        {
+          investigationId,
+          type: IndicatorType.EMAIL,
+          value: 'john.doe@example.com',
+          source: 'buster',
+          confidence: 0.6,
+          generation: 1,
+          verified: false,
+          processed: false,
+        },
+      ],
+      skipDuplicates: true,
     });
   });
 
-  describe('validate', () => {
-    it('should validate email existence', async () => {
-      const email = 'test@example.com';
-      
-      const result = await service.validate(email);
-      
-      expect(result).toBeDefined();
-      expect(result.email).toBe(email);
-      expect(typeof result.exists).toBe('boolean');
-      expect(typeof result.confidence).toBe('number');
-      expect(result.confidence).toBeGreaterThanOrEqual(0);
-      expect(result.confidence).toBeLessThanOrEqual(1);
-    });
+  it('should not call buster service if no domains are found', async () => {
+    const investigationId = 1;
+    const nameIndicator = { id: 1, value: 'Jane Doe', generation: 0 };
 
-    it('should handle invalid email format', async () => {
-      const email = 'invalid-email';
-      
-      const result = await service.validate(email);
-      
-      expect(result).toBeDefined();
-      expect(result.email).toBe(email);
-      expect(result.exists).toBe(false);
-      expect(result.confidence).toBe(0);
-    });
-  });
+    busterService.getDomainsForInvestigation = jest.fn().mockResolvedValue([]);
+    
+    await busterService.generateEmails(investigationId, nameIndicator);
 
-  describe('run', () => {
-    it('should run complete buster analysis', async () => {
-      const investigationId = 'test-id';
-      const indicators = [
-        { type: 'NAME', value: 'John Doe' }
-      ];
-      
-      mockPrisma.indicator.create.mockResolvedValue({
-        id: 'indicator-id',
-        type: 'EMAIL',
-        value: 'john.doe@gmail.com'
-      });
-      
-      mockPrisma.result.create.mockResolvedValue({
-        id: 'result-id'
-      });
-      
-      const result = await service.run(investigationId, indicators);
-      
-      expect(result).toBeDefined();
-      expect(result.generated).toBeDefined();
-      expect(result.validated).toBeDefined();
-      expect(Array.isArray(result.generated)).toBe(true);
-      expect(Array.isArray(result.validated)).toBe(true);
-    });
+    expect(axios.post).not.toHaveBeenCalled();
+    expect(prisma.indicator.createMany).not.toHaveBeenCalled();
   });
-}); 
+});

@@ -1,9 +1,6 @@
-# Version simplifiée fonctionnelle de docker-compose
-
 version: '3.8'
 
 services:
-  # Base de données PostgreSQL
   postgres:
     image: postgres:15-alpine
     container_name: numosint_postgres
@@ -25,7 +22,6 @@ services:
       timeout: 5s
       retries: 5
 
-  # Cache Redis
   redis:
     image: redis:7-alpine
     container_name: numosint_redis
@@ -41,7 +37,6 @@ services:
       timeout: 3s
       retries: 5
 
-  # Backend API avec nouvelle architecture
   backend:
     build: 
       context: .
@@ -53,6 +48,12 @@ services:
       - DATABASE_URL=postgresql://numosint:numosint_password@postgres:5432/numosint
       - REDIS_URL=redis://redis:6379
       - FRONTEND_URL=http://frontend:3001
+      - MAIGRET_SERVICE_URL=http://maigret-service:5002
+      - BUSTER_SERVICE_URL=http://buster-service:5003
+      - MOSINT_SERVICE_URL=http://mosint-service:5004
+      - PHONEINFOGA_SERVICE_URL=http://phoneinfoga-service:5005
+      - WAU_SERVICE_URL=http://wau-service:8080
+      - WAYBULK_SERVICE_URL=http://waybulk-service:8080
     ports:
       - "5001:5001"
     volumes:
@@ -65,6 +66,18 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      maigret-service:
+        condition: service_started
+      buster-service:
+        condition: service_started
+      mosint-service:
+        condition: service_started
+      phoneinfoga-service:
+        condition: service_started
+      wau-service:
+        condition: service_started
+      waybulk-service:
+        condition: service_started
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:5001/api/health"]
@@ -72,7 +85,60 @@ services:
       timeout: 10s
       retries: 3
 
-  # Frontend Next.js
+  maigret-service:
+    build:
+      context: ./tools/maigret
+      dockerfile: Dockerfile
+    container_name: numosint_maigret_service
+    networks:
+      - numosint_network
+    restart: unless-stopped
+
+  buster-service:
+    build:
+      context: ./tools/buster
+      dockerfile: Dockerfile
+    container_name: numosint_buster_service
+    networks:
+      - numosint_network
+    restart: unless-stopped
+
+  mosint-service:
+    build:
+      context: ./tools/mosint
+      dockerfile: Dockerfile
+    container_name: numosint_mosint_service
+    networks:
+      - numosint_network
+    restart: unless-stopped
+
+  phoneinfoga-service:
+    build:
+      context: ./tools/phoneinfoga
+      dockerfile: Dockerfile
+    container_name: numosint_phoneinfoga_service
+    networks:
+      - numosint_network
+    restart: unless-stopped
+
+  wau-service:
+    build:
+      context: ./tools/wau
+      dockerfile: Dockerfile
+    container_name: numosint_wau_service
+    networks:
+      - numosint_network
+    restart: unless-stopped
+
+  waybulk-service:
+    build:
+      context: ./tools/waybulk
+      dockerfile: Dockerfile
+    container_name: numosint_waybulk_service
+    networks:
+      - numosint_network
+    restart: unless-stopped
+
   frontend:
     image: numosint-frontend
     build:
@@ -92,7 +158,6 @@ services:
       - backend
     restart: unless-stopped
 
-  # Nginx reverse proxy
   nginx:
     image: nginx:alpine
     container_name: numosint_nginx

@@ -4,12 +4,12 @@ FROM node:18-slim
 RUN apt-get update && apt-get install -y \
     git \
     curl \
-    python3 \
     make \
     g++ \
     openssl \
     ca-certificates \
     procps \
+    # Les dépendances Python et Go sont maintenant dans leurs propres services
     && rm -rf /var/lib/apt/lists/*
 
 # Créer l'utilisateur et les répertoires avec les bonnes permissions

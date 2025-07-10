@@ -1,12 +1,10 @@
 "use client";
 
 import { useEffect, useState } from 'react';
-import { AppSidebar } from "@/components/app-sidebar";
-import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { AlertCircle } from 'lucide-react';
+import { ErrorOutline } from '@mui/icons-material';
 import { investigationAPI, GlobalStats } from '@/lib/investigation-api';
 
 export default function StatisticsPage() {
@@ -36,9 +34,6 @@ export default function StatisticsPage() {
   }, []);
 
   return (
-    <SidebarProvider>
-      <AppSidebar />
-      <SidebarInset>
         <div className="p-4 sm:p-6 lg:p-8">
           <h1 className="text-3xl font-bold mb-6">Statistiques Globales</h1>
           
@@ -53,7 +48,7 @@ export default function StatisticsPage() {
 
           {error && (
             <Alert variant="destructive">
-              <AlertCircle className="h-4 w-4" />
+              <ErrorOutline className="h-4 w-4" />
               <AlertTitle>En cours de développement</AlertTitle>
               <AlertDescription>{error}</AlertDescription>
             </Alert>
@@ -83,7 +78,5 @@ export default function StatisticsPage() {
           {/* D'autres visualisations de données viendront ici */}
 
         </div>
-      </SidebarInset>
-    </SidebarProvider>
   );
 }

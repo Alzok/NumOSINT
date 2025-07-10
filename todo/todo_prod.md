@@ -316,3 +316,32 @@ Tâches spécifiques pour préparer NumOSINT à un déploiement en production s�
 ---
 
 **Estimation totale : 7-8 semaines pour une mise en production complète** 
+---
+
+## 👥 Collaboration (Fonctionnalité avancée)
+
+- [ ] **Gestion des Utilisateurs**
+  - [ ] Mettre en place un système d'authentification complet (ex: avec Passport.js, Auth0, ou Next-Auth).
+  - [ ] Créer des modèles de données pour `User`, `Team`, et les rôles.
+  - [ ] Développer une interface d'administration pour gérer les utilisateurs et les équipes.
+
+- [ ] **Partage et Permissions**
+  - [ ] Permettre d'assigner des investigations et des dossiers à des utilisateurs ou des équipes.
+  - [ ] Définir des niveaux de permission (ex: lecteur, éditeur, administrateur) par dossier/investigation.
+
+- [ ] **Fonctionnalités Collaboratives**
+  - [ ] Ajouter une section de commentaires ou de notes sur une investigation.
+  - [ ] Mettre en place un journal d'audit pour tracer les actions des utilisateurs sur une investigation.
+  - [ ] Développer un système de notifications en temps réel pour les actions collaboratives.
+---
+
+## 🔔 Notifications Avancées
+
+- [ ] **Infrastructure de Notification**
+  - [ ] Mettre en place un service de messagerie (ex: SendGrid, Mailgun pour les emails).
+  - [ ] Configurer un service pour les webhooks sortants.
+
+- [ ] **Déclencheurs de Notification**
+  - [ ] Notification par email à la fin d'une investigation.
+  - [ ] Notification par webhook pour intégration avec des outils tiers (ex: Slack, Discord).
+  - [ ] Notifications pour les mentions dans les commentaires (si la collaboration est implémentée).

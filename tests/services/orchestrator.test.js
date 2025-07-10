@@ -12,207 +12,143 @@ jest.mock('../../src/services/tools/spiderfoot');
 describe('OrchestratorService', () => {
   let service;
   let mockPrisma;
-  let mockSocket;
-  
+  let mockIo;
+
   beforeEach(() => {
-    mockPrisma = new PrismaClient();
-    mockSocket = {
-      emit: jest.fn()
+    mockPrisma = {
+      investigation: {
+        create: jest.fn(),
+        update: jest.fn(),
+        findUnique: jest.fn(),
+      },
+      indicator: {
+        findFirst: jest.fn(),
+        update: jest.fn(),
+        count: jest.fn(),
+      },
+      result: { // Ajout du mock manquant
+        findMany: jest.fn(),
+      },
+      investigationLog: {
+        create: jest.fn(),
+      },
     };
-    service = new OrchestratorService(mockPrisma, mockSocket);
+    mockIo = {
+      emit: jest.fn(),
+    };
+    service = new OrchestratorService(mockPrisma, mockIo);
   });
 
   afterEach(() => {
     jest.clearAllMocks();
   });
 
-  describe('validateInput', () => {
-    it('should validate valid input data', () => {
-      const inputData = {
-        first_name: 'John',
-        last_name: 'Doe',
-        email: 'john.doe@example.com',
-        phone: '+1234567890',
-        username: 'johndoe'
-      };
-      
-      const result = service.validateInput(inputData);
-      
-      expect(result.isValid).toBe(true);
-      expect(result.errors).toHaveLength(0);
-    });
-
-    it('should reject empty input', () => {
-      const inputData = {};
-      
-      const result = service.validateInput(inputData);
-      
-      expect(result.isValid).toBe(false);
-      expect(result.errors).toContain('Au moins un indicateur requis');
-    });
-
-    it('should validate email format', () => {
-      const inputData = {
-        email: 'invalid-email'
-      };
-      
-      const result = service.validateInput(inputData);
-      
-      expect(result.isValid).toBe(false);
-      expect(result.errors).toContain('Format email invalide');
-    });
-
-    it('should validate phone format', () => {
-      const inputData = {
-        phone: '123'
-      };
-      
-      const result = service.validateInput(inputData);
-      
-      expect(result.isValid).toBe(false);
-      expect(result.errors).toContain('Format téléphone invalide');
-    });
-  });
-
-  describe('createInvestigation', () => {
-    it('should create investigation with valid data', async () => {
-      const inputData = {
-        first_name: 'John',
-        last_name: 'Doe',
-        email: 'john.doe@example.com'
-      };
-      
-      mockPrisma.investigation.create.mockResolvedValue({
-        id: 'investigation-id',
+  describe('startInvestigation', () => {
+    it('should create an investigation and start the enrichment loop', async () => {
+      const inputData = { emails: ['test@example.com'] };
+      const mockInvestigation = {
+        id: 'test-investigation',
         status: 'INITIALIZING',
-        progress: 0
-      });
-      
-      const result = await service.createInvestigation(inputData);
-      
-      expect(result).toBeDefined();
-      expect(result.id).toBe('investigation-id');
-      expect(mockPrisma.investigation.create).toHaveBeenCalledWith({
-        data: {
-          status: 'INITIALIZING',
-          progress: 0,
-          currentStep: 'initialization',
-          inputData: inputData
-        }
-      });
-    });
+        progress: 0,
+        indicators: [{ id: 'indicator-1', type: 'EMAIL', value: 'test@example.com', processed: false }],
+      };
 
-    it('should handle database errors', async () => {
-      const inputData = { email: 'test@example.com' };
+      mockPrisma.investigation.create.mockResolvedValue(mockInvestigation);
+      // Mock la fin de la boucle pour ne pas la tester ici
+      mockPrisma.indicator.findFirst.mockResolvedValue(null);
+      // Mock pour l'étape de consolidation
+      mockPrisma.result.findMany.mockResolvedValue([]);
+      mockPrisma.investigation.findUnique.mockResolvedValue(mockInvestigation);
+
+
+      const investigation = await service.startInvestigation(inputData);
+
+      expect(mockPrisma.investigation.create).toHaveBeenCalled();
+      expect(investigation.id).toBe('test-investigation');
+      expect(service.activeInvestigations.has('test-investigation')).toBe(true);
+      expect(mockIo.emit).toHaveBeenCalledWith('investigation:started', expect.any(Object));
+    });
+  });
+
+  describe('runEnrichmentLoop', () => {
+    it('should process indicators and finalize investigation', async () => {
+      const investigationId = 'test-investigation';
+      const indicator = { id: 'indicator-1', type: 'EMAIL', value: 'test@example.com', processed: false, investigationId };
       
-      mockPrisma.investigation.create.mockRejectedValue(
-        new Error('Database error')
+      // Premier appel trouve un indicateur, le second non pour terminer la boucle
+      mockPrisma.indicator.findFirst
+        .mockResolvedValueOnce(indicator)
+        .mockResolvedValue(null);
+      
+      mockPrisma.indicator.count.mockResolvedValue(1);
+      mockPrisma.investigation.update.mockResolvedValue({});
+      mockPrisma.investigationLog.create.mockResolvedValue({});
+      mockPrisma.result.findMany.mockResolvedValue([]); // Mock pour la consolidation
+      mockPrisma.investigation.findUnique.mockResolvedValue({ // Mock pour le rapport final
+        id: investigationId,
+        indicators: [],
+        results: [],
+      });
+
+
+      // Mock du service outil
+      service.mosintService.analyzeEmail = jest.fn().mockResolvedValue();
+
+      await service.runEnrichmentLoop(investigationId);
+
+      expect(mockPrisma.indicator.findFirst).toHaveBeenCalledTimes(2);
+      expect(service.mosintService.analyzeEmail).toHaveBeenCalledWith(investigationId, indicator);
+      // Vérification plus souple
+      expect(mockPrisma.investigation.update).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ status: 'COMPLETED' }) })
       );
-      
-      await expect(service.createInvestigation(inputData))
-        .rejects
-        .toThrow('Database error');
+      expect(service.activeInvestigations.has(investigationId)).toBe(false);
+    });
+
+    it('should stop when investigation is cancelled', async () => {
+      const investigationId = 'test-investigation-cancel';
+      const indicator = { id: 'indicator-2', type: 'EMAIL', value: 'test@example.com', processed: false, investigationId };
+
+      service.activeInvestigations.set(investigationId, { status: 'running' });
+      mockPrisma.indicator.findFirst.mockResolvedValue(indicator);
+      mockPrisma.investigation.update.mockResolvedValue({});
+      mockPrisma.investigationLog.create.mockResolvedValue({});
+
+      // Simule l'annulation pendant le traitement
+      service.activeInvestigations.get(investigationId).status = 'cancelled';
+
+      await service.runEnrichmentLoop(investigationId);
+
+      expect(mockPrisma.investigation.update).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ status: 'CANCELLED' }) })
+      );
+      expect(service.activeInvestigations.has(investigationId)).toBe(false);
     });
   });
 
-  describe('runInvestigation', () => {
-    it('should run complete investigation flow', async () => {
-      const investigationId = 'test-id';
-      const inputData = {
-        first_name: 'John',
-        last_name: 'Doe',
-        email: 'john.doe@example.com'
-      };
-      
-      // Mock investigation updates
-      mockPrisma.investigation.update.mockResolvedValue({
-        id: investigationId,
-        status: 'COMPLETED',
-        progress: 100
-      });
-      
-      // Mock indicator creation
-      mockPrisma.indicator.create.mockResolvedValue({
-        id: 'indicator-id'
-      });
-      
-      // Mock services
-      const mockBusterService = {
-        run: jest.fn().mockResolvedValue({ generated: [], validated: [] })
-      };
-      
-      const mockMosintService = {
-        run: jest.fn().mockResolvedValue({ breaches: [], analysis: {} })
-      };
-      
-      service.busterService = mockBusterService;
-      service.mosintService = mockMosintService;
-      
-      const result = await service.runInvestigation(investigationId, inputData);
-      
-      expect(result).toBeDefined();
-      expect(result.status).toBe('COMPLETED');
-      expect(mockSocket.emit).toHaveBeenCalledWith('investigation:progress', {
-        investigationId,
-        progress: 100,
-        status: 'COMPLETED'
-      });
+  describe('stopInvestigation', () => {
+    it('should mark an active investigation as cancelled', async () => {
+      const investigationId = 'test-investigation-stop';
+      service.activeInvestigations.set(investigationId, { status: 'running' });
+      mockPrisma.investigationLog.create.mockResolvedValue({});
+
+      const result = await service.stopInvestigation(investigationId);
+
+      expect(service.activeInvestigations.get(investigationId).status).toBe('cancelled');
+      expect(result.message).toContain('Annulation de l\'investigation demandée');
     });
 
-    it('should handle service errors gracefully', async () => {
-      const investigationId = 'test-id';
-      const inputData = { email: 'test@example.com' };
-      
-      // Mock service error
-      const mockBusterService = {
-        run: jest.fn().mockRejectedValue(new Error('Service error'))
-      };
-      
-      service.busterService = mockBusterService;
-      
-      // Mock investigation update for error handling
-      mockPrisma.investigation.update.mockResolvedValue({
-        id: investigationId,
-        status: 'FAILED'
-      });
-      
-      const result = await service.runInvestigation(investigationId, inputData);
-      
-      expect(result.status).toBe('FAILED');
-      expect(mockSocket.emit).toHaveBeenCalledWith('investigation:error', {
-        investigationId,
-        error: 'Service error'
-      });
+    it('should update db if investigation is not in active map', async () => {
+        const investigationId = 'test-investigation-stop-db';
+        mockPrisma.investigation.findUnique.mockResolvedValue({ id: investigationId, status: 'ENRICHING' });
+        mockPrisma.investigation.update.mockResolvedValue({});
+
+        const result = await service.stopInvestigation(investigationId);
+
+        expect(mockPrisma.investigation.update).toHaveBeenCalledWith(
+            expect.objectContaining({ data: expect.objectContaining({ status: 'CANCELLED' }) })
+        );
+        expect(result.message).toContain('Investigation annulée');
     });
   });
-
-  describe('getInvestigationStatus', () => {
-    it('should return investigation status', async () => {
-      const investigationId = 'test-id';
-      
-      mockPrisma.investigation.findUnique.mockResolvedValue({
-        id: investigationId,
-        status: 'RUNNING',
-        progress: 50,
-        currentStep: 'scanning'
-      });
-      
-      const result = await service.getInvestigationStatus(investigationId);
-      
-      expect(result).toBeDefined();
-      expect(result.status).toBe('RUNNING');
-      expect(result.progress).toBe(50);
-      expect(result.currentStep).toBe('scanning');
-    });
-
-    it('should handle missing investigation', async () => {
-      const investigationId = 'non-existent';
-      
-      mockPrisma.investigation.findUnique.mockResolvedValue(null);
-      
-      const result = await service.getInvestigationStatus(investigationId);
-      
-      expect(result).toBeNull();
-    });
-  });
-}); 
+});
