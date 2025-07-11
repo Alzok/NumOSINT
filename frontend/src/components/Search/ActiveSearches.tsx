@@ -1,7 +1,8 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Clock, User, Loader2, CheckCircle, XCircle, Trash2 } from 'lucide-react';
+import { Schedule, Person, CheckCircleOutline, Cancel, Delete } from '@mui/icons-material';
+import { CircularProgress } from '@mui/material';
 import { useAppStore } from '@/lib/store';
 import { useSearch } from '@/hooks/useSearch';
 import { formatRelativeTime } from '@/lib/utils';
@@ -43,14 +44,14 @@ export default function ActiveSearches() {
   const getStatusIcon = (status: string) => {
     switch (status) {
       case 'completed':
-        return <CheckCircle className="h-5 w-5 text-green-500" />;
+        return <CheckCircleOutline className="h-5 w-5 text-green-500" />;
       case 'failed':
-        return <XCircle className="h-5 w-5 text-red-500" />;
+        return <Cancel className="h-5 w-5 text-red-500" />;
       case 'running':
       case 'started':
-        return <Loader2 className="h-5 w-5 animate-spin text-blue-500" />;
+        return <CircularProgress size={20} color="inherit" />;
       default:
-        return <Clock className="h-5 w-5 text-gray-500" />;
+        return <Schedule className="h-5 w-5 text-gray-500" />;
     }
   };
 
@@ -74,11 +75,11 @@ export default function ActiveSearches() {
     <div className="w-full p-6 bg-card rounded-lg shadow-md border">
       <div className="flex justify-between items-center mb-4">
         <h3 className="flex items-center gap-2 text-lg font-semibold">
-          <Loader2 className="h-5 w-5 animate-spin" />
+          <CircularProgress size={20} color="inherit" className="mr-2" />
           Recherches actives ({activeSearches.length})
         </h3>
         <Button variant="outline" size="sm" onClick={clearCompletedSearches}>
-          <Trash2 className="h-4 w-4 mr-2" />
+          <Delete className="h-4 w-4 mr-2" />
           Nettoyer les tâches terminées
         </Button>
       </div>
@@ -92,7 +93,7 @@ export default function ActiveSearches() {
               {getStatusIcon(search.status)}
               <div className="flex-grow">
                 <div className="flex items-center gap-2">
-                  <User className="h-4 w-4 text-muted-foreground" />
+                  <Person className="h-4 w-4 text-muted-foreground" />
                   <span className="font-medium">
                     {search.first_name} {search.last_name}
                   </span>

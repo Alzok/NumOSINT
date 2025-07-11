@@ -1,7 +1,8 @@
 'use client';
 
 import { useState } from 'react';
-import { Search, Loader2 } from 'lucide-react';
+import { Search } from '@mui/icons-material';
+import { CircularProgress } from '@mui/material';
 import { motion } from 'framer-motion';
 import { useSearch } from '@/hooks/useSearch';
 import { SearchRequest } from '@/types';
@@ -121,7 +122,7 @@ export default function SearchForm() {
           >
             {isLoading ? (
               <>
-                <Loader2 className="w-5 h-5 mr-2 animate-spin" />
+                <CircularProgress size={20} color="inherit" className="mr-2" />
                 Recherche en cours...
               </>
             ) : (

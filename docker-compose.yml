@@ -1,71 +1,173 @@
-# Version simplifiée fonctionnelle de docker-compose
+version: '3.8'
 
 services:
-  # Service Redis pour la queue des tâches
+  postgres:
+    image: postgres:15-alpine
+    container_name: numosint_postgres
+    environment:
+      POSTGRES_DB: numosint
+      POSTGRES_USER: numosint
+      POSTGRES_PASSWORD: numosint_password
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=C"
+    ports:
+      - "5435:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init-db.sql:/docker-entrypoint-initdb.d/init-db.sql:ro
+    networks:
+      - numosint_network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U numosint -d numosint"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
   redis:
     image: redis:7-alpine
-    container_name: redis
+    container_name: numosint_redis
     ports:
-      - "6379:6379"
-    restart: unless-stopped
+      - "6380:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - numosint_network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
 
-  # Service API Backend
   backend:
-    build:
+    build: 
       context: .
-      args:
-        UID: ${UID:-1000}
-        GID: ${GID:-1000}
-    container_name: backend
+      dockerfile: Dockerfile
+    container_name: numosint_backend
+    environment:
+      - NODE_ENV=production
+      - PORT=5001
+      - DATABASE_URL=postgresql://numosint:numosint_password@postgres:5432/numosint
+      - REDIS_URL=redis://redis:6379
+      - FRONTEND_URL=http://frontend:3001
+      - MAIGRET_SERVICE_URL=http://maigret-service:5002
+      - BUSTER_SERVICE_URL=http://buster-service:5003
+      - MOSINT_SERVICE_URL=http://mosint-service:5004
+      - PHONEINFOGA_SERVICE_URL=http://phoneinfoga-service:5005
+      - ASN_SERVICE_URL=http://asn-service:5008
     ports:
-      - "5000:5000"
-    environment:
-      - FLASK_ENV=development
-      - REDIS_URL=redis://redis:6379
-      - PYTHONUNBUFFERED=1
+      - "5001:5001"
     volumes:
-      - ./results:/app/results
-      - ./reports:/app/reports
       - ./logs:/app/logs
-      - ./data.json:/app/data.json
+      - ./results:/app/results
+    networks:
+      - numosint_network
     depends_on:
-      - redis
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      maigret-service:
+        condition: service_started
+      buster-service:
+        condition: service_started
+      mosint-service:
+        condition: service_started
+      phoneinfoga-service:
+        condition: service_started
+      asn-service:
+        condition: service_started
     restart: unless-stopped
-    command: python app.py
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5001/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
-  # Service Worker Celery pour les tâches asynchrones
-  worker:
+  maigret-service:
     build:
-      context: .
-      args:
-        UID: ${UID:-1000}
-        GID: ${GID:-1000}
-    container_name: worker
-    environment:
-      - REDIS_URL=redis://redis:6379
-      - PYTHONUNBUFFERED=1
-    volumes:
-      - ./results:/app/results
-      - ./reports:/app/reports
-      - ./logs:/app/logs
-    depends_on:
-      - redis
-      - backend
+      context: ./tools/maigret
+      dockerfile: Dockerfile
+    container_name: numosint_maigret_service
+    networks:
+      - numosint_network
     restart: unless-stopped
-    command: celery -A app.celery worker --loglevel=info
 
-  # Service Frontend Next.js (corrigé)
+  buster-service:
+    build:
+      context: ./tools/buster
+      dockerfile: Dockerfile
+    container_name: numosint_buster_service
+    networks:
+      - numosint_network
+    restart: unless-stopped
+
+  mosint-service:
+    build:
+      context: ./tools/mosint
+      dockerfile: Dockerfile
+    container_name: numosint_mosint_service
+    networks:
+      - numosint_network
+    restart: unless-stopped
+
+  phoneinfoga-service:
+    build:
+      context: ./tools/phoneinfoga
+      dockerfile: Dockerfile
+    container_name: numosint_phoneinfoga_service
+    networks:
+      - numosint_network
+    restart: unless-stopped
+
+
+  asn-service:
+    build:
+      context: ./tools/asn
+      dockerfile: Dockerfile
+    container_name: numosint_asn_service
+    networks:
+      - numosint_network
+    restart: unless-stopped
+
   frontend:
-    build: ./frontend
-    container_name: frontend
-    ports:
-      - "3000:3000"
+    image: numosint-frontend
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: numosint_frontend
     environment:
-      - NODE_ENV=development
-      - NEXT_PUBLIC_API_URL=http://localhost:5000
+      - NEXT_PUBLIC_API_URL=http://localhost:5001
+    ports:
+      - "3001:3000"
     volumes:
       - ./frontend:/app
       - /app/node_modules
+    networks:
+      - numosint_network
     depends_on:
       - backend
     restart: unless-stopped
+
+  nginx:
+    image: nginx:alpine
+    container_name: numosint_nginx
+    ports:
+      - "8081:80"
+      - "8444:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+    networks:
+      - numosint_network
+    depends_on:
+      - frontend
+      - backend
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+
+networks:
+  numosint_network:
+    driver: bridge

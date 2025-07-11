@@ -2,7 +2,7 @@
 
 import { useMemo, useState, useEffect } from 'react';
 import { ColumnDef, ExpandedState } from "@tanstack/react-table"
-import { MoreHorizontal } from "lucide-react"
+import { MoreHoriz, ExpandMore, ChevronRight } from "@mui/icons-material"
 
 import { Button } from "@/components/ui/button"
 import { DataTable } from "@/components/data-table"
@@ -16,7 +16,6 @@ import ActiveFilters from './ActiveFilters';
 import EmailFilter from './EmailFilter';
 import CategoryFilter from './CategoryFilter';
 import PlatformFilter from './PlatformFilter';
-import { ChevronDown, ChevronRight } from 'lucide-react';
 import { getCategoryColorClass } from '@/lib/utils';
 
 interface AccountsTableProps {
@@ -108,7 +107,7 @@ export const columns: ColumnDef<PersonResult>[] = [
             style: { cursor: 'pointer' },
           }}
         >
-          {row.getIsExpanded() ? <ChevronDown /> : <ChevronRight />}
+          {row.getIsExpanded() ? <ExpandMore /> : <ChevronRight />}
         </button>
       ) : null;
     },

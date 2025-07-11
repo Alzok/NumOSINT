@@ -1,103 +1,158 @@
 'use client';
 
 import { useEffect } from 'react';
-import { AppSidebar } from "@/components/app-sidebar";
-import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { useAllResults, useIsLoading } from '@/lib/store';
-import { useSearch } from '@/hooks/useSearch';
+import { useInvestigation } from '@/hooks/useInvestigation';
+import { useAppStore } from '@/lib/store';
 
-import SearchForm from '@/components/Search/SearchForm';
+import InvestigationForm from '@/components/Investigation/InvestigationForm';
 import SearchLogs from '@/components/Search/SearchLogs';
-import ActiveSearches from '@/components/Search/ActiveSearches';
-import AccountsTable from '@/components/Results/AccountsTable';
-import GlobalStats from '@/components/Results/GlobalStats';
+import ActiveInvestigations from '@/components/Investigation/ActiveInvestigations';
+import RecentActivity from '@/components/Dashboard/RecentActivity';
+import ModernInvestigationTimeline from '@/components/Investigation/ModernInvestigationTimeline';
+import { mapStatusToPhase } from '@/lib/utils';
 
 export default function DashboardPage() {
-  const { loadInitialData } = useSearch();
-  const allResults = useAllResults();
-  const isLoading = useIsLoading();
+  const {
+    investigations,
+    indicators,
+    results,
+    isLoading,
+    loadInvestigations,
+    createInvestigation,
+    startInvestigation
+  } = useInvestigation();
+  
+  const { addNotification } = useAppStore();
 
   useEffect(() => {
-    loadInitialData();
-  }, [loadInitialData]);
+    loadInvestigations();
+  }, [loadInvestigations]);
 
-  const persons = allResults?.persons || [];
-  const totalPersons = persons.length;
-  const totalEmails = allResults?.stats?.total_emails || 0;
-  const totalAccounts = allResults?.stats?.total_accounts || 0;
-  const totalPlatforms = allResults?.stats?.total_platforms || 0;
+  // Calculer les statistiques à partir des investigations
+  const totalInvestigations = investigations.length;
+  const completedInvestigationsList = investigations.filter(inv => inv.status === 'COMPLETED');
+  const completedInvestigations = completedInvestigationsList.length;
+  const runningInvestigationsList = investigations.filter(inv => ['SCANNING', 'ENRICHING', 'CONSOLIDATING'].includes(inv.status));
+  const runningInvestigations = runningInvestigationsList.length;
+  
+  // Déterminer quelle investigation afficher dans la timeline
+  let investigationForTimeline = null;
+  if (runningInvestigations > 0) {
+    // Priorité à l'investigation en cours la plus récente
+    investigationForTimeline = runningInvestigationsList.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0];
+  } else if (completedInvestigations > 0) {
+    // Sinon, montrer la dernière investigation terminée
+    investigationForTimeline = completedInvestigationsList.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0];
+  }
+
+  const totalIndicators = indicators.length;
+  const totalResults = results.length;
 
   return (
-    <SidebarProvider
-      defaultOpen={false}
-      style={
-        {
-          "--sidebar-width": "18rem",
-        } as React.CSSProperties
-      }
-    >
-      <AppSidebar variant="sidebar" collapsible="icon" />
-      <SidebarInset>
         <div className="flex flex-col gap-4 py-4 md:gap-6 md:py-6">
-            <div className="grid gap-4 px-4 md:grid-cols-2 md:gap-8 lg:grid-cols-5 lg:px-6">
+            <div className="px-4 lg:px-6">
               <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-lg font-bold flex items-center gap-2">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-6 w-6">
-                      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
-                    </svg>
-                    NumOSINT
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="text-sm text-muted-foreground">Plateforme d'investigation numérique</div>
-                </CardContent>
-              </Card>
-              <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">Comptes Trouvés</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold">{totalAccounts}</div>
-                </CardContent>
-              </Card>
-              <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">Emails Analysés</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold">{totalEmails}</div>
-                </CardContent>
-              </Card>
-              <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">Plateformes</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold">{totalPlatforms}</div>
-                </CardContent>
-              </Card>
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-lg font-bold flex items-center gap-2">
+                      <svg focusable="false" aria-hidden="true" viewBox="0 0 24 24" className="h-6 w-6" fill="currentColor">
+                        <path d="M17 14c-.24-.24-.44-.49-.65-.75C17.51 11.5 19 8.56 19 5c0-1.95-.74-3-2-3-1.54 0-3.96 2.06-5 5.97C10.96 4.06 8.54 2 7 2 5.74 2 5 3.05 5 5c0 3.56 1.49 6.5 2.65 8.25-.21.26-.41.51-.65.75-.25.25-2 1.39-2 3.5C5 19.98 7.02 22 9.5 22c1.5 0 2.5-.5 2.5-.5s1 .5 2.5.5c2.48 0 4.5-2.02 4.5-4.5 0-2.11-1.75-3.25-2-3.5m-.12-9.97c.06.17.12.48.12.97 0 2.84-1.11 5.24-2.07 6.78-.38-.26-.83-.48-1.4-.62.24-4.52 2.44-6.83 3.35-7.13M7 5c0-.49.06-.8.12-.97.91.3 3.11 2.61 3.36 7.13-.58.14-1.03.35-1.4.62C8.11 10.24 7 7.84 7 5m7.5 15c-1 0-1.8-.33-2.22-.56.42-.18.72-.71.72-.94 0-.28-.45-.5-1-.5s-1 .22-1 .5c0 .23.3.76.72.94-.42.23-1.22.56-2.22.56C8.12 20 7 18.88 7 17.5c0-.7.43-1.24 1-1.73.44-.36.61-.52 1.3-1.37.76-.95 1.09-1.4 2.7-1.4s1.94.45 2.7 1.4c.69.85.86 1.01 1.3 1.37.57.49 1 1.03 1 1.73 0 1.38-1.12 2.5-2.5 2.5m-.5-4c0 .41-.22.75-.5.75s-.5-.34-.5-.75.22-.75.5-.75.5.34.5.75m-3 0c0 .41-.22.75-.5.75s-.5-.34-.5-.75.22-.75.5-.75.5.34.5.75"></path>
+                      </svg>
+                      NumOSINT
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-sm text-muted-foreground">Plateforme d'investigation numérique unifiée</div>
+                  </CardContent>
+                </Card>
             </div>
             
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 px-4 lg:px-6">
-              <div id="search-section">
-                <SearchForm />
+            <div className="grid grid-cols-1 gap-8 px-4 lg:px-6">
+              <div id="investigation-section" className="w-full">
+                <InvestigationForm onSubmit={async (input) => {
+                  const investigation = await createInvestigation(input);
+                  if (investigation) {
+                    await startInvestigation(investigation.id);
+                    return true;
+                  }
+                  return false;
+                }}
+                isLoading={isLoading} />
               </div>
-              <SearchLogs />
+
+              <div className="w-full">
+                  <Card>
+                      <CardHeader>
+                          <CardTitle>
+                              {investigationForTimeline ? (runningInvestigations > 0 ? "Progression de l'investigation en cours" : "Dernière investigation terminée") : "Progression de l'investigation"}
+                          </CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                          <ModernInvestigationTimeline
+                              currentPhase={investigationForTimeline ? mapStatusToPhase(investigationForTimeline.status) : ''}
+                              status={investigationForTimeline ? investigationForTimeline.status : 'NONE'}
+                              createdAt={investigationForTimeline ? investigationForTimeline.createdAt : undefined}
+                          />
+                      </CardContent>
+                  </Card>
+              </div>
+
+              <div id="logs-section">
+                <SearchLogs />
+              </div>
             </div>
 
-            <div className="grid gap-8 px-4 lg:px-6">
-              <ActiveSearches />
-              <div id="stats-section">
-                <GlobalStats persons={persons} />
-              </div>
-              <div id="results-section">
-                <AccountsTable persons={persons} />
-              </div>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 px-4 lg:px-6">
+              <ActiveInvestigations />
+              <RecentActivity />
+            </div>
+
+            <div className="grid gap-4 px-4 md:grid-cols-2 md:gap-8 lg:grid-cols-4 lg:px-6">
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">Investigations</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold">{totalInvestigations}</div>
+                  <p className="text-xs text-muted-foreground">
+                    {completedInvestigations} terminées, {runningInvestigations} en cours
+                  </p>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">Indicateurs</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold">{totalIndicators}</div>
+                  <p className="text-xs text-muted-foreground">
+                    Analysés
+                  </p>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">Résultats</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold">{totalResults}</div>
+                  <p className="text-xs text-muted-foreground">
+                    Trouvés
+                  </p>
+                </CardContent>
+              </Card>
+               <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">Taux de succès</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold">{totalInvestigations > 0 ? Math.round((completedInvestigations / totalInvestigations) * 100) : 0}%</div>
+                  <p className="text-xs text-muted-foreground">
+                    Basé sur les investigations terminées
+                  </p>
+                </CardContent>
+              </Card>
             </div>
         </div>
-      </SidebarInset>
-    </SidebarProvider>
   );
 }

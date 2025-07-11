@@ -58,12 +58,19 @@ export interface ApiResponse<T> {
   message?: string;
 }
 
+export interface NotificationAction {
+  label: string;
+  onClick: () => void;
+}
+
 export interface NotificationState {
   id: string;
   type: 'success' | 'error' | 'warning' | 'info';
   title: string;
   message: string;
   duration?: number;
+  actions?: NotificationAction[];
+  isRead?: boolean;
 }
 
 export interface AppState {

@@ -1,24 +1,46 @@
 'use client';
 
 import { useEffect } from 'react';
-import { X, CheckCircle, AlertCircle, Info, AlertTriangle } from 'lucide-react';
+import Link from 'next/link';
+import { Close, CheckCircleOutline, ErrorOutline, InfoOutlined, WarningAmber, DeleteSweep } from '@mui/icons-material';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useAppStore } from '@/lib/store';
+import { useAppStore, NotificationAction } from '@/lib/store';
+
+const NotificationActionButton = ({ action, onActionClick }: { action: NotificationAction, onActionClick: () => void }) => {
+  const commonClass = "px-2 py-1 text-xs rounded-md bg-white/20 hover:bg-white/30 transition-colors";
+
+  if (action.href) {
+    return (
+      <Link href={action.href} passHref legacyBehavior>
+        <a onClick={onActionClick} className={commonClass}>
+          {action.label}
+        </a>
+      </Link>
+    );
+  }
+
+  return (
+    <button onClick={onActionClick} className={commonClass}>
+      {action.label}
+    </button>
+  );
+};
+
 
 export default function Notifications() {
-  const { notifications, removeNotification } = useAppStore();
+  const { notifications, removeNotification, clearNotifications } = useAppStore();
 
   const getIcon = (type: string) => {
     switch (type) {
       case 'success':
-        return <CheckCircle className="h-5 w-5 text-green-500" />;
+        return <CheckCircleOutline className="h-5 w-5 text-green-500" />;
       case 'error':
-        return <AlertCircle className="h-5 w-5 text-red-500" />;
+        return <ErrorOutline className="h-5 w-5 text-red-500" />;
       case 'warning':
-        return <AlertTriangle className="h-5 w-5 text-yellow-500" />;
+        return <WarningAmber className="h-5 w-5 text-yellow-500" />;
       case 'info':
       default:
-        return <Info className="h-5 w-5 text-blue-500" />;
+        return <InfoOutlined className="h-5 w-5 text-blue-500" />;
     }
   };
 
@@ -37,38 +59,80 @@ export default function Notifications() {
   };
 
   return (
-    <div className="fixed top-4 right-4 z-50 space-y-2 max-w-sm">
+    <div className="fixed top-4 right-4 z-50 space-y-2 max-w-sm w-full">
+      <AnimatePresence>
+        {notifications.length > 1 && (
+          <motion.div
+            layout
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            className={`rounded-lg border p-2 shadow-lg backdrop-blur-sm flex items-center justify-between text-sm ${getStyles('info')}`}
+          >
+            <span className="font-medium">
+              {notifications.length} notifications
+            </span>
+            <button
+              onClick={clearNotifications}
+              className="p-1 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 transition-colors"
+              aria-label="Clear all notifications"
+            >
+              <DeleteSweep className="h-5 w-5" />
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
       <AnimatePresence>
         {notifications.map((notification) => (
           <motion.div
             key={notification.id}
+            layout
             initial={{ opacity: 0, x: 300, scale: 0.3 }}
             animate={{ opacity: 1, x: 0, scale: 1 }}
             exit={{ opacity: 0, x: 300, scale: 0.5, transition: { duration: 0.2 } }}
-            className={`rounded-lg border p-4 shadow-lg backdrop-blur-sm ${getStyles(notification.type)}`}
           >
-            <div className="flex items-start space-x-3">
-              <div className="flex-shrink-0">
-                {getIcon(notification.type)}
+            <div className={`rounded-lg border p-4 shadow-lg backdrop-blur-sm ${getStyles(notification.type)}`}>
+              <div className="flex items-start space-x-3">
+                <div className="flex-shrink-0 mt-0.5">
+                  {getIcon(notification.type)}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium">
+                    {notification.title}
+                  </p>
+                  {notification.message && (
+                    <p className="text-sm opacity-90 mt-1">
+                      {notification.message}
+                    </p>
+                  )}
+                  {notification.actions && notification.actions.length > 0 && (
+                    <div className="mt-3 flex gap-2">
+                      {notification.actions.map((action, index) => (
+                        <NotificationActionButton
+                          key={index}
+                          action={action}
+                          onActionClick={() => {
+                            if (action.onClick) {
+                                action.onClick();
+                            }
+                            removeNotification(notification.id);
+                          }}
+                        />
+                      ))}
+                    </div>
+                  )}
+                </div>
+                <button
+                  onClick={() => removeNotification(notification.id)}
+                  className="flex-shrink-0 ml-2 p-1 rounded-full opacity-60 hover:opacity-100 hover:bg-black/10 dark:hover:bg-white/10 transition-all"
+                >
+                  <Close className="h-4 w-4" />
+                </button>
               </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium">
-                  {notification.title}
-                </p>
-                <p className="text-sm opacity-90">
-                  {notification.message}
-                </p>
-              </div>
-              <button
-                onClick={() => removeNotification(notification.id)}
-                className="flex-shrink-0 ml-2 opacity-60 hover:opacity-100 transition-opacity"
-              >
-                <X className="h-4 w-4" />
-              </button>
             </div>
           </motion.div>
         ))}
       </AnimatePresence>
     </div>
   );
-} 
+}

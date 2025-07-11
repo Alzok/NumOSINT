@@ -22,8 +22,12 @@ interface AppStore extends AppState {
   addNotification: (notification: Omit<NotificationState, 'id'>) => void;
   removeNotification: (id: string) => void;
   clearNotifications: () => void;
+  markAsRead: (id: string) => void;
+  markAllAsRead: () => void;
   setLoading: (loading: boolean) => void;
   toggleDarkMode: () => void;
+  isSearchLogExpanded: boolean;
+  setIsSearchLogExpanded: (isExpanded: boolean) => void;
 }
 
 export const useAppStore = create<AppStore>()(
@@ -41,6 +45,7 @@ export const useAppStore = create<AppStore>()(
       categoryFilter: null,
       platformFilter: null,
       searchProgress: 0,
+      isSearchLogExpanded: false,
 
       addActiveSearch: (search) => set((state) => ({ activeSearches: [...state.activeSearches, search] })),
       updateSearchStatus: (taskId, updates) =>
@@ -69,8 +74,8 @@ export const useAppStore = create<AppStore>()(
       setPlatformFilter: (platform) => set({ platformFilter: platform }),
       addNotification: (notification) => {
         const id = generateId();
-        const newNotification = { ...notification, id };
-        set((state) => ({ notifications: [...state.notifications, newNotification] }));
+        const newNotification = { ...notification, id, isRead: false };
+        set((state) => ({ notifications: [newNotification, ...state.notifications] }));
         if (notification.duration && notification.duration > 0) {
           setTimeout(() => get().removeNotification(id), notification.duration);
         }
@@ -80,8 +85,19 @@ export const useAppStore = create<AppStore>()(
           notifications: state.notifications.filter((n) => n.id !== id),
         })),
       clearNotifications: () => set({ notifications: [] }),
+      markAsRead: (id) =>
+        set((state) => ({
+          notifications: state.notifications.map((n) =>
+            n.id === id ? { ...n, isRead: true } : n
+          ),
+        })),
+      markAllAsRead: () =>
+        set((state) => ({
+          notifications: state.notifications.map((n) => ({ ...n, isRead: true })),
+        })),
       setLoading: (loading) => set({ isLoading: loading }),
       toggleDarkMode: () => set((state) => ({ darkMode: !state.darkMode })),
+      setIsSearchLogExpanded: (isExpanded) => set({ isSearchLogExpanded: isExpanded }),
     }),
     {
       name: 'turbolehe-store',

@@ -2,6 +2,7 @@
 const nextConfig = {
   reactStrictMode: true,
   swcMinify: true,
+  fastRefresh: false,
   output: 'standalone',
   images: {
     domains: ['localhost'],
@@ -10,12 +11,12 @@ const nextConfig = {
     return [
       {
         source: '/api/backend/:path*',
-        destination: 'http://backend:5000/api/:path*',
+        destination: 'http://backend:5001/api/:path*',
       },
     ];
   },
   env: {
-    BACKEND_URL: process.env.BACKEND_URL || 'http://localhost:5000',
+    BACKEND_URL: process.env.BACKEND_URL || 'http://localhost:5001',
   },
 };
 

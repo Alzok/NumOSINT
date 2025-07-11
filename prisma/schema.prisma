@@ -1,0 +1,130 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "debian-openssl-3.0.x", "linux-musl", "linux-musl-openssl-3.0.x"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Investigation {
+  id          String   @id @default(cuid())
+  status      InvestigationStatus @default(INITIALIZING)
+  progress    Int      @default(0)
+  currentStep String?
+  currentPhase String  @default("ENRICHMENT")
+  inputData   Json?
+  finalReport Json?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  maxGeneration Int    @default(3)
+  minConfidence Float  @default(0.7)
+  
+  // Relations
+  indicators  Indicator[]
+  results     Result[]
+  logs        InvestigationLog[]
+  caseId      String?
+  case        Case?      @relation(fields: [caseId], references: [id], onDelete: SetNull)
+  graphData   Json?
+  
+  @@map("investigations")
+}
+
+model Case {
+  id            String   @id @default(cuid())
+  name          String
+  description   String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  
+  investigations Investigation[]
+  
+  @@map("cases")
+}
+
+model Indicator {
+  id              String        @id @default(cuid())
+  investigationId String
+  type            IndicatorType
+  value           String
+  source          String? // buster, mosint, maigret, phoneinfoga, spiderfoot
+  confidence      Float         @default(0.5)
+  verified        Boolean       @default(false)
+  status          String?       // ex: valid, invalid, risky (pour wau)
+  processed       Boolean       @default(false) // Ajout pour le suivi du traitement
+  generation      Int           @default(0)
+  createdAt       DateTime      @default(now())
+
+  investigation Investigation @relation(fields: [investigationId], references: [id], onDelete: Cascade)
+  results       Result[]
+
+  @@index([investigationId])
+  @@unique([investigationId, type, value])
+  @@map("indicators")
+}
+
+model Result {
+  id             String     @id @default(cuid())
+  investigationId String
+  indicatorId    String?
+  toolSource     String     // buster, mosint, maigret, phoneinfoga, spiderfoot
+  data           Json
+  score          Float      @default(0.0)
+  createdAt      DateTime   @default(now())
+  
+  investigation  Investigation @relation(fields: [investigationId], references: [id], onDelete: Cascade)
+  indicator      Indicator?     @relation(fields: [indicatorId], references: [id], onDelete: SetNull)
+  
+  @@index([investigationId])
+  @@index([toolSource])
+  @@map("results")
+}
+
+model InvestigationLog {
+  id             String     @id @default(cuid())
+  investigationId String
+  step           String
+  message        String
+  level          LogLevel    @default(INFO)
+  timestamp      DateTime   @default(now())
+  
+  investigation  Investigation @relation(fields: [investigationId], references: [id], onDelete: Cascade)
+  
+  @@index([investigationId])
+  @@map("investigation_logs")
+}
+
+enum InvestigationStatus {
+  INITIALIZING
+  ENRICHING
+  SCANNING
+  CONSOLIDATING
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+enum IndicatorType {
+  NAME
+  EMAIL
+  USERNAME
+  PHONE
+  IP
+  DOMAIN
+  URL
+  LOCATION
+  COUNTRY
+  ORGANIZATION
+}
+
+enum LogLevel {
+  INFO
+  WARNING
+  ERROR
+  DEBUG
+}
