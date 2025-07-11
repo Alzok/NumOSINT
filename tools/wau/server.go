@@ -1,66 +1,84 @@
 package main
 
 import (
-	"bytes"
 	"encoding/json"
-	"log"
 	"net/http"
 	"os/exec"
+	"strings"
+
+	"github.com/gin-gonic/gin"
 )
 
-type ValidateRequest struct {
+type EmailValidationRequest struct {
 	Email string `json:"email"`
 }
 
-type ValidateResponse struct {
-	IsValid bool   `json:"isValid"`
-	Error   string `json:"error,omitempty"`
-}
-
-func validateEmailHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "Invalid request method", http.StatusMethodNotAllowed)
-		return
-	}
-
-	var req ValidateRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Error decoding request body", http.StatusBadRequest)
-		return
-	}
-
-	if req.Email == "" {
-		http.Error(w, "Email is required", http.StatusBadRequest)
-		return
-	}
-
-	cmd := exec.Command("wau", req.Email)
-	var out bytes.Buffer
-	cmd.Stdout = &out
-
-	err := cmd.Run()
-	isValid := err == nil
-
-	resp := ValidateResponse{
-		IsValid: isValid,
-	}
-
-	if !isValid {
-		// wau exits with non-zero status for invalid emails, but we don't treat it as a server error.
-		// The output might contain more info.
-		resp.Error = "Email validation failed"
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(resp); err != nil {
-		http.Error(w, "Error encoding response", http.StatusInternalServerError)
-	}
+type ValidationResult struct {
+	Email      string `json:"email"`
+	IsValid    bool   `json:"is_valid"`
+	IsRisky    bool   `json:"is_risky"`
+	Reason     string `json:"reason"`
+	RawOutput  string `json:"raw_output"`
 }
 
 func main() {
-	http.HandleFunc("/validate", validateEmailHandler)
-	log.Println("Starting server on :8080")
-	if err := http.ListenAndServe(":8080", nil); err != nil {
-		log.Fatal(err)
+	r := gin.Default()
+
+	r.POST("/validate", func(c *gin.Context) {
+		var req EmailValidationRequest
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+
+		if req.Email == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Email is required"})
+			return
+		}
+
+		cmd := exec.Command("wau", req.Email)
+		output, err := cmd.CombinedOutput()
+
+		result := parseWauOutput(req.Email, string(output), err)
+
+		c.JSON(http.StatusOK, result)
+	})
+
+	r.Run(":8080")
+}
+
+func parseWauOutput(email string, rawOutput string, err error) ValidationResult {
+	// Implémentation basique du parsing. wau peut avoir différents codes de sortie.
+	// Une sortie réussie (exit code 0) signifie généralement que l'e-mail est valide.
+	// On se base sur le contenu textuel pour plus de détails.
+
+	isValid := err == nil
+	isRisky := false
+	reason := "Validation successful"
+
+	if strings.Contains(rawOutput, "is risky") {
+		isRisky = true
+		reason = "Email is considered risky"
+	}
+
+	if err != nil {
+		reason = err.Error()
+		if exitError, ok := err.(*exec.ExitError); ok {
+			reason = string(exitError.Stderr)
+		}
+	}
+	
+	// Simplification: si le code de sortie n'est pas 0, on considère invalide.
+	// On pourrait affiner avec les codes de sortie spécifiques de wau.
+	if err != nil {
+		isValid = false
+	}
+
+	return ValidationResult{
+		Email:     email,
+		IsValid:   isValid,
+		IsRisky:   isRisky,
+		Reason:    reason,
+		RawOutput: rawOutput,
 	}
 }

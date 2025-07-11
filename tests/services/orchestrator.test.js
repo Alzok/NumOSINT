@@ -8,6 +8,8 @@ jest.mock('../../src/services/tools/mosint');
 jest.mock('../../src/services/tools/maigret');
 jest.mock('../../src/services/tools/phoneinfoga');
 jest.mock('../../src/services/tools/spiderfoot');
+jest.mock('../../src/services/tools/wau');
+jest.mock('../../src/services/tools/waybulk');
 
 describe('OrchestratorService', () => {
   let service;
@@ -123,6 +125,47 @@ describe('OrchestratorService', () => {
         expect.objectContaining({ data: expect.objectContaining({ status: 'CANCELLED' }) })
       );
       expect(service.activeInvestigations.has(investigationId)).toBe(false);
+    });
+
+    it('should call wau service for unverified email and continue if valid', async () => {
+      const investigationId = 'test-investigation-wau-valid';
+      const indicator = { id: 'indicator-3', type: 'EMAIL', value: 'valid@example.com', verified: false, investigationId };
+      
+      mockPrisma.indicator.findFirst.mockResolvedValueOnce(indicator);
+      mockPrisma.indicator.findUnique.mockResolvedValue({ ...indicator, verified: true }); // Simulate successful validation
+      service.wauService.validateEmail = jest.fn().mockResolvedValue();
+      service.mosintService.analyzeEmail = jest.fn().mockResolvedValue();
+
+      await service._enrichEmail(investigationId, indicator);
+
+      expect(service.wauService.validateEmail).toHaveBeenCalledWith(investigationId, indicator);
+      expect(service.mosintService.analyzeEmail).toHaveBeenCalled();
+    });
+
+    it('should call wau service for unverified email and stop if invalid', async () => {
+      const investigationId = 'test-investigation-wau-invalid';
+      const indicator = { id: 'indicator-4', type: 'EMAIL', value: 'invalid@example.com', verified: false, investigationId };
+      
+      mockPrisma.indicator.findFirst.mockResolvedValueOnce(indicator);
+      mockPrisma.indicator.findUnique.mockResolvedValue({ ...indicator, verified: false }); // Simulate failed validation
+      service.wauService.validateEmail = jest.fn().mockResolvedValue();
+      service.mosintService.analyzeEmail = jest.fn();
+
+      await service._enrichEmail(investigationId, indicator);
+
+      expect(service.wauService.validateEmail).toHaveBeenCalledWith(investigationId, indicator);
+      expect(service.mosintService.analyzeEmail).not.toHaveBeenCalled();
+    });
+
+    it('should call waybulk service for domain indicator', async () => {
+      const investigationId = 'test-investigation-waybulk';
+      const indicator = { id: 'indicator-5', type: 'DOMAIN', value: 'example.com', investigationId };
+      
+      service.waybulkService.lookupDomain = jest.fn().mockResolvedValue();
+
+      await service._enrichDomain(investigationId, indicator);
+
+      expect(service.waybulkService.lookupDomain).toHaveBeenCalledWith(investigationId, indicator);
     });
   });
 

@@ -1,42 +1,37 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
+import { GitHub, Twitter, LinkedIn, Instagram, Facebook, Reddit } from '@mui/icons-material';
 
 interface SocialProfile {
   siteName: string;
   profileUrl: string;
-  logoUrl: string;
 }
 
 interface SocialProfilesProps {
   profiles: SocialProfile[];
 }
 
-const mockProfiles: SocialProfile[] = [
-  {
-    siteName: "Facebook",
-    profileUrl: "https://www.facebook.com/johndoe",
-    logoUrl: "https://upload.wikimedia.org/wikipedia/commons/5/51/Facebook_f_logo_%282019%29.svg",
-  },
-  {
-    siteName: "Twitter",
-    profileUrl: "https://twitter.com/johndoe",
-    logoUrl: "https://upload.wikimedia.org/wikipedia/en/6/60/X_logo.svg",
-  },
-  {
-    siteName: "LinkedIn",
-    profileUrl: "https://www.linkedin.com/in/johndoe",
-    logoUrl: "https://upload.wikimedia.org/wikipedia/commons/c/ca/LinkedIn_logo_initials.png",
-  },
-  {
-    siteName: "GitHub",
-    profileUrl: "https://github.com/johndoe",
-    logoUrl: "https://upload.wikimedia.org/wikipedia/commons/9/91/Octicons-mark-github.svg",
-  },
-];
+export function SocialProfiles({ profiles }: SocialProfilesProps) {
+  const getSocialIcon = (siteName: string) => {
+    switch (siteName.toLowerCase()) {
+      case 'github':
+        return <GitHub />;
+      case 'twitter':
+        return <Twitter />;
+      case 'linkedin':
+        return <LinkedIn />;
+      case 'instagram':
+        return <Instagram />;
+      case 'facebook':
+        return <Facebook />;
+      case 'reddit':
+        return <Reddit />;
+      default:
+        return null;
+    }
+  };
 
-export function SocialProfiles({ profiles = mockProfiles }: SocialProfilesProps) {
   if (!profiles || profiles.length === 0) {
     return <p>No social profiles found.</p>;
   }
@@ -46,10 +41,7 @@ export function SocialProfiles({ profiles = mockProfiles }: SocialProfilesProps)
       {profiles.map((profile) => (
         <Card key={profile.siteName}>
           <CardHeader className="flex flex-row items-center gap-4">
-            <Avatar>
-              <AvatarImage src={profile.logoUrl} alt={`${profile.siteName} logo`} />
-              <AvatarFallback>{profile.siteName.charAt(0)}</AvatarFallback>
-            </Avatar>
+            {getSocialIcon(profile.siteName) || <div className="w-10 h-10 rounded-full bg-gray-200" />}
             <CardTitle>{profile.siteName}</CardTitle>
           </CardHeader>
           <CardContent>

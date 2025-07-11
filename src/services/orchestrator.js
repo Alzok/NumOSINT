@@ -8,6 +8,10 @@ const MosintService = require('./tools/mosint');
 const MaigretService = require('./tools/maigret');
 const PhoneInfogaService = require('./tools/phoneinfoga');
 const SpiderFootService = require('./tools/spiderfoot');
+const AsnService = require('./tools/asn');
+const PdlService = require('./tools/pdl');
+const WauService = require('./tools/wau');
+const WaybulkService = require('./tools/waybulk');
 
 class OrchestratorService {
   constructor(prisma, io) {
@@ -21,6 +25,10 @@ class OrchestratorService {
     this.maigretService = new MaigretService(prisma);
     this.phoneinfogaService = new PhoneInfogaService(prisma);
     this.spiderfootService = new SpiderFootService(prisma);
+    this.asnService = new AsnService(prisma);
+    this.pdlService = new PdlService(prisma);
+    this.wauService = new WauService(prisma);
+    this.waybulkService = new WaybulkService(prisma);
 
     // Écoute des événements globaux de l'application
     eventBus.on('tool:scan_completed', this.handleToolCompletion.bind(this));
@@ -204,18 +212,22 @@ class OrchestratorService {
     try {
       switch (type) {
         case IndicatorType.NAME:
-          // Double stratégie: Buster pour les emails, Maigret pour les usernames
-          await this._runToolWithRetry(this.busterService.generateEmails.bind(this.busterService), investigationId, indicator);
-          await this._runToolWithRetry(this.maigretService.searchProfiles.bind(this.maigretService), investigationId, indicator);
+          await this._enrichName(investigationId, indicator);
           break;
         case IndicatorType.EMAIL:
-          await this._runToolWithRetry(this.mosintService.analyzeEmail.bind(this.mosintService), investigationId, indicator);
+          await this._enrichEmail(investigationId, indicator);
           break;
         case IndicatorType.USERNAME:
-          await this._runToolWithRetry(this.maigretService.searchProfiles.bind(this.maigretService), investigationId, indicator);
+          await this._enrichUsername(investigationId, indicator);
           break;
         case IndicatorType.PHONE:
-          await this._runToolWithRetry(this.phoneinfogaService.analyzePhone.bind(this.phoneinfogaService), investigationId, indicator);
+          await this._enrichPhone(investigationId, indicator);
+          break;
+        case IndicatorType.DOMAIN:
+          await this._enrichDomain(investigationId, indicator);
+          break;
+        case IndicatorType.IP:
+          await this._enrichIp(investigationId, indicator);
           break;
         default:
           logger.warn(`Type d'indicateur non traité en phase d'enrichissement: ${type}`);
@@ -223,6 +235,69 @@ class OrchestratorService {
     } catch (error) {
         logger.error(`Erreur lors du dispatch de l'indicateur ${indicator.id} pour enrichissement. L'investigation va être marquée comme échouée.`, error);
         await this.handleInvestigationError(investigationId, error);
+    }
+  }
+
+  async _enrichName(investigationId, indicator) {
+    await this._runToolWithRetry(this.busterService.generateEmails.bind(this.busterService), investigationId, indicator);
+    await this._runToolWithRetry(this.maigretService.searchProfiles.bind(this.maigretService), investigationId, indicator);
+  }
+
+  async _enrichEmail(investigationId, indicator) {
+    if (!indicator.verified) {
+      await this._runToolWithRetry(this.wauService.validateEmail.bind(this.wauService), investigationId, indicator);
+      const updatedIndicator = await this.prisma.indicator.findUnique({ where: { id: indicator.id } });
+      if (!updatedIndicator.verified) {
+        logger.tool(this.toolName, investigationId, `Arrêt du traitement pour l'email non vérifié: ${indicator.value}`);
+        return;
+      }
+    }
+    await this._runToolWithRetry(this.mosintService.analyzeEmail.bind(this.mosintService), investigationId, indicator);
+    await this._runToolWithRetry(this.busterService.reverseWhois.bind(this.busterService), investigationId, indicator);
+    await this._runToolWithRetry(this.mosintService.hibpLookup.bind(this.mosintService), investigationId, indicator);
+    await this._runToolWithRetry(this.mosintService.ipLookup.bind(this.mosintService), investigationId, indicator);
+    await this._runToolWithRetry(this.mosintService.linkSearch.bind(this.mosintService), investigationId, indicator);
+  }
+
+  async _enrichUsername(investigationId, indicator) {
+    await this._runToolWithRetry(this.maigretService.searchProfiles.bind(this.maigretService), investigationId, indicator);
+  }
+
+  async _enrichPhone(investigationId, indicator) {
+    await this._runToolWithRetry(this.phoneinfogaService.analyzePhone.bind(this.phoneinfogaService), investigationId, indicator);
+  }
+
+  async _enrichDomain(investigationId, indicator) {
+    await this._runToolWithRetry(this.waybulkService.lookupDomain.bind(this.waybulkService), investigationId, indicator);
+  }
+
+  async _enrichIp(investigationId, indicator) {
+    await this._runToolWithRetry(this.asnService.lookupIp.bind(this.asnService), investigationId, indicator);
+  }
+
+  /**
+   * Déclenche un enrichissement avancé avec People Data Labs.
+   */
+  async runPdlEnrichment(investigationId, indicatorId) {
+    const indicator = await this.prisma.indicator.findUnique({ where: { id: indicatorId } });
+    if (!indicator) {
+      logger.error(`[PDL] Indicateur ${indicatorId} non trouvé pour l'enrichissement.`);
+      return;
+    }
+
+    logger.info(`[PDL] Démarrage de l'enrichissement avancé pour ${indicator.value}`);
+    await this.logStep(investigationId, 'pdl_enrichment_start', `Lancement de l'enrichissement PDL pour: ${indicator.value}.`);
+
+    try {
+      if (indicator.type === IndicatorType.EMAIL) {
+        await this.pdlService.enrichEmail(investigationId, indicator);
+      } else {
+        logger.warn(`[PDL] Type d'indicateur non supporté pour l'enrichissement PDL: ${indicator.type}`);
+      }
+      await this.logStep(investigationId, 'pdl_enrichment_success', `Enrichissement PDL pour ${indicator.value} terminé.`);
+    } catch (error) {
+      logger.error(`[PDL] Échec de l'enrichissement pour ${indicator.value}:`, error);
+      await this.logStep(investigationId, 'pdl_enrichment_error', `Échec de l'enrichissement PDL pour ${indicator.value}: ${error.message}`, 'ERROR');
     }
   }
 
@@ -241,7 +316,7 @@ class OrchestratorService {
       where: {
         investigationId: investigationId,
         processed: false,
-        type: { in: [IndicatorType.NAME, IndicatorType.EMAIL, IndicatorType.USERNAME, IndicatorType.PHONE] },
+        type: { in: [IndicatorType.NAME, IndicatorType.EMAIL, IndicatorType.USERNAME, IndicatorType.PHONE, IndicatorType.DOMAIN, IndicatorType.IP] },
         generation: { lte: investigation.maxGeneration }
       },
       orderBy: [
@@ -263,6 +338,87 @@ class OrchestratorService {
     await this.updateInvestigationStatus(investigationId, investigation.status, investigation.progress, `phase_change:${newPhase}`, newPhase);
   }
 
+    /**
+     * Déclenche une recherche récursive Maigret pour un username spécifique.
+     * C'est une action qui sera typiquement initiée par l'utilisateur depuis l'UI.
+     */
+    async runRecursiveMaigretSearch(investigationId, username) {
+      logger.info(`[Recursive Search] Démarrage de la recherche récursive Maigret pour ${username} dans l'investigation ${investigationId}.`);
+      await this.logStep(investigationId, 'recursive_search_start', `Lancement d'une recherche récursive pour le pseudo: ${username}.`);
+  
+      try {
+        // On crée un "pseudo-indicateur" pour passer au service, ou on cherche l'existant.
+        let indicator = await this.prisma.indicator.findFirst({
+          where: { investigationId, value: username, type: IndicatorType.USERNAME }
+        });
+  
+        if (!indicator) {
+          indicator = { value: username, generation: 0 }; // Mock indicator
+          logger.warn(`[Recursive Search] Aucun indicateur existant pour ${username}. Lancement avec un indicateur mock.`);
+        }
+  
+        // On appelle directement le service avec l'option récursive activée.
+        await this.maigretService.searchProfiles(investigationId, indicator, 'all', true);
+  
+        await this.logStep(investigationId, 'recursive_search_success', `Recherche récursive pour ${username} terminée.`);
+        
+        // On pourrait vouloir relancer une phase d'enrichissement si de nouveaux indicateurs ont été trouvés.
+        // Pour l'instant, on se contente de logger.
+        this.io.emit('investigation:update', {
+          id: investigationId,
+          status: 'ENRICHING', // Pour rafraîchir l'UI
+          currentStep: `Recherche récursive sur ${username} terminée.`,
+        });
+  
+      } catch (error) {
+        logger.error(`[Recursive Search] Échec de la recherche récursive pour ${username} dans l'investigation ${investigationId}:`, error);
+        await this.logStep(investigationId, 'recursive_search_error', `Échec de la recherche récursive pour ${username}: ${error.message}`, 'ERROR');
+        this.io.emit('investigation:update', {
+          id: investigationId,
+          status: 'FAILED',
+          error: `La recherche récursive a échoué: ${error.message}`,
+        });
+      }
+    }
+  
+    /**
+     * Déclenche une recherche Maigret par tags.
+     */
+    async runMaigretTagSearch(investigationId, username, tags) {
+      logger.info(`[Tag Search] Démarrage de la recherche Maigret pour ${username} avec les tags '${tags}' dans l'investigation ${investigationId}.`);
+      await this.logStep(investigationId, 'tag_search_start', `Lancement d'une recherche par tags pour le pseudo: ${username} (tags: ${tags}).`);
+  
+      try {
+        let indicator = await this.prisma.indicator.findFirst({
+          where: { investigationId, value: username, type: IndicatorType.USERNAME }
+        });
+  
+        if (!indicator) {
+          indicator = { value: username, generation: 0 }; // Mock indicator
+        }
+  
+        // On appelle le service avec les tags et sans récursion.
+        await this.maigretService.searchProfiles(investigationId, indicator, tags, false);
+  
+        await this.logStep(investigationId, 'tag_search_success', `Recherche par tags pour ${username} terminée.`);
+        
+        this.io.emit('investigation:update', {
+          id: investigationId,
+          status: 'ENRICHING',
+          currentStep: `Recherche par tags sur ${username} terminée.`,
+        });
+  
+      } catch (error) {
+        logger.error(`[Tag Search] Échec de la recherche par tags pour ${username} dans l'investigation ${investigationId}:`, error);
+        await this.logStep(investigationId, 'tag_search_error', `Échec de la recherche par tags pour ${username}: ${error.message}`, 'ERROR');
+        this.io.emit('investigation:update', {
+          id: investigationId,
+          status: 'FAILED',
+          error: `La recherche par tags a échoué: ${error.message}`,
+        });
+      }
+    }
+  
   // ... [Les autres méthodes comme stopInvestigation, _runToolWithRetry, logStep, etc. restent ici]
   // ... [Il faudra adapter updateProgress pour qu'il prenne en compte les bornes de progression par phase]
 
@@ -316,7 +472,7 @@ class OrchestratorService {
     }
   }
 
-  async _runToolWithRetry(toolFunction, investigationId, indicator) {
+  async _runToolWithRetry(toolFunction, investigationId, indicator, ...args) {
     const maxRetries = 3;
     let attempt = 1;
     let delay = 1000;
@@ -325,7 +481,7 @@ class OrchestratorService {
     while (attempt <= maxRetries) {
       try {
         await this.logStep(investigationId, 'tool_attempt', `[${toolName}] Tentative ${attempt}/${maxRetries} pour ${indicator.value}`);
-        await toolFunction(investigationId, indicator);
+        await toolFunction(investigationId, indicator, ...args);
         await this.logStep(investigationId, 'tool_success', `[${toolName}] Succès pour ${indicator.value}`);
         return;
       } catch (error) {

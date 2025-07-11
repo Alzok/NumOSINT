@@ -29,6 +29,8 @@ class ReportService {
       return this.generatePdfReport(investigation);
     } else if (format === 'csv') {
       return this.generateCsvReport(investigation);
+    } else if (format === 'json') {
+      return this.generateJsonReport(investigation);
     } else {
       throw new Error('Format de rapport non supporté');
     }
@@ -104,6 +106,17 @@ class ReportService {
     }
 
     return papaparse.unparse(flattenedResults);
+  }
+
+  /**
+   * Génère un rapport JSON à partir des données d'une investigation.
+   * @private
+   */
+  async generateJsonReport(data) {
+    logger.info(`Génération du JSON pour l'investigation ${data.id}`);
+    // On retourne simplement les données de l'investigation.
+    // On pourrait vouloir nettoyer ou formater ces données à l'avenir.
+    return data;
   }
 }
 

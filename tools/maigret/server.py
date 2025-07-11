@@ -11,9 +11,11 @@ def scan():
     """
     Endpoint to scan a username with Maigret.
     Expects a JSON payload with a "username" key.
+    Can also accept a "tags" key to filter by site tags.
     """
     data = request.get_json()
     username = data.get('username')
+    tags = data.get('tags', 'all')
 
     if not username:
         return jsonify({"error": "Username is required"}), 400
@@ -27,6 +29,7 @@ def scan():
         command = [
             "maigret",
             "--json-file", output_filename,
+            "--tags", tags,
             username
         ]
 
@@ -47,20 +50,72 @@ def scan():
     except subprocess.CalledProcessError as e:
         # Si Maigret retourne un code d'erreur
         error_message = e.stderr or e.stdout or "Unknown error during Maigret execution"
-        app.logger.error(f"Maigret execution failed for {username}: {error_message}")
+        app.logger.error(f"Maigret execution failed for {username} with tags {tags}: {error_message}")
         return jsonify({
             "error": "Maigret execution failed",
             "details": error_message
         }), 500
     except Exception as e:
         # Pour toute autre erreur
-        app.logger.error(f"An unexpected error occurred for {username}: {str(e)}")
+        app.logger.error(f"An unexpected error occurred for {username} with tags {tags}: {str(e)}")
         return jsonify({
             "error": "An unexpected error occurred",
             "details": str(e)
         }), 500
     finally:
         # S'assurer que le fichier temporaire est supprimé
+        if os.path.exists(output_filename):
+            os.remove(output_filename)
+
+@app.route('/recursive-search', methods=['POST'])
+def recursive_search():
+    """
+    Endpoint to perform a recursive username search with Maigret.
+    Expects a JSON payload with a "username" key.
+    """
+    data = request.get_json()
+    username = data.get('username')
+
+    if not username:
+        return jsonify({"error": "Username is required"}), 400
+
+    with tempfile.NamedTemporaryFile(mode='w+', delete=False, suffix='.json') as tmp_file:
+        output_filename = tmp_file.name
+
+    try:
+        command = [
+            "maigret",
+            "--json-file", output_filename,
+            "--recursive",
+            username
+        ]
+
+        process = subprocess.run(
+            command,
+            capture_output=True,
+            text=True,
+            check=True
+        )
+
+        with open(output_filename, 'r') as f:
+            results = json.load(f)
+        
+        return jsonify(results)
+
+    except subprocess.CalledProcessError as e:
+        error_message = e.stderr or e.stdout or "Unknown error during Maigret execution"
+        app.logger.error(f"Maigret recursive execution failed for {username}: {error_message}")
+        return jsonify({
+            "error": "Maigret recursive execution failed",
+            "details": error_message
+        }), 500
+    except Exception as e:
+        app.logger.error(f"An unexpected error occurred during recursive search for {username}: {str(e)}")
+        return jsonify({
+            "error": "An unexpected error occurred",
+            "details": str(e)
+        }), 500
+    finally:
         if os.path.exists(output_filename):
             os.remove(output_filename)
 

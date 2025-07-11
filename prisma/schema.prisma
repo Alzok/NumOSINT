@@ -30,6 +30,7 @@ model Investigation {
   logs        InvestigationLog[]
   caseId      String?
   case        Case?      @relation(fields: [caseId], references: [id], onDelete: SetNull)
+  graphData   Json?
   
   @@map("investigations")
 }
@@ -54,6 +55,7 @@ model Indicator {
   source          String? // buster, mosint, maigret, phoneinfoga, spiderfoot
   confidence      Float         @default(0.5)
   verified        Boolean       @default(false)
+  status          String?       // ex: valid, invalid, risky (pour wau)
   processed       Boolean       @default(false) // Ajout pour le suivi du traitement
   generation      Int           @default(0)
   createdAt       DateTime      @default(now())

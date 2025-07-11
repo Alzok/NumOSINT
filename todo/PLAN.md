@@ -9,32 +9,42 @@ Un workflow dynamique qui s'adapte aux données d'entrée est essentiel. L'objec
 ### Diagramme du Workflow
 ```mermaid
 graph TD
-    A[Formulaire de Lancement] --> B{Donnée d'entrée principale ?};
-    B -->|Nom/Prénom + Domaine| C[Buster: Génération d'e-mails];
-    B -->|E-mail| D[Mosint: Analyse d'e-mail];
-    B -->|Téléphone| E[PhoneInfoga: Analyse de numéro];
-    B -->|Pseudo| F[Maigret: Recherche de profils];
-    B -->|Domaine seul| G[Waybulk: URLs archivées & SpiderFoot: Scan initial];
+    subgraph "Phase 1: Collecte & Enrichissement Primaire"
+        A[Formulaire de Lancement] --> B{Donnée d'entrée ?};
+        B -->|Nom/Prénom + Domaine| C[Buster: Génération d'e-mails];
+        B -->|E-mail| D[Mosint: Analyse d'e-mail];
+        B -->|Téléphone| E[PhoneInfoga: Analyse de numéro];
+        B -->|Pseudo| F[Maigret: Recherche de profils];
+        B -->|Domaine| G[Waybulk: URLs archivées];
+        B -->|IP| ASN[asn: Analyse IP];
+    end
 
-    C --> H{E-mails potentiels trouvés?};
-    H -->|Oui| I[wau: Validation des e-mails];
-    I --> J[Mosint: Analyse des e-mails validés];
-    H -->|Non| K[SpiderFoot: Recherche étendue sur le domaine/nom];
+    subgraph "Phase 2: Validation & Pivot"
+        C --> H{E-mails potentiels?};
+        H -->|Oui| I[wau: Validation des e-mails];
+        I --> J[Mosint: Analyse des e-mails validés];
+        
+        D --> L[SpiderFoot: Utiliser l'e-mail comme pivot];
+        D --> F;
+        D --> PDL[pdl: Enrichissement avancé];
 
-    D --> L[SpiderFoot: Utiliser l'e-mail comme pivot];
-    D --> F;
+        E --> M[SpiderFoot: Utiliser le numéro comme pivot];
+        E --> PDL;
+
+        F --> N{Profils trouvés?};
+        N --> |Oui| O[Extraire Noms/E-mails/Infos];
+        O --> C;
+        O --> D;
+    end
     
-    E --> M[SpiderFoot: Utiliser le numéro comme pivot];
-
-    F --> N{Profils trouvés?};
-    N --> |Oui| O[Extraire Noms/E-mails/Infos des profils];
-    O --> C;
-    O --> D;
-    
-    J --> L;
+    subgraph "Phase 3: Scan Exhaustif"
+        J --> L;
+        ASN --> L;
+        G --> L;
+    end
 ```
 
-## 2. Intégration des Nouveaux Outils : `wau` et `waybulk`
+## 2. Intégration des Nouveaux Outils : `wau`, `waybulk`, `asn` et `pdl`
 
 *   **`wau` (Who Are You)**
     *   **Valeur Ajoutée :** Spécialiste de la **validation d'e-mails**. Il va au-delà de la simple vérification syntaxique en tentant de confirmer auprès du serveur mail si une boîte existe réellement.
@@ -45,6 +55,16 @@ graph TD
     *   **Valeur Ajoutée :** **Archéologie numérique**. Découvrir d'anciennes pages d'un site web est une mine d'or pour comprendre l'historique d'une entité.
     *   **Rôle :** **Nouvelle capacité**.
     *   **Intégration :** Se déclenche dès qu'un **nom de domaine** est une entrée.
+
+*   **`asn` (ASN/IP Intel)**
+    *   **Valeur Ajoutée :** **Contexte réseau**. Fournit des informations cruciales sur une adresse IP (propriétaire, géolocalisation, réputation).
+    *   **Rôle :** **Enrichissement d'IP**. Essentiel pour qualifier les adresses IP découvertes.
+    *   **Intégration :** Doit être appelé chaque fois qu'un indicateur **IP** est créé ou traité.
+
+*   **`peopledatalabs` (PDL)**
+    *   **Valeur Ajoutée :** **Enrichissement de profils professionnels**. Source de données commerciales extrêmement riche pour les informations sur les personnes.
+    *   **Rôle :** **Enrichissement avancé (premium)**.
+    *   **Intégration :** Peut être déclenché manuellement ou automatiquement sur des indicateurs **E-mail** ou **Téléphone** de haute confiance. Nécessite une clé API.
 
 ## 3. Exploitation Complète des Fonctionnalités (Plan UI/UX)
 
@@ -95,3 +115,26 @@ graph TD
 | **Moteur de corrélation** | Comment toutes ces informations (e-mails, IPs, domaines, noms) sont-elles liées ? | Onglet "Vue Graphique" ou "Relations" | **Composant de Graphe** (ex: `react-flow` ou `vis.js`). C'est la fonctionnalité la plus visuelle. |
 | **Export CSV/JSON/GEXF** | Comment puis-je exporter ces données pour les utiliser ailleurs ? | Barre d'outils de l'enquête | `DropdownMenu` avec des options d'export. |
 | **Intégration TOR** | Y a-t-il des mentions de cette cible sur le dark web ? | Section "Dark Web" (à traiter avec précaution) | `Alert` avec un avertissement, puis une liste des mentions trouvées. |
+
+## 4. Intégration Stratégique des Outils
+
+L'objectif n'est pas seulement d'ajouter des outils, mais de les intégrer de manière à ce qu'ils s'enrichissent mutuellement et rendent le workflow plus intelligent.
+
+### `wau` comme Gardien de la Qualité
+
+*   **Rôle Stratégique**: Agir comme un filtre de qualité pour les e-mails générés par `Buster`.
+*   **Logique de Workflow**:
+    1.  `Buster` génère des e-mails.
+    2.  `wau` valide chaque e-mail.
+    3.  **Seuls les e-mails `valides`** sont transmis à `Mosint` et `SpiderFoot` pour des analyses approfondies.
+    4.  Les e-mails `invalides` ou `risqués` sont stockés mais ne déclenchent pas d'actions, évitant ainsi de gaspiller des ressources.
+*   **Impact sur l'UI**: Chaque e-mail dans les résultats affichera un `Badge` de statut (`Valide`, `Invalide`, `Risqué`), offrant une clarté immédiate à l'analyste.
+
+### `waybulk` comme Moteur de Découverte
+
+*   **Rôle Stratégique**: Transformer les archives web d'une simple liste d'URL en une source active de nouvelles pistes.
+*   **Logique de Workflow**:
+    1.  `waybulk` est lancé sur un domaine.
+    2.  L'orchestrateur analyse les URL retournées pour y **détecter de nouveaux sous-domaines, domaines, ou e-mails**.
+    3.  Ces nouvelles entités sont **automatiquement ajoutées comme de nouveaux indicateurs** à la file d'attente de l'enquête, créant une boucle d'enrichissement.
+*   **Impact sur l'UI**: La vue des résultats de `waybulk` sera interactive, avec un regroupement par année et des **aperçus visuels** des pages archivées pour faciliter l'analyse historique. Les URL ayant conduit à de nouvelles découvertes seront mises en évidence.

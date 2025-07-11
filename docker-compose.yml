@@ -52,8 +52,7 @@ services:
       - BUSTER_SERVICE_URL=http://buster-service:5003
       - MOSINT_SERVICE_URL=http://mosint-service:5004
       - PHONEINFOGA_SERVICE_URL=http://phoneinfoga-service:5005
-      - WAU_SERVICE_URL=http://wau-service:8080
-      - WAYBULK_SERVICE_URL=http://waybulk-service:8080
+      - ASN_SERVICE_URL=http://asn-service:5008
     ports:
       - "5001:5001"
     volumes:
@@ -74,9 +73,7 @@ services:
         condition: service_started
       phoneinfoga-service:
         condition: service_started
-      wau-service:
-        condition: service_started
-      waybulk-service:
+      asn-service:
         condition: service_started
     restart: unless-stopped
     healthcheck:
@@ -121,20 +118,12 @@ services:
       - numosint_network
     restart: unless-stopped
 
-  wau-service:
-    build:
-      context: ./tools/wau
-      dockerfile: Dockerfile
-    container_name: numosint_wau_service
-    networks:
-      - numosint_network
-    restart: unless-stopped
 
-  waybulk-service:
+  asn-service:
     build:
-      context: ./tools/waybulk
+      context: ./tools/asn
       dockerfile: Dockerfile
-    container_name: numosint_waybulk_service
+    container_name: numosint_asn_service
     networks:
       - numosint_network
     restart: unless-stopped

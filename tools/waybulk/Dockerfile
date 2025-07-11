@@ -1,19 +1,35 @@
-FROM golang:1.21-alpine
+# Étape 1: Builder l'application et l'outil
+FROM golang:1.18-alpine AS builder
+WORKDIR /app
 
-# Install waybulk
-RUN go install github.com/sham00n/waybulk@latest
+# Installer git et cloner waybulk
+RUN apk --no-cache add git
+RUN git clone https://github.com/sham00n/waybulk.git /app/waybulk_src
 
-# Copy the binary to an accessible path
-RUN cp /go/bin/waybulk /usr/local/bin/
+# Builder et installer waybulk
+WORKDIR /app/waybulk_src
+RUN ls -la
+RUN go mod init waybulk
+RUN go mod tidy
+RUN CGO_ENABLED=0 go build -o /usr/local/bin/waybulk .
 
-# Copy the server source code
+# Préparer le build du serveur wrapper
+WORKDIR /app
+COPY go.mod go.sum ./
+RUN GOPROXY=direct go mod download
 COPY server.go .
 
-# Build the server
-RUN go build -o /go/bin/server server.go
+# Builder le serveur wrapper
+RUN CGO_ENABLED=0 GOOS=linux go build -o /app/server server.go
 
-# Expose the port the server will run on
+# Étape 2: Créer l'image finale
+FROM alpine:latest
+RUN apk --no-cache add ca-certificates
+WORKDIR /root/
+
+# Copier l'outil et le serveur depuis l'étape de build
+COPY --from=builder /usr/local/bin/waybulk /usr/local/bin/waybulk
+COPY --from=builder /app/server .
+
 EXPOSE 8080
-
-# Command to run the server
-CMD ["/go/bin/server"]
+CMD ["./server"]

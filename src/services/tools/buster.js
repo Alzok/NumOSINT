@@ -92,6 +92,63 @@ class BusterService {
     }
   }
 
+  /**
+   * Effectue une recherche Reverse Whois pour un email donné.
+   */
+  async reverseWhois(investigationId, emailIndicator) {
+    if (!busterServiceUrl) {
+      logger.toolError(this.toolName, investigationId, "La variable d'environnement BUSTER_SERVICE_URL n'est pas définie.");
+      return;
+    }
+
+    const email = emailIndicator.value;
+    try {
+      logger.tool(this.toolName, investigationId, `Recherche Reverse Whois pour: ${email}`);
+      
+      const response = await axios.post(`${busterServiceUrl}/reverse-whois`, { email }, { timeout: 120000 }); // 2 minutes timeout
+      const result = response.data;
+
+      if (result.domains && result.domains.length > 0) {
+        // Sauvegarder les résultats
+        await this.prisma.result.create({
+          data: {
+            investigationId,
+            indicatorId: emailIndicator.id,
+            toolSource: this.toolName,
+            data: {
+              email,
+              reverse_whois: result.domains,
+            },
+            score: Math.min(result.domains.length / 10, 1),
+          },
+        });
+
+        // Créer de nouveaux indicateurs de domaine
+        const newIndicators = result.domains.map(domain => ({
+          investigationId,
+          type: IndicatorType.DOMAIN,
+          value: domain,
+          source: this.toolName,
+          confidence: 0.9,
+          generation: emailIndicator.generation + 1,
+          verified: true,
+          processed: false,
+        }));
+
+        if (newIndicators.length > 0) {
+          await this.prisma.indicator.createMany({
+            data: newIndicators,
+            skipDuplicates: true,
+          });
+        }
+        logger.tool(this.toolName, investigationId, `${result.domains.length} domaine(s) trouvé(s) pour ${email}.`);
+      }
+    } catch (error) {
+      const errorMessage = error.response ? JSON.stringify(error.response.data) : error.message;
+      logger.toolError(this.toolName, investigationId, `Erreur lors de la recherche Reverse Whois pour ${email}: ${errorMessage}`);
+    }
+  }
+
   async testConfiguration() {
     if (!busterServiceUrl) {
         return { status: 'error', message: "La variable d'environnement BUSTER_SERVICE_URL n'est pas définie." };

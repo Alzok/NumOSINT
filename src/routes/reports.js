@@ -15,8 +15,8 @@ const reportService = new ReportService(prisma);
     const { id } = req.params;
     const { format } = req.query;
 
-    if (!format || !['pdf', 'csv'].includes(format)) {
-      return res.status(400).json({ error: 'Le paramètre "format" (pdf ou csv) est requis.' });
+    if (!format || !['pdf', 'csv', 'json'].includes(format)) {
+      return res.status(400).json({ error: 'Le paramètre "format" (pdf, csv, ou json) est requis.' });
     }
 
     try {
@@ -30,6 +30,10 @@ const reportService = new ReportService(prisma);
         res.setHeader('Content-Type', 'text/csv');
         res.setHeader('Content-Disposition', `attachment; filename="rapport-investigation-${id}.csv"`);
         res.send(reportContent);
+      } else if (format === 'json') {
+        res.setHeader('Content-Type', 'application/json');
+        res.setHeader('Content-Disposition', `attachment; filename="rapport-investigation-${id}.json"`);
+        res.json(reportContent);
       }
     } catch (error) {
       logger.error(`Erreur lors de la génération du rapport pour l'investigation ${id}:`, error);

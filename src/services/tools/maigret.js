@@ -82,12 +82,18 @@ class MaigretService {
 
   /**
    * Appelle le microservice Maigret.
+   * @param {string} username - Le nom d'utilisateur à rechercher.
+   * @param {string} tags - Les tags pour filtrer.
+   * @param {boolean} recursive - Activer la recherche récursive.
    */
-  async executeMaigretCommand(username) {
+  async executeMaigretCommand(username, tags = 'all', recursive = false) {
+    const endpoint = recursive ? '/recursive-search' : '/scan';
+    const payload = { username, tags };
+    const timeout = recursive ? 900000 : 300000; // 15 minutes pour récursif, 5 pour normal
+
     try {
-      const response = await axios.post(`${this.serviceUrl}/scan`, { username }, {
-        timeout: 300000 // 5 minutes timeout
-      });
+      logger.info(`Calling Maigret service at ${this.serviceUrl}${endpoint} for ${username}`);
+      const response = await axios.post(`${this.serviceUrl}${endpoint}`, payload, { timeout });
       
       // Le microservice retourne directement la liste des profils trouvés.
       // On s'assure de retourner un tableau même si la réponse est vide ou malformée.
@@ -99,7 +105,7 @@ class MaigretService {
 
     } catch (error) {
       const errorMessage = error.response ? JSON.stringify(error.response.data) : error.message;
-      logger.error(`Erreur lors de l'appel au microservice Maigret pour ${username}: ${errorMessage}`);
+      logger.error(`Erreur lors de l'appel au microservice Maigret pour ${username} (recursive: ${recursive}): ${errorMessage}`);
       // Propage une erreur plus explicite pour l'orchestrateur.
       throw new Error(`Maigret service failed for ${username}: ${errorMessage}`);
     }

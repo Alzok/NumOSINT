@@ -9,7 +9,7 @@ import InvestigationForm from '@/components/Investigation/InvestigationForm';
 import SearchLogs from '@/components/Search/SearchLogs';
 import ActiveInvestigations from '@/components/Investigation/ActiveInvestigations';
 import RecentActivity from '@/components/Dashboard/RecentActivity';
-import InvestigationTimeline from '@/components/Investigation/InvestigationTimeline';
+import ModernInvestigationTimeline from '@/components/Investigation/ModernInvestigationTimeline';
 import { mapStatusToPhase } from '@/lib/utils';
 
 export default function DashboardPage() {
@@ -88,9 +88,10 @@ export default function DashboardPage() {
                           </CardTitle>
                       </CardHeader>
                       <CardContent>
-                          <InvestigationTimeline
+                          <ModernInvestigationTimeline
                               currentPhase={investigationForTimeline ? mapStatusToPhase(investigationForTimeline.status) : ''}
                               status={investigationForTimeline ? investigationForTimeline.status : 'NONE'}
+                              createdAt={investigationForTimeline ? investigationForTimeline.createdAt : undefined}
                           />
                       </CardContent>
                   </Card>

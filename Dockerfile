@@ -47,6 +47,16 @@ COPY --chown=app:app . .
 # Rendre le script de démarrage exécutable
 RUN chmod +x start-backend.sh
 
+# Installer wau
+COPY tools/wau/install.sh /usr/local/bin/install-wau.sh
+RUN chmod +x /usr/local/bin/install-wau.sh
+RUN /usr/local/bin/install-wau.sh
+
+# Installer waybulk
+COPY tools/waybulk/install.sh /usr/local/bin/install-waybulk.sh
+RUN chmod +x /usr/local/bin/install-waybulk.sh
+RUN /usr/local/bin/install-waybulk.sh
+
 # S'assurer que tous les fichiers appartiennent à app
 RUN chown -R app:app /app && \
     chmod -R 755 /app/logs /app/results

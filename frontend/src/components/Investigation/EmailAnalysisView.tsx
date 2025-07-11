@@ -4,6 +4,12 @@ import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion";
+import {
   Email,
   Security,
   Warning,
@@ -12,10 +18,14 @@ import {
   Language,
   Person,
   CalendarToday,
-  Storage
+  Storage,
+  Star
 } from '@mui/icons-material';
+import { Button } from '@/components/ui/button';
+import { toast } from "sonner";
 
 interface EmailAnalysisData {
+  indicatorId: string;
   email: string;
   breaches: Array<{
     name: string;
@@ -24,6 +34,7 @@ interface EmailAnalysisData {
     verified: boolean;
     severity: 'low' | 'medium' | 'high';
   }>;
+  hibp_breaches?: string[];
   reputation: {
     score: number;
     status: 'clean' | 'suspicious' | 'malicious';
@@ -34,20 +45,44 @@ interface EmailAnalysisData {
     url: string;
     verified: boolean;
   }>;
+  google_links?: string[];
   metadata: {
     domain: string;
     mx_records: string[];
     created_at: string;
     last_seen: string;
   };
+  ip_info?: {
+    ip: string;
+    country: string;
+    city: string;
+    org: string;
+  };
 }
 
 interface EmailAnalysisViewProps {
   data: EmailAnalysisData[];
   loading?: boolean;
+  investigationId: string;
 }
 
-const EmailAnalysisView: React.FC<EmailAnalysisViewProps> = ({ data, loading = false }) => {
+const EmailAnalysisView: React.FC<EmailAnalysisViewProps> = ({ data, loading = false, investigationId }) => {
+  const handlePdlEnrichment = async (indicatorId: string) => {
+    toast.info("Lancement de l'enrichissement avancé avec People Data Labs...");
+    try {
+      const response = await fetch(`/api/v1/investigations/${investigationId}/pdl-enrich`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ indicatorId }),
+      });
+      if (!response.ok) {
+        throw new Error("L'enrichissement PDL a échoué.");
+      }
+      toast.success("Enrichissement PDL lancé. Les résultats apparaîtront dans un nouvel onglet.");
+    } catch (error: any) {
+      toast.error(error.message || "Une erreur inconnue est survenue lors de l'enrichissement PDL.");
+    }
+  };
   if (loading) {
     return (
       <div className="space-y-4">
@@ -117,6 +152,10 @@ const EmailAnalysisView: React.FC<EmailAnalysisViewProps> = ({ data, loading = f
                 <span className="font-mono text-sm">{analysis.email}</span>
               </div>
               <div className="flex items-center space-x-2">
+                <Button size="sm" variant="outline" onClick={() => handlePdlEnrichment(analysis.indicatorId)}>
+                  <Star className="h-4 w-4 mr-2" />
+                  Enrichir avec PDL
+                </Button>
                 {getReputationIcon(analysis.reputation.status)}
                 <span className={`text-sm font-medium ${getReputationColor(analysis.reputation.status)}`}>
                   {analysis.reputation.status.toUpperCase()}
@@ -143,49 +182,60 @@ const EmailAnalysisView: React.FC<EmailAnalysisViewProps> = ({ data, loading = f
             </div>
 
             {/* Fuites de données */}
-            {analysis.breaches && analysis.breaches.length > 0 && (
-              <div className="space-y-3">
-                <div className="flex items-center space-x-2">
-                  <Storage className="h-4 w-4 text-red-500" />
-                  <span className="font-medium">Fuites de données détectées</span>
-                  <Badge variant="destructive">{analysis.breaches.length}</Badge>
-                </div>
-                
-                <div className="grid gap-3">
-                  {analysis.breaches.map((breach, i) => (
-                    <div key={i} className="border rounded-lg p-3 space-y-2">
-                      <div className="flex items-center justify-between">
-                        <span className="font-medium">{breach.name}</span>
-                        <div className="flex items-center space-x-2">
-                          <div className={`w-2 h-2 rounded-full ${getSeverityColor(breach.severity)}`} />
-                          <span className="text-sm text-gray-600">{breach.severity}</span>
-                        </div>
-                      </div>
-                      
-                      <div className="flex items-center space-x-2 text-sm text-gray-600">
-                        <CalendarToday className="h-3 w-3" />
-                        <span>{breach.date}</span>
-                        {breach.verified && (
-                          <Badge variant="outline" className="text-xs">
-                            Vérifié
-                          </Badge>
-                        )}
-                      </div>
-
-                      {breach.compromised_data && breach.compromised_data.length > 0 && (
-                        <div className="flex flex-wrap gap-1">
-                          {breach.compromised_data.map((data, j) => (
-                            <Badge key={j} variant="secondary" className="text-xs">
-                              {data}
-                            </Badge>
-                          ))}
-                        </div>
-                      )}
+            {(analysis.breaches && analysis.breaches.length > 0) || (analysis.hibp_breaches && analysis.hibp_breaches.length > 0) ? (
+              <Alert variant="destructive">
+                <Warning className="h-4 w-4" />
+                <AlertDescription>
+                  <div className="space-y-3">
+                    <div className="flex items-center space-x-2">
+                      <span className="font-medium">Fuites de données détectées</span>
+                      <Badge variant="destructive">{(analysis.breaches?.length || 0) + (analysis.hibp_breaches?.length || 0)}</Badge>
                     </div>
-                  ))}
-                </div>
-              </div>
-            )}
+                    <div className="grid gap-3">
+                      {analysis.breaches?.map((breach, i) => (
+                        <div key={`breach-${i}`} className="border rounded-lg p-3 space-y-2 bg-white dark:bg-gray-900">
+                          <div className="flex items-center justify-between">
+                            <span className="font-medium text-gray-800 dark:text-gray-200">{breach.name}</span>
+                            <div className="flex items-center space-x-2">
+                              <div className={`w-2 h-2 rounded-full ${getSeverityColor(breach.severity)}`} />
+                              <span className="text-sm text-gray-600 dark:text-gray-400">{breach.severity}</span>
+                            </div>
+                          </div>
+                          <div className="flex items-center space-x-2 text-sm text-gray-600 dark:text-gray-400">
+                            <CalendarToday className="h-3 w-3" />
+                            <span>{breach.date}</span>
+                            {breach.verified && (
+                              <Badge variant="outline" className="text-xs">
+                                Vérifié
+                              </Badge>
+                            )}
+                          </div>
+                          {breach.compromised_data && breach.compromised_data.length > 0 && (
+                            <div className="flex flex-wrap gap-1">
+                              {breach.compromised_data.map((data, j) => (
+                                <Badge key={j} variant="secondary" className="text-xs">
+                                  {data}
+                                </Badge>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                      {analysis.hibp_breaches?.map((breachName, i) => (
+                        <div key={`hibp-${i}`} className="border rounded-lg p-3 space-y-2 bg-white dark:bg-gray-900">
+                          <div className="flex items-center justify-between">
+                            <span className="font-medium text-gray-800 dark:text-gray-200">{breachName}</span>
+                            <Badge variant="outline" className="text-xs">
+                              Source: HIBP
+                            </Badge>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </AlertDescription>
+              </Alert>
+            ) : null}
 
             {/* Profils sociaux */}
             {analysis.social_profiles && analysis.social_profiles.length > 0 && (
@@ -220,6 +270,54 @@ const EmailAnalysisView: React.FC<EmailAnalysisViewProps> = ({ data, loading = f
                   ))}
                 </div>
               </div>
+            )}
+
+            {/* Informations IP */}
+            {analysis.ip_info && (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center space-x-2">
+                    <Language className="h-5 w-5" />
+                    <span>Informations IP du serveur mail</span>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="grid grid-cols-2 gap-4 text-sm">
+                  <div>
+                    <span className="font-medium">Adresse IP:</span>
+                    <span className="ml-2 text-gray-600">{analysis.ip_info.ip}</span>
+                  </div>
+                  <div>
+                    <span className="font-medium">Pays:</span>
+                    <span className="ml-2 text-gray-600">{analysis.ip_info.country}</span>
+                  </div>
+                  <div>
+                    <span className="font-medium">Ville:</span>
+                    <span className="ml-2 text-gray-600">{analysis.ip_info.city}</span>
+                  </div>
+                  <div>
+                    <span className="font-medium">Organisation:</span>
+                    <span className="ml-2 text-gray-600">{analysis.ip_info.org}</span>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Liens Google */}
+            {analysis.google_links && analysis.google_links.length > 0 && (
+              <Accordion type="single" collapsible>
+                <AccordionItem value="google-links">
+                  <AccordionTrigger>Empreinte Numérique (Google)</AccordionTrigger>
+                  <AccordionContent>
+                    <div className="space-y-2">
+                      {analysis.google_links.map((link, i) => (
+                        <div key={i} className="p-2 border rounded">
+                          <a href={link} target="_blank" rel="noopener noreferrer" className="text-sm text-blue-500 break-all">{link}</a>
+                        </div>
+                      ))}
+                    </div>
+                  </AccordionContent>
+                </AccordionItem>
+              </Accordion>
             )}
 
             {/* Métadonnées */}

@@ -419,9 +419,9 @@ getGroupedResults: async (): Promise<ApiResponse<{ persons: PersonResult[] }>> =
   },
 
   // Reports
-  exportInvestigation: async (id: string, format: 'pdf' | 'csv') => {
+  exportInvestigation: async (id: string, format: 'pdf' | 'csv' | 'json') => {
     const response = await api.get(`/api/reports/investigation/${id}/export?format=${format}`, {
-      responseType: 'blob',
+      responseType: format === 'json' ? 'json' : 'blob',
     });
     return response.data;
   },
@@ -431,6 +431,16 @@ getGroupedResults: async (): Promise<ApiResponse<{ persons: PersonResult[] }>> =
       responseType: 'blob',
     });
     return response.data;
+  },
+
+  // Graph
+  getInvestigationGraph: async (id: string): Promise<ApiResponse<{ nodes: any[], edges: any[] }>> => {
+    try {
+      const response = await api.get(`/api/v1/investigations/${id}/graph`);
+      return { data: response.data };
+    } catch (error: any) {
+      return { error: error.response?.data?.error || 'Erreur lors de la récupération des données du graphe' };
+    }
   },
 };
 

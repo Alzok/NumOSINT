@@ -1,17 +1,26 @@
-FROM golang:1.21-alpine
-
-# Install wau tool and make it available in the path
-RUN go install github.com/alpkeskin/wau@latest && \
-    cp /go/bin/wau /usr/local/bin/
-
+# Étape 1: Builder l'application et l'outil
+FROM golang:1.19-alpine AS builder
 WORKDIR /app
 
-# Copy source code
+# Installer l'outil wau
+RUN go install -v github.com/alpkeskin/wau@latest
+
+# Préparer le build du serveur wrapper
+COPY go.mod go.sum ./
 COPY server.go .
 
-# Build the server
-RUN go build -o server .
+# Télécharger les dépendances et builder
+RUN go mod download
+RUN CGO_ENABLED=0 GOOS=linux go build -o /app/server server.go
+
+# Étape 2: Créer l'image finale
+FROM alpine:latest
+RUN apk --no-cache add ca-certificates
+WORKDIR /root/
+
+# Copier l'outil et le serveur depuis l'étape de build
+COPY --from=builder /go/bin/wau /usr/local/bin/wau
+COPY --from=builder /app/server .
 
 EXPOSE 8080
-
-CMD ["/app/server"]
+CMD ["./server"]

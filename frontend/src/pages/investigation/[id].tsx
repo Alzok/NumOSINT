@@ -11,6 +11,12 @@ import { Progress } from "@/components/ui/progress";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
   ArrowBack,
   PlayArrow,
   Stop,
@@ -29,7 +35,10 @@ import {
   Language,
   Wifi,
   WifiOff,
-  InfoOutlined
+  InfoOutlined,
+  FileDownload,
+  Warning,
+  Public
 } from '@mui/icons-material';
 import { CircularProgress } from '@mui/material';
 import { useInvestigation } from '@/hooks/useInvestigation';
@@ -49,6 +58,19 @@ import { SocialProfiles } from '@/components/Investigation/Buster/SocialProfiles
 import { ReverseWhoisResults } from '@/components/Investigation/Buster/ReverseWhoisResults';
 import { EmailSummary } from '@/components/Investigation/Email/EmailSummary';
 import ProfilesGrid from '@/components/Investigation/Maigret/ProfilesGrid';
+import DarkWebResults from '@/components/Investigation/DarkWebResults';
+import CorrelationGraph from '@/components/Investigation/CorrelationGraph';
+import IpAnalysisView from '@/components/Investigation/IpAnalysisView';
+import PersonProfileView from '@/components/Investigation/PersonProfileView';
+
+interface Profile {
+  siteName: string;
+  profileUrl: string;
+  siteLogoUrl: string;
+  bio?: string;
+  location?: string;
+  fullName?: string;
+}
 
 export default function InvestigationDetailPage() {
   const router = useRouter();
@@ -71,7 +93,7 @@ export default function InvestigationDetailPage() {
   const { addNotification } = useAppStore();
   const [activeTab, setActiveTab] = useState('overview');
 
-  const handleExport = async (format: 'pdf' | 'csv') => {
+  const handleExport = async (format: 'pdf' | 'csv' | 'json') => {
     if (!investigationId) return;
     try {
       const blob = await investigationAPI.exportInvestigation(investigationId, format);
@@ -185,6 +207,9 @@ export default function InvestigationDetailPage() {
   const comprehensiveResults = results.filter(result => result.toolSource.toLowerCase() === 'spiderfoot');
   const waybackRawResults = results.filter(result => result.toolSource.toLowerCase() === 'waybulk');
   const busterResults = results.filter(result => result.toolSource.toLowerCase() === 'buster');
+  const darkWebResults = results.filter(result => result.data?.darkweb_results).flatMap(r => r.data.darkweb_results);
+  const ipResults = results.filter(result => result.toolSource.toLowerCase() === 'asn');
+  const pdlResults = results.filter(result => result.toolSource.toLowerCase() === 'pdl');
 
   // Transformer les résultats pour les vues spécialisées
   const transformBusterResults = (results: Result[]) => {
@@ -193,10 +218,14 @@ export default function InvestigationDetailPage() {
 
   const transformEmailResults = (results: Result[]) => {
     return results.map(result => ({
+      indicatorId: result.indicatorId || '',
       email: result.data?.email || '',
       breaches: result.data?.breaches || [],
+      hibp_breaches: result.data?.hibp_breaches || [],
       reputation: result.data?.reputation || { score: 0, status: 'clean' as const, sources: [] },
       social_profiles: result.data?.social_profiles || [],
+      google_links: result.data?.google_links || [],
+      ip_info: result.data?.ip_info,
       metadata: result.data?.metadata || {
         domain: '',
         mx_records: [],
@@ -282,15 +311,46 @@ export default function InvestigationDetailPage() {
 
   const maigretResults = results.filter(result => result.toolSource.toLowerCase() === 'maigret');
 
-  // Données factices pour le développement de ProfilesGrid
-  const dummyProfiles = [
-    { siteName: 'GitHub', profileUrl: 'https://github.com/user', siteLogoUrl: '/github-logo.png' },
-    { siteName: 'Twitter', profileUrl: 'https://twitter.com/user', siteLogoUrl: '/twitter-logo.png' },
-    { siteName: 'Instagram', profileUrl: 'https://instagram.com/user', siteLogoUrl: '/instagram-logo.png' },
-    { siteName: 'Facebook', profileUrl: 'https://facebook.com/user', siteLogoUrl: '/facebook-logo.png' },
-    { siteName: 'LinkedIn', profileUrl: 'https://linkedin.com/in/user', siteLogoUrl: '/linkedin-logo.png' },
-    { siteName: 'Reddit', profileUrl: 'https://reddit.com/u/user', siteLogoUrl: '/reddit-logo.png' },
-  ];
+  interface MaigretProfile {
+    sitename?: string;
+    siteName?: string;
+    url?: string;
+    profileUrl?: string;
+    logo_url?: string;
+    bio?: string;
+    location?: string;
+    full_name?: string;
+    fullName?: string;
+  }
+  
+  const transformMaigretResultsForGrid = (maigretResults: Result[]): Profile[] => {
+    if (!maigretResults || maigretResults.length === 0) return [];
+    
+    const allProfiles = maigretResults.flatMap((result: Result) => {
+        const profilesSource: any[] = result.data?.profiles || result.data?.found_profiles || result.data?.accounts || [];
+        
+        return profilesSource.map((profile: any) => {
+            const profileUrl = profile.url || profile.profileUrl;
+            if (!profileUrl) return null;
+
+            return {
+                siteName: profile.sitename || profile.siteName || 'Unknown Site',
+                profileUrl: profileUrl,
+                siteLogoUrl: profile.logo_url || `https://www.google.com/s2/favicons?domain=${new URL(profileUrl).hostname}`,
+                bio: profile.bio,
+                location: profile.location,
+                fullName: profile.full_name || profile.fullName,
+            };
+        }).filter(Boolean);
+    });
+    
+    // Déduplication des profils par URL
+    const uniqueProfiles = Array.from(new Map(allProfiles.filter(p => p !== null).map(p => [p.profileUrl, p])).values());
+    return uniqueProfiles as Profile[];
+  };
+
+  const maigretProfilesForGrid = transformMaigretResultsForGrid(maigretResults);
+  const usernameForRecursiveSearch = currentInvestigation?.inputData?.usernames?.[0];
 
 
   if (isLoading && !currentInvestigation) {
@@ -365,8 +425,19 @@ export default function InvestigationDetailPage() {
                   {isSocketConnected ? 'Connecté' : 'Déconnecté'}
                 </Badge>
                 {getStatusBadge(currentInvestigation.status)}
-                <Button onClick={() => handleExport('pdf')} size="sm">Exporter PDF</Button>
-                <Button onClick={() => handleExport('csv')} size="sm" variant="outline">Exporter CSV</Button>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="outline" size="sm">
+                      <FileDownload className="h-4 w-4 mr-2" />
+                      Exporter
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent>
+                    <DropdownMenuItem onClick={() => handleExport('pdf')}>PDF</DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => handleExport('csv')}>CSV</DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => handleExport('json')}>JSON</DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
               </div>
             </div>
           </div>
@@ -423,6 +494,22 @@ export default function InvestigationDetailPage() {
                 <TabsTrigger value="buster-results">
                   <Search className="h-4 w-4 mr-1" />
                   Buster ({socialProfiles.length})
+                </TabsTrigger>
+                <TabsTrigger value="dark-web">
+                  <Warning className="h-4 w-4 mr-1" />
+                  Dark Web ({darkWebResults.length})
+                </TabsTrigger>
+                <TabsTrigger value="graph">
+                  <Timeline className="h-4 w-4 mr-1" />
+                  Graphe
+                </TabsTrigger>
+                <TabsTrigger value="ip-analysis">
+                  <Public className="h-4 w-4 mr-1" />
+                  IPs ({ipResults.length})
+                </TabsTrigger>
+                <TabsTrigger value="pdl-profiles">
+                  <Person className="h-4 w-4 mr-1" />
+                  PDL ({pdlResults.length})
                 </TabsTrigger>
                 <TabsTrigger value="logs">Logs ({logs.length})</TabsTrigger>
                 <TabsTrigger value="report" disabled={currentInvestigation.status !== 'COMPLETED'}>
@@ -625,7 +712,7 @@ export default function InvestigationDetailPage() {
                     {emailResults.length === 0 ? (
                       <p className="text-muted-foreground">Aucun résultat d'email disponible pour le moment...</p>
                     ) : (
-                      <EmailAnalysisView data={transformEmailResults(emailResults)} />
+                      <EmailAnalysisView data={transformEmailResults(emailResults)} investigationId={investigationId || ''} />
                     )}
                   </CardContent>
                 </Card>
@@ -652,7 +739,19 @@ export default function InvestigationDetailPage() {
                     <CardTitle>Profils trouvés (Maigret)</CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <ProfilesGrid profiles={dummyProfiles} />
+                    {usernameForRecursiveSearch && investigationId ? (
+                      <ProfilesGrid
+                        profiles={maigretProfilesForGrid}
+                        investigationId={investigationId}
+                        username={usernameForRecursiveSearch}
+                      />
+                    ) : (
+                      <p className="text-muted-foreground">
+                        {maigretProfilesForGrid.length > 0
+                          ? "Données de l'investigation manquantes pour activer les actions."
+                          : "Aucun profil Maigret trouvé pour le moment."}
+                      </p>
+                    )}
                   </CardContent>
                 </Card>
               </TabsContent>
@@ -721,8 +820,7 @@ export default function InvestigationDetailPage() {
                       <CardTitle>Reverse Whois (Buster)</CardTitle>
                     </CardHeader>
                     <CardContent>
-                      {/* TODO: Replace dummy data with real data */}
-                      <ReverseWhoisResults domains={dummyReverseWhoisDomains} />
+                      <ReverseWhoisResults domains={reverseWhoisDomains} />
                     </CardContent>
                   </Card>
                 </div>
@@ -733,6 +831,24 @@ export default function InvestigationDetailPage() {
                   logs={logs}
                   investigationId={currentInvestigation.id}
                 />
+              </TabsContent>
+
+              <TabsContent value="dark-web" className="space-y-4">
+                <DarkWebResults results={darkWebResults} />
+              </TabsContent>
+
+              <TabsContent value="graph" className="space-y-4">
+                {investigationId && <CorrelationGraph investigationId={investigationId} />}
+              </TabsContent>
+
+              <TabsContent value="ip-analysis" className="space-y-4">
+                <IpAnalysisView data={ipResults.map(r => r.data)} />
+              </TabsContent>
+
+              <TabsContent value="pdl-profiles" className="space-y-4">
+                {pdlResults.map((result, i) => (
+                  <PersonProfileView key={i} profile={result.data} />
+                ))}
               </TabsContent>
 
               <TabsContent value="report" className="space-y-4">

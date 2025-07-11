@@ -78,6 +78,13 @@ class SpiderFootService {
           const scanData = await this.parseScanResults(reportPath);
           await this.processAndSaveResults(investigationId, null, scanData); // indicatorId est null car multi-indicateurs
           await this.extractAndSaveNewIndicators(investigationId, scanData);
+          
+          const graphData = this.generateGraphData(scanData);
+          await this.prisma.investigation.update({
+            where: { id: investigationId },
+            data: { graphData },
+          });
+
           eventBus.emit('tool:scan_completed', { investigationId, tool: this.name, success: true });
         } catch (processingError) {
           logger.error(`🕷️ SpiderFoot: Erreur lors du traitement des résultats pour ${investigationId}:`, processingError);
@@ -185,6 +192,43 @@ class SpiderFootService {
     });
 
     return result.count;
+  }
+
+  /**
+   * Génère les données du graphe à partir des résultats du scan.
+   */
+  generateGraphData(scanData) {
+    const nodes = [];
+    const edges = [];
+    const nodeIds = new Set();
+
+    scanData.forEach(item => {
+      const nodeId = `${item.type}-${item.data}`;
+      if (!nodeIds.has(nodeId)) {
+        nodes.push({
+          id: nodeId,
+          type: item.type,
+          data: { label: item.data },
+          position: { x: Math.random() * 400, y: Math.random() * 400 },
+        });
+        nodeIds.add(nodeId);
+      }
+
+      if (item.source_finding_id) {
+        const sourceItem = scanData.find(d => d.id === item.source_finding_id);
+        if (sourceItem) {
+          const sourceNodeId = `${sourceItem.type}-${sourceItem.data}`;
+          edges.push({
+            id: `${sourceNodeId}-${nodeId}`,
+            source: sourceNodeId,
+            target: nodeId,
+            animated: true,
+          });
+        }
+      }
+    });
+
+    return { nodes, edges };
   }
 
   calculateScore(scanData) {
