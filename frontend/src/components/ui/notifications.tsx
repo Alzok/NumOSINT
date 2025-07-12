@@ -3,15 +3,15 @@
 import { useEffect, useState } from 'react';
 import { Close, CheckCircleOutline, ErrorOutline, WarningAmber, InfoOutlined } from '@mui/icons-material';
 import { useAppStore } from '@/lib/store';
-import { NotificationState } from '@/types';
+import { ToastNotification } from '@/types';
 
 export function Notifications() {
-  const { notifications, removeNotification } = useAppStore();
-  const [visibleNotifications, setVisibleNotifications] = useState<NotificationState[]>([]);
+  const { toastNotifications, removeToastNotification } = useAppStore();
+  const [visibleNotifications, setVisibleNotifications] = useState<ToastNotification[]>([]);
 
   useEffect(() => {
-    setVisibleNotifications(notifications);
-  }, [notifications]);
+    setVisibleNotifications(toastNotifications);
+  }, [toastNotifications]);
 
   const getIcon = (type: string) => {
     switch (type) {
@@ -80,7 +80,7 @@ export function Notifications() {
               </p>
             </div>
             <button
-              onClick={() => removeNotification(notification.id)}
+              onClick={() => removeToastNotification(notification.id)}
               className="text-gray-400 hover:text-gray-600 transition-colors"
             >
               <Close className="h-4 w-4" />

@@ -54,7 +54,7 @@ graph TD
 *   **`waybulk`**
     *   **Valeur Ajoutée :** **Archéologie numérique**. Découvrir d'anciennes pages d'un site web est une mine d'or pour comprendre l'historique d'une entité.
     *   **Rôle :** **Nouvelle capacité**.
-    *   **Intégration :** Se déclenche dès qu'un **nom de domaine** est une entrée.
+    *   **Intégration :** Se déclenche dès qu'un **nom de domaine** est une entrée. **(Note : Intégration technique terminée)**.
 
 *   **`asn` (ASN/IP Intel)**
     *   **Valeur Ajoutée :** **Contexte réseau**. Fournit des informations cruciales sur une adresse IP (propriétaire, géolocalisation, réputation).
@@ -138,3 +138,69 @@ L'objectif n'est pas seulement d'ajouter des outils, mais de les intégrer de ma
     2.  L'orchestrateur analyse les URL retournées pour y **détecter de nouveaux sous-domaines, domaines, ou e-mails**.
     3.  Ces nouvelles entités sont **automatiquement ajoutées comme de nouveaux indicateurs** à la file d'attente de l'enquête, créant une boucle d'enrichissement.
 *   **Impact sur l'UI**: La vue des résultats de `waybulk` sera interactive, avec un regroupement par année et des **aperçus visuels** des pages archivées pour faciliter l'analyse historique. Les URL ayant conduit à de nouvelles découvertes seront mises en évidence.
+
+---
+
+## 5. Stratégies de Workflow Dynamique
+
+L'objectif est de rendre l'orchestrateur intelligent en sélectionnant un workflow prioritaire basé sur la nature des indicateurs initiaux (ceux fournis par l'utilisateur, de `generation: 0`). Cela évite de lancer des scans non pertinents et concentre les ressources sur les pistes les plus prometteuses.
+
+### Logique de Priorisation
+
+En cas d'indicateurs multiples, le système suivra un ordre de priorité pour déterminer le workflow principal. Les indicateurs de moindre priorité seront utilisés pour l'enrichissement contextuel, mais ne déclencheront pas leur propre workflow complet au démarrage.
+
+**Ordre de Priorité des Workflows :**
+1.  **Email** : L'identifiant le plus direct et le plus riche.
+2.  **Téléphone** : Un identifiant unique fort.
+3.  **Domaine** : Ouvre l'analyse d'infrastructure.
+4.  **Pseudo** : Idéal pour la recherche de profils en ligne.
+5.  **Nom** : Le plus générique, nécessite une phase de génération/validation.
+
+### Tableau de Décision du Workflow
+
+| Indicateurs Initiaux Contiennent... | Workflow Prioritaire | Outils de Démarrage Clés | Rôle des Autres Indicateurs |
+| :--- | :--- | :--- | :--- |
+| `EMAIL` | **Email** | `Mosint`, `Wau` | Enrichissement secondaire (ex: le nom est utilisé par `Buster` pour trouver d'autres emails). |
+| `PHONE` (sans `EMAIL`) | **Téléphone** | `PhoneInfoga` | Enrichissement secondaire. |
+| `DOMAIN` (sans `EMAIL`/`PHONE`) | **Domaine** | `Waybulk`, `Spiderfoot` | Le nom est utilisé par `Buster` avec ce domaine. |
+| `USERNAME` (sans les précédents) | **Pseudo** | `Maigret` | Le nom est utilisé pour trouver des variations de pseudos. |
+| `NAME` (seul) | **Nom** | `Buster` | N/A |
+
+### Implémentation dans l'Orchestrateur
+
+1.  **`runPhaseEnrichment`** : Cette méthode sera modifiée pour inclure une étape initiale :
+    *   Récupérer tous les indicateurs avec `generation: 0`.
+    *   Appliquer la logique du tableau de décision pour déterminer le `workflowPriority`.
+    *   Stocker cette priorité (par exemple, dans une variable de l'instance d'investigation active).
+
+2.  **`_enrich...` methods** (ex: `_enrichEmail`) :
+    *   Ces méthodes recevront la variable `workflowPriority`.
+    *   Elles contiendront une logique conditionnelle pour n'exécuter que certains outils.
+    *   **Exemple pour `_enrichDomain`** :
+        ```javascript
+        async _enrichDomain(investigationId, indicator, workflowPriority) {
+          // Waybulk est coûteux, on le lance seulement si le domaine est une piste principale.
+          if (workflowPriority === 'Domaine') {
+            await this._runToolWithRetry(this.waybulkService.lookupDomain.bind(this.waybulkService), investigationId, indicator);
+          }
+          // Un scan Spiderfoot peut toujours être pertinent, mais peut-être avec moins de modules.
+          // (Logique à affiner)
+        }
+        ```
+
+### Raffinement : Stratégies Primaires et Secondaires
+
+Pour couvrir les cas complexes avec plus de nuance, le concept de "stratégie" peut être étendu :
+
+*   **Stratégie Primaire :** Définie par l'indicateur le plus prioritaire. Elle dicte le flux principal et l'utilisation des outils les plus coûteux.
+*   **Stratégies Secondaires :** Définies par les autres indicateurs initiaux. Elles activent des "modules d'enrichissement croisé" spécifiques sans lancer un workflow complet.
+
+**Exemple : `EMAIL` + `USERNAME` fournis**
+1.  **Stratégie Primaire :** `Email`. Le workflow `_enrichEmail` est exécuté en totalité.
+2.  **Stratégie Secondaire :** `Pseudo`.
+3.  Quand l'orchestrateur traite l'indicateur `USERNAME`, la méthode `_enrichUsername` est appelée.
+4.  Sa logique interne sera :
+    *   Si la stratégie primaire est `Pseudo`, lancer la recherche `Maigret` complète.
+    *   Sinon (comme dans ce cas), lancer `Maigret` mais uniquement sur les 10 sites les plus populaires pour une vérification rapide, ou extraire les informations du profil déjà trouvé via l'email pour ne pas refaire le travail.
+
+Cette approche combine la priorisation avec une exécution conditionnelle plus fine, ce qui répond au besoin de couvrir tous les cas de manière plus robuste.

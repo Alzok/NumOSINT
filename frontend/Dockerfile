@@ -13,7 +13,7 @@ ENV HOSTNAME="0.0.0.0"
 
 # Copier et installer les dépendances
 COPY package.json package-lock.json* ./
-RUN npm install
+RUN npm install --legacy-peer-deps
 
 # Copier les fichiers de configuration et le code source
 COPY . .

@@ -1,69 +1,113 @@
 const { IndicatorType } = require('@prisma/client');
 const logger = require('../../utils/logger');
-const { exec } = require('child_process');
+const axios = require('axios');
+
+const WAYBULK_SERVICE_URL = process.env.WAYBULK_SERVICE_URL || 'http://localhost:5004';
 
 class WaybulkService {
   constructor(prisma) {
     this.prisma = prisma;
     this.toolName = 'waybulk';
+    this.serviceUrl = WAYBULK_SERVICE_URL;
   }
 
   /**
-   * Recherche les URLs archivées pour un domaine en utilisant l'exécutable waybulk.
+   * Recherche les archives d'un domaine en utilisant le microservice waybulk.
+   * @param {string} investigationId - L'ID de l'investigation.
+   * @param {object} domainIndicator - L'indicateur de type DOMAIN.
    */
-  async lookupDomain(investigationId, domainIndicator) {
+  async scanDomain(investigationId, domainIndicator) {
     const domain = domainIndicator.value;
-    logger.tool(this.toolName, investigationId, `Recherche d'archives pour le domaine: ${domain}`);
+    try {
+      const logMessage = `Recherche d'archives pour le domaine ${domain}`;
+      logger.tool(this.toolName, investigationId, logMessage);
 
-    return new Promise((resolve, reject) => {
-      exec(`echo ${domain} | waybulk`, { maxBuffer: 1024 * 1024 * 10 }, async (error, stdout, stderr) => { // 10MB buffer
-        if (error) {
-          logger.toolError(this.toolName, investigationId, `Erreur lors de la recherche d'archives pour ${domain}: ${stderr}`);
-          return resolve(); // Résoudre sans rejeter pour ne pas bloquer l'orchestrateur
+      const scanResult = await this.executeWaybulkCommand(domain);
+
+      const existingResult = await this.prisma.result.findFirst({
+        where: {
+          investigationId,
+          indicatorId: domainIndicator.id,
+          toolSource: this.toolName,
         }
-
-        const urls = stdout.split('\n').filter(url => url.trim() !== '');
-
-        if (urls.length > 0) {
-          try {
-            await this.prisma.result.create({
-              data: {
-                investigationId,
-                indicatorId: domainIndicator.id,
-                toolSource: this.toolName,
-                data: {
-                  domain,
-                  urls,
-                },
-                score: Math.min(urls.length / 100, 1),
-              },
-            });
-
-            const newIndicators = urls.map(url => ({
-              investigationId,
-              type: IndicatorType.URL,
-              value: url,
-              source: this.toolName,
-              confidence: 0.8,
-              generation: domainIndicator.generation + 1,
-              verified: true,
-              processed: false,
-            }));
-
-            if (newIndicators.length > 0) {
-              await this.prisma.indicator.createMany({
-                data: newIndicators,
-                skipDuplicates: true,
-              });
-            }
-            logger.tool(this.toolName, investigationId, `${urls.length} URL(s) archivée(s) trouvée(s) pour ${domain}.`);
-          } catch (dbError) {
-            logger.toolError(this.toolName, investigationId, `Erreur de base de données pour waybulk: ${dbError.message}`);
-          }
-        }
-        resolve();
       });
-    });
+
+      if (!existingResult) {
+        await this.prisma.result.create({
+          data: {
+            investigationId,
+            indicatorId: domainIndicator.id,
+            toolSource: this.toolName,
+            data: scanResult,
+            score: scanResult.archived_snapshots && scanResult.archived_snapshots.closest ? 1 : 0,
+          },
+        });
+      } else {
+        logger.tool(this.toolName, investigationId, `Résultat déjà existant pour le domaine ${domain}. Pas de nouvelle sauvegarde.`);
+      }
+
+      if (scanResult.archived_snapshots && scanResult.archived_snapshots.closest) {
+        const url = scanResult.archived_snapshots.closest.url;
+        await this.prisma.indicator.createMany({
+            data: [{
+                investigationId,
+                type: IndicatorType.URL,
+                value: url,
+                source: this.toolName,
+                confidence: 0.8,
+                generation: domainIndicator.generation + 1,
+                verified: true,
+                processed: false,
+            }],
+            skipDuplicates: true,
+        });
+      }
+
+      logger.tool(this.toolName, investigationId, `Domaine ${domain}: recherche d'archives terminée.`);
+
+    } catch (error) {
+      logger.toolError(this.toolName, investigationId, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Appelle le microservice waybulk.
+   * @param {string} domain - Le domaine à scanner.
+   */
+  async executeWaybulkCommand(domain) {
+    const endpoint = '/scan';
+    const payload = { domain };
+    const timeout = 60000; // 1 minute
+
+    try {
+      logger.info(`Calling waybulk service at ${this.serviceUrl}${endpoint} for ${domain}`);
+      const response = await axios.post(`${this.serviceUrl}${endpoint}`, payload, { timeout });
+      return response.data;
+    } catch (error) {
+      const errorMessage = error.response ? JSON.stringify(error.response.data) : error.message;
+      logger.error(`Erreur lors de l'appel au microservice waybulk pour ${domain}: ${errorMessage}`);
+      throw new Error(`Waybulk service failed for ${domain}: ${errorMessage}`);
+    }
+  }
+
+  /**
+   * Teste la connexion au microservice waybulk.
+   */
+  async testConfiguration() {
+    try {
+      if (!this.serviceUrl) {
+          throw new Error('WAYBULK_SERVICE_URL is not defined');
+      }
+      return { status: 'success', message: `Waybulk service est configuré à l'adresse: ${this.serviceUrl}` };
+    } catch (error) {
+      logger.error('Erreur lors du test de configuration waybulk service:', error);
+      return {
+        status: 'error',
+        message: 'Impossible de contacter le microservice waybulk.',
+        error: error.message,
+      };
+    }
   }
 }
 

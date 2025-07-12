@@ -1,29 +1,149 @@
 # 🚀 NumOSINT - Plateforme d'Investigation Numérique Unifiée
 
-![GitHub Workflow Status](https://img.shields.io/github/actions/workflow/status/your-repo/your-workflow.yml?style=for-the-badge)
-![GitHub last commit](https://img.shields.io/github/last-commit/your-repo/your-branch?style=for-the-badge)
-![GitHub contributors](https://img.shields.io/github/contributors/your-repo?style=for-the-badge)
-![License](https://img.shields.io/github/license/your-repo?style=for-the-badge)
+<div align="center">
+  
+![Docker](https://img.shields.io/badge/Docker-2496ED?style=for-the-badge&logo=docker&logoColor=white)
+![TypeScript](https://img.shields.io/badge/TypeScript-007ACC?style=for-the-badge&logo=typescript&logoColor=white)
+![Next.js](https://img.shields.io/badge/Next.js-000000?style=for-the-badge&logo=next.js&logoColor=white)
+![Node.js](https://img.shields.io/badge/Node.js-339933?style=for-the-badge&logo=node.js&logoColor=white)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-4169E1?style=for-the-badge&logo=postgresql&logoColor=white)
+![License](https://img.shields.io/badge/License-MIT-green.svg?style=for-the-badge)
+
+</div>
 
 **NumOSINT est une solution open-source complète conçue pour les professionnels de la cybersécurité, les analystes du renseignement et les enquêteurs numériques. Notre mission est de simplifier et d'accélérer le processus d'Open Source Intelligence (OSINT) en unifiant plusieurs outils de pointe au sein d'une interface unique, intuitive et puissante.**
 
 Le projet intègre un orchestrateur intelligent qui automatise la collecte et la corrélation de données à partir de diverses sources, permettant aux utilisateurs de transformer des informations brutes en renseignements exploitables. Avec son architecture moderne et modulaire, NumOSINT est conçu pour être à la fois performant, extensible et facile à déployer.
 
-**Plateforme OSINT moderne avec orchestrateur multi-outils, interface React/Next.js et backend Node.js/PostgreSQL.**
+---
 
-## 🎯 Vue d'Ensemble
+## 🛠️ Services OSINT Intégrés
 
-NumOSINT est une plateforme d'investigation numérique qui unifie plusieurs outils OSINT spécialisés dans un flux de travail automatisé et intelligent.
+<table>
+<tr>
+<td width="33%">
 
-- **🔍 Buster** : Génération d'e-mails et recherche "Reverse Whois".
-- **📧 Mosint** : Analyse d'e-mails, recherche de fuites de données et de liens Google.
-- **👤 Maigret** : Recherche de profils sur plus de 400 plateformes.
-- **📱 PhoneInfoga** : Analyse de numéros de téléphone.
-- **🕷️ SpiderFoot** : Scan OSINT exhaustif et génération de graphes de corrélation.
-- **🛡️ nitefood/asn** : Enrichissement d'adresses IP (ASN, géolocalisation).
-- **🤵 peopledatalabs** : Enrichissement avancé de profils de personnes.
-- **🔎 wau** : Validation d'adresses e-mail.
-- **🌐 waybulk** : Recherche d'URLs archivées via la Wayback Machine.
+### 🔍 Buster
+**Génération d'e-mails et recherche Reverse Whois**
+
+Découverte d'adresses e-mail à partir de domaines et recherche inversée de propriétaires de domaines.
+
+`📧 Email Discovery` `🌐 Whois` `🐳 Microservice`
+
+</td>
+<td width="33%">
+
+### 📧 Mosint
+**Analyse d'e-mails et recherche de fuites**
+
+Analyse complète d'adresses e-mail, recherche de fuites de données et de liens Google.
+
+`🔬 Email Analysis` `⚠️ Breach Check` `🐳 Microservice`
+
+</td>
+<td width="33%">
+
+### 👤 Maigret
+**Recherche de profils sur 400+ plateformes**
+
+Recherche exhaustive de profils utilisateur à travers plus de 400 plateformes sociales.
+
+`📱 Social Media` `🔍 Username Search` `🐳 Microservice`
+
+</td>
+</tr>
+<tr>
+<td width="33%">
+
+### 📱 PhoneInfoga
+**Analyse de numéros de téléphone**
+
+Analyse complète de numéros de téléphone : localisation, opérateur, et recherche de fuites.
+
+`📞 Phone Analysis` `📍 Geolocation` `🐳 Microservice`
+
+</td>
+<td width="33%">
+
+### 🕷️ SpiderFoot
+**Scan OSINT exhaustif et graphes**
+
+Framework complet d'automatisation OSINT avec génération de graphes de corrélation.
+
+`📊 Comprehensive` `🔗 Correlation` `🐳 Microservice`
+
+</td>
+<td width="33%">
+
+### 🛡️ ASN Lookup
+**Enrichissement d'adresses IP**
+
+Enrichissement d'adresses IP avec informations ASN, géolocalisation et fournisseur.
+
+`🌐 IP Analysis` `📊 ASN Info` `🐳 Microservice`
+
+</td>
+</tr>
+<tr>
+<td width="33%">
+
+### 🤵 People Data Labs
+**Enrichissement avancé de profils**
+
+API premium pour l'enrichissement de données personnelles et professionnelles.
+
+`👤 People Search` `⭐ Premium API` `🌐 External Service`
+
+</td>
+<td width="33%">
+
+### 🔎 WAU
+**Validation d'adresses e-mail**
+
+Validation rapide et efficace de la validité des adresses e-mail.
+
+`✅ Email Validation` `⚡ Fast Processing` `💻 Local Binary`
+
+</td>
+<td width="33%">
+
+### 🌐 Waybulk
+**Recherche d'URLs archivées**
+
+Recherche d'URLs archivées via la Wayback Machine pour l'analyse historique.
+
+`📚 Web Archive` `📅 Historical Data` `💻 Local Binary`
+
+</td>
+</tr>
+</table>
+
+---
+
+## 🚀 Installation Rapide
+
+> ⚡ **Démarrage en 3 étapes simples**
+
+| Étape | Action | Commande |
+|-------|--------|----------|
+| **1️⃣** | **Cloner le projet** | `git clone https://github.com/votre-repo/numosint.git`<br>`cd numosint` |
+| **2️⃣** | **Configurer l'environnement** | `touch .env` |
+| **3️⃣** | **Démarrer l'application** | `docker-compose up` |
+
+### 🔧 Configuration minimale du fichier `.env`
+
+```env
+# Configuration minimale
+DATABASE_URL=postgresql://numosint:numosint_password@postgres:5432/numosint
+REDIS_URL=redis://redis:6379
+
+# Clé API People Data Labs (optionnelle mais recommandée)
+PDL_API_KEY=votre_clé_api_pdl_ici
+```
+
+### 🎯 Accès à l'application
+
+Une fois démarré, l'application sera disponible sur : **http://localhost:3001**
 
 ## 📖 Glossaire des Concepts Clés
 
@@ -32,6 +152,46 @@ NumOSINT est une plateforme d'investigation numérique qui unifie plusieurs outi
 -   **Résultat** : Les données brutes retournées par un outil après l'analyse d'un indicateur.
 -   **Génération** : Le "niveau de profondeur" d'un indicateur. Les indicateurs initiaux sont de génération 0. Ceux découverts à partir d'eux sont de génération 1, et ainsi de suite. Permet de contrôler la portée des investigations.
 -   **Confiance** : Un score de 0 à 1 indiquant la fiabilité estimée d'un indicateur.
+
+## 🔑 Configuration des Clés API
+
+Plusieurs outils intégrés peuvent utiliser des clés API pour étendre leurs capacités et fournir de meilleurs résultats. Voici comment les configurer :
+
+### 1. Mosint
+
+L'outil `mosint` peut utiliser plusieurs clés API pour enrichir les adresses e-mail. La configuration se fait dans le fichier [`tools/mosint/config.yaml`](tools/mosint/config.yaml).
+
+-   **Clés API générales :** Remplissez les champs `breach_directory_api_key`, `hunter_api_key`, etc., avec vos clés.
+-   **Pour IntelX :**
+    -   Ajoutez votre clé dans le champ `intelx_api_key`.
+    -   Assurez-vous que le champ `intelx_host` correspond à votre type de licence :
+        -   Licence gratuite/trial : `https://free.intelx.io`
+        -   Licence commerciale : `https://api.intelx.io`
+
+### 2. People Data Labs (PDL)
+
+Ce service est utilisé pour un enrichissement de données de haute qualité.
+
+-   **Fichier de configuration :** [`.env`](.env)
+-   **Instructions :** Dans le fichier `.env` à la racine du projet, ajoutez ou modifiez la ligne suivante en remplaçant `VOTRE_CLE_API_PDL_ICI` par votre clé :
+    ```env
+    PDL_API_KEY=VOTRE_CLE_API_PDL_ICI
+    ```
+
+### 3. SpiderFoot
+
+SpiderFoot est un framework d'automatisation OSINT très puissant avec des dizaines de modules configurables.
+
+-   **Fichier de configuration :** [`tools/spiderfoot/config/sfconfig.py`](tools/spiderfoot/config/sfconfig.py)
+-   **Instructions :** Modifiez ce fichier pour ajouter les configurations des modules que vous souhaitez utiliser. Le fichier contient un exemple pour vous guider. Vous pouvez trouver la liste complète des modules et de leurs options dans la documentation officielle de SpiderFoot.
+
+---
+
+Après toute modification de configuration :
+- **Modifications du fichier `.env`** : Redémarrer simplement avec `docker-compose restart`
+- **Modifications de `docker-compose.yml`** ou des fichiers de configuration des outils : Rebuilder avec `docker-compose up -d --build`
+
+---
 
 ## 🏗️ Architecture et Contexte pour l'IA
 
@@ -110,12 +270,11 @@ L'intégration des outils est hybride, choisissant la meilleure approche pour ch
 
 1.  **Création** : L'utilisateur soumet des indicateurs initiaux (ex: email, pseudo) via le Frontend.
 2.  **Initialisation** : Le Backend crée une nouvelle `Investigation` dans la base de données et initialise l'**Orchestrateur** (`OrchestratorService`).
-3.  **Phase d'Enrichissement** :
-    *   L'Orchestrateur prend les indicateurs non traités un par un.
-    *   Pour chaque indicateur, il sélectionne l'outil approprié (ex: `Mosint` pour un `EMAIL`).
-    *   Il appelle le service correspondant (ex: `MosintService`), qui communique avec le microservice ou exécute le binaire local.
-    *   Les résultats obtenus (nouveaux indicateurs) sont stockés en base avec une `generation` incrémentée.
-    *   Le processus se répète jusqu'à ce qu'il n'y ait plus d'indicateurs à enrichir dans la limite de `maxGeneration`.
+3.  **Phase d'Enrichissement (Workflow Dynamique)** :
+    *   **Détermination de la Stratégie :** Au début de cette phase, l'Orchestrateur analyse les indicateurs initiaux (fournis par l'utilisateur) pour définir une **stratégie de workflow**. La priorité est donnée aux indicateurs les plus spécifiques (Email > Téléphone > Domaine > Pseudo > Nom).
+    *   **Exécution Ciblée :** L'Orchestrateur parcourt les indicateurs non traités. Pour chacun, il appelle les outils pertinents, mais de manière conditionnelle en fonction de la stratégie.
+    *   **Exemple :** Si un `EMAIL` et un `DOMAIN` sont fournis, la stratégie primaire sera "Email". Le workflow d'analyse d'email sera complet. Lorsque l'indicateur de domaine sera traité, seuls les scans les moins coûteux seront lancés, car ce n'est pas la piste principale.
+    *   **Génération de Données :** Les nouveaux indicateurs découverts sont stockés en base avec une `generation` incrémentée pour suivre la profondeur de l'enquête.
 4.  **Phase de Scanning** :
     *   L'Orchestrateur lance un scan `SpiderFoot` avec tous les indicateurs pertinents collectés. C'est un scan long et asynchrone.
 5.  **Phase de Consolidation** :
@@ -145,6 +304,33 @@ Certains outils nécessitent des clés API pour fonctionner. Si une clé n'est p
 
 - `PDL_API_KEY`: Votre clé API pour le service People Data Labs.
 - `SPIDERFOOT_USERNAME` / `SPIDERFOOT_PASSWORD`: Identifiants pour l'API de SpiderFoot si vous l'avez sécurisée.
+
+### Exemple de fichier .env
+```env
+# PostgreSQL Database Configuration
+POSTGRES_DB=numosint
+POSTGRES_USER=numosint
+POSTGRES_PASSWORD=numosint_password
+
+# Database connection URL
+DATABASE_URL=postgresql://numosint:numosint_password@postgres:5432/numosint
+
+# Redis Configuration
+REDIS_URL=redis://redis:6379
+
+# External API Keys
+PDL_API_KEY=votre_clé_api_pdl_ici
+
+# Application Configuration
+NODE_ENV=production
+PORT=5001
+LOG_LEVEL=info
+
+# Frontend Configuration
+NEXT_PUBLIC_API_URL=http://localhost:5001
+```
+
+> **⚠️ Important :** Assurez-vous d'ajouter votre clé API People Data Labs dans le fichier `.env` avant de démarrer l'application avec `docker-compose up`.
 
 ## 🤝 Guide du Contributeur : Ajouter un Nouvel Outil OSINT
 

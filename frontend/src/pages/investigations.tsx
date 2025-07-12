@@ -10,9 +10,11 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { useInvestigation } from '@/hooks/useInvestigation';
 import { useCases } from '@/hooks/useCases';
 import { useAppStore } from '@/lib/store';
-import { Investigation, Case } from '@/lib/investigation-api';
+import { Investigation, Case, investigationAPI } from '@/lib/investigation-api';
 import { CreateCaseModal } from '@/components/Investigation/CreateCaseModal';
 import { AssignCaseModal } from '@/components/Investigation/AssignCaseModal';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
+import { Trash2 } from 'lucide-react';
 
 // --- Local SVG Icon Components ---
 const RefreshIcon = (props: React.SVGProps<SVGSVGElement>) => (
@@ -54,7 +56,7 @@ const CircularProgress = (props: { size?: number, color?: string, className?: st
     </svg>
 );
 
-const InvestigationCard = ({ investigation, onAssignClick, onStopClick }: { investigation: Investigation, onAssignClick: (investigation: Investigation) => void, onStopClick: (investigationId: string) => void }) => {
+const InvestigationCard = ({ investigation, onAssignClick, onStopClick, onDeleteClick }: { investigation: Investigation, onAssignClick: (investigation: Investigation) => void, onStopClick: (investigationId: string) => void, onDeleteClick: (investigationId: string) => void }) => {
     const router = useRouter();
 
     const getPhaseInfo = (phase: Investigation['currentPhase']) => {
@@ -117,14 +119,18 @@ const InvestigationCard = ({ investigation, onAssignClick, onStopClick }: { inve
     const primaryTarget = getPrimaryTarget(investigation);
 
     return (
-        <Card key={investigation.id} className="hover:shadow-lg transition-shadow flex flex-col">
+        <Card key={investigation.id} className="hover:shadow-lg transition-shadow flex flex-col cursor-pointer">
             <CardHeader>
                 <CardTitle className="flex items-start justify-between">
-                    <div className="flex items-center gap-3">
-                        {getStatusIcon(investigation.status)}
-                        <span className="truncate font-semibold">{primaryTarget.value}</span>
+                    <div className="flex flex-col items-start">
+                        <div className="flex items-center gap-2">
+                            {getStatusIcon(investigation.status)}
+                            <span className="truncate font-semibold">{primaryTarget.value}</span>
+                        </div>
+                        <div className="mt-1">
+                            {getStatusBadge(investigation)}
+                        </div>
                     </div>
-                    {getStatusBadge(investigation)}
                 </CardTitle>
             </CardHeader>
             <CardContent className="flex-grow">
@@ -155,12 +161,15 @@ const InvestigationCard = ({ investigation, onAssignClick, onStopClick }: { inve
                     </Button>
                     <div className="flex items-center gap-1">
                         {(investigation.status === 'SCANNING' || investigation.status === 'ENRICHING' || investigation.status === 'CONSOLIDATING' || investigation.status === 'INITIALIZING') && (
-                            <Button size="sm" variant="destructive" onClick={() => onStopClick(investigation.id)}>
+                            <Button size="sm" variant="destructive" onClick={(e) => { e.stopPropagation(); onStopClick(investigation.id); }}>
                                 <CancelIcon className="h-4 w-4 mr-1" />
                                 Annuler
                             </Button>
                         )}
-                        <Button size="sm" variant="ghost" onClick={() => onAssignClick(investigation)}>Gérer</Button>
+                        <Button size="sm" variant="ghost" onClick={(e) => { e.stopPropagation(); onAssignClick(investigation); }}>Gérer</Button>
+                        <Button size="icon" variant="ghost" className="h-8 w-8" onClick={(e) => { e.stopPropagation(); onDeleteClick(investigation.id); }}>
+                            <Trash2 className="h-4 w-4 text-red-500" />
+                        </Button>
                     </div>
                 </div>
             </div>
@@ -168,15 +177,20 @@ const InvestigationCard = ({ investigation, onAssignClick, onStopClick }: { inve
     );
 };
 
-const CaseCard = ({ caseItem, onAssignClick, onStopClick }: { caseItem: Case, onAssignClick: (investigation: Investigation) => void, onStopClick: (investigationId: string) => void }) => {
+const CaseCard = ({ caseItem, onDeleteClick }: { caseItem: Case, onDeleteClick: (caseId: string) => void }) => {
     const router = useRouter();
 
     return (
-        <Card className="flex flex-col h-full hover:shadow-lg transition-shadow" onClick={() => router.push(`/case/${caseItem.id}`)}>
+        <Card className="flex flex-col h-full hover:shadow-lg transition-shadow">
             <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                    <FolderIcon className="h-6 w-6" />
-                    <span className="truncate">{caseItem.name}</span>
+                <CardTitle className="flex items-center justify-between">
+                    <div className="flex items-center gap-2 cursor-pointer" onClick={() => router.push(`/case/${caseItem.id}`)}>
+                        <FolderIcon className="h-6 w-6" />
+                        <span className="truncate">{caseItem.name}</span>
+                    </div>
+                    <Button size="icon" variant="ghost" className="h-8 w-8 flex-shrink-0" onClick={(e) => { e.stopPropagation(); onDeleteClick(caseItem.id); }}>
+                        <Trash2 className="h-4 w-4 text-red-500" />
+                    </Button>
                 </CardTitle>
             </CardHeader>
             <CardContent className="flex-grow">
@@ -215,13 +229,34 @@ export default function InvestigationsPage() {
   const [isCreateModalOpen, setCreateIsModalOpen] = useState(false);
   const [isAssignModalOpen, setAssignIsModalOpen] = useState(false);
   const [selectedInvestigation, setSelectedInvestigation] = useState<Investigation | null>(null);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [deletingItemId, setDeletingItemId] = useState<string | null>(null);
+  const [deleteType, setDeleteType] = useState<'investigation' | 'case' | null>(null);
+  const [filteredInvestigations, setFilteredInvestigations] = useState<Investigation[]>([]);
 
   useEffect(() => {
     loadInvestigations();
     loadCases();
   }, [loadInvestigations, loadCases]);
 
-  const unclassifiedInvestigations = investigations.filter(inv => !inv.caseId);
+  useEffect(() => {
+    const statusFilter = router.query.status as string;
+    if (statusFilter) {
+      let filtered: Investigation[] = [];
+      if (statusFilter === 'active') {
+        filtered = investigations.filter(inv => ['SCANNING', 'ENRICHING', 'CONSOLIDATING'].includes(inv.status));
+      } else if (statusFilter === 'completed') {
+        filtered = investigations.filter(inv => inv.status === 'COMPLETED');
+      } else {
+        filtered = investigations;
+      }
+      setFilteredInvestigations(filtered);
+    } else {
+      setFilteredInvestigations(investigations);
+    }
+  }, [router.query.status, investigations]);
+
+  const unclassifiedInvestigations = filteredInvestigations.filter(inv => !inv.caseId);
   const isLoading = isLoadingInvestigations || isLoadingCases;
 
   const handleAssignClick = (investigation: Investigation) => {
@@ -231,7 +266,28 @@ export default function InvestigationsPage() {
 
   const handleStopClick = async (investigationId: string) => {
     await stopInvestigation(investigationId);
-    // Le hook useInvestigation devrait mettre à jour la liste via socket.io
+  };
+
+  const handleDeleteClick = (id: string, type: 'investigation' | 'case') => {
+    setDeletingItemId(id);
+    setDeleteType(type);
+    setIsDeleteDialogOpen(true);
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!deletingItemId || !deleteType) return;
+
+    if (deleteType === 'investigation') {
+        await investigationAPI.deleteInvestigation(deletingItemId);
+        loadInvestigations();
+    } else if (deleteType === 'case') {
+        await investigationAPI.deleteCase(deletingItemId);
+        loadCases();
+    }
+
+    setIsDeleteDialogOpen(false);
+    setDeletingItemId(null);
+    setDeleteType(null);
   };
 
   const handleAssignSubmit = async (caseId: string | null, investigationId: string) => {
@@ -282,7 +338,7 @@ export default function InvestigationsPage() {
                 <h2 className="text-2xl font-semibold mb-4">Dossiers</h2>
                 <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                     {cases.map(caseItem => (
-                        <CaseCard key={caseItem.id} caseItem={caseItem} onAssignClick={handleAssignClick} onStopClick={handleStopClick} />
+                        <CaseCard key={caseItem.id} caseItem={caseItem} onDeleteClick={(id) => handleDeleteClick(id, 'case')} />
                     ))}
                     <CreateCaseCard onClick={() => setCreateIsModalOpen(true)} />
                 </div>
@@ -293,7 +349,7 @@ export default function InvestigationsPage() {
                 {unclassifiedInvestigations.length > 0 && (
                     <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                         {unclassifiedInvestigations.map((investigation) => (
-                            <InvestigationCard key={investigation.id} investigation={investigation} onAssignClick={handleAssignClick} onStopClick={handleStopClick} />
+                            <InvestigationCard key={investigation.id} investigation={investigation} onAssignClick={handleAssignClick} onStopClick={handleStopClick} onDeleteClick={(id) => handleDeleteClick(id, 'investigation')} />
                         ))}
                     </div>
                 )}
@@ -334,6 +390,13 @@ export default function InvestigationsPage() {
         investigation={selectedInvestigation}
         cases={cases}
         isLoading={isLoadingCases}
+      />
+      <ConfirmDialog
+        isOpen={isDeleteDialogOpen}
+        onClose={() => setIsDeleteDialogOpen(false)}
+        onConfirm={handleDeleteConfirm}
+        title={`Supprimer ${deleteType === 'case' ? 'le dossier' : 'l\'investigation'} ?`}
+        description="Cette action est irréversible et supprimera toutes les données associées."
       />
     </div>
     </TooltipProvider>

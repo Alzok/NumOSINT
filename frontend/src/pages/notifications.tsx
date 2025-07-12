@@ -4,64 +4,71 @@ import { useAppStore } from '@/lib/store';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-
-const NotificationIcon = ({ type }: { type: string }) => {
-    // Simple icons for now
-    switch (type) {
-        case 'success': return <span className="text-green-500">✓</span>;
-        case 'error': return <span className="text-red-500">✗</span>;
-        case 'warning': return <span className="text-yellow-500">!</span>;
-        default: return <span className="text-blue-500">i</span>;
-    }
-};
+import Link from 'next/link';
+import { BellIcon, CheckCheck } from 'lucide-react';
 
 export default function NotificationsPage() {
-  const { notifications, markAsRead, markAllAsRead, clearNotifications } = useAppStore();
+  const { appNotifications, markAppNotificationsAsRead, markAllAppNotificationsAsRead } = useAppStore();
+
+  const handleMarkAsRead = (id: string) => {
+    markAppNotificationsAsRead([id]);
+    // Idéalement, appeler aussi l'API ici
+  };
+
+  const handleMarkAllAsRead = () => {
+    markAllAppNotificationsAsRead();
+    // Idéalement, appeler aussi l'API ici
+  };
 
   return (
-    <div className="p-4 sm:p-6 lg:p-8">
+    <div className="container mx-auto p-4 sm:p-6 lg:p-8">
       <div className="flex justify-between items-center mb-6">
-        <h1 className="text-3xl font-bold tracking-tight">Centre de Notifications</h1>
-        <div className="flex gap-2">
-            <Button onClick={markAllAsRead} variant="outline">Tout marquer comme lu</Button>
-            <Button onClick={clearNotifications} variant="destructive">Tout effacer</Button>
-        </div>
+        <h1 className="text-3xl font-bold tracking-tight flex items-center gap-2">
+          <BellIcon className="h-8 w-8" />
+          Centre de Notifications
+        </h1>
+        <Button onClick={handleMarkAllAsRead} variant="outline" disabled={appNotifications.every(n => n.read)}>
+          <CheckCheck className="h-4 w-4 mr-2" />
+          Tout marquer comme lu
+        </Button>
       </div>
 
       <div className="space-y-4">
-        {notifications.length > 0 ? (
-          notifications.map((notification) => (
-            <Card 
-              key={notification.id} 
-              className={`transition-all ${!notification.isRead ? 'bg-blue-50 dark:bg-blue-900/20' : ''}`}
-              onClick={() => !notification.isRead && markAsRead(notification.id)}
+        {appNotifications.length > 0 ? (
+          appNotifications.map((notification) => (
+            <Card
+              key={notification.id}
+              className={`transition-all duration-300 ease-in-out ${!notification.read ? 'bg-card' : 'bg-muted/50'}`}
             >
               <CardContent className="p-4 flex items-start gap-4">
                 <div className="flex-shrink-0 pt-1">
-                    <NotificationIcon type={notification.type} />
+                  <span className={`flex h-3 w-3 rounded-full ${!notification.read ? 'bg-blue-500' : 'bg-transparent'}`} />
                 </div>
                 <div className="flex-grow">
-                  <div className="flex justify-between items-center">
-                    <p className="font-semibold">{notification.title}</p>
-                    {!notification.isRead && <Badge>Nouveau</Badge>}
-                  </div>
-                  <p className="text-sm text-muted-foreground">{notification.message}</p>
-                  <div className="flex gap-2 mt-2">
-                    {notification.actions?.map((action, index) => (
-                        <Button key={index} size="sm" variant="ghost" onClick={(e) => {
-                            e.stopPropagation();
-                            action.onClick();
-                        }}>
-                            {action.label}
-                        </Button>
-                    ))}
+                  <p className={`text-sm ${!notification.read ? 'font-semibold' : ''}`}>{notification.message}</p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {new Date(notification.createdAt).toLocaleString()}
+                  </p>
+                  <div className="flex gap-4 mt-2">
+                    {notification.link && (
+                      <Button asChild variant="link" className="p-0 h-auto">
+                        <Link href={notification.link}>Voir les détails</Link>
+                      </Button>
+                    )}
+                    {!notification.read && (
+                       <Button variant="link" className="p-0 h-auto text-xs" onClick={() => handleMarkAsRead(notification.id)}>
+                         Marquer comme lu
+                       </Button>
+                    )}
                   </div>
                 </div>
               </CardContent>
             </Card>
           ))
         ) : (
-          <div className="text-center py-12 text-muted-foreground">
+          <div className="text-center py-20 text-muted-foreground">
+            <BellIcon className="h-12 w-12 mx-auto mb-4" />
+            <p className="text-lg">C'est bien calme ici.</p>
             <p>Aucune notification pour le moment.</p>
           </div>
         )}

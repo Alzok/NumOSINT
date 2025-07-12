@@ -6,8 +6,23 @@ const router = express.Router();
 const prisma = new PrismaClient();
 
 /**
- * GET /api/health
- * Endpoint de santé général
+ * @swagger
+ * tags:
+ *   name: Health
+ *   description: Vérification de l'état de santé de l'application
+ */
+
+/**
+ * @swagger
+ * /api/health:
+ *   get:
+ *     summary: Endpoint de santé général
+ *     tags: [Health]
+ *     responses:
+ *       200:
+ *         description: L'application est saine ou dégradée
+ *       503:
+ *         description: L'application n'est pas saine
  */
 router.get('/', async (req, res) => {
   try {
@@ -78,8 +93,16 @@ router.get('/', async (req, res) => {
 });
 
 /**
- * GET /api/health/detailed
- * Endpoint de santé détaillé
+ * @swagger
+ * /api/health/detailed:
+ *   get:
+ *     summary: Endpoint de santé détaillé
+ *     tags: [Health]
+ *     responses:
+ *       200:
+ *         description: L'application est saine ou dégradée
+ *       503:
+ *         description: L'application n'est pas saine
  */
 router.get('/detailed', async (req, res) => {
   try {
@@ -145,8 +168,16 @@ router.get('/detailed', async (req, res) => {
 });
 
 /**
- * GET /api/health/ready
- * Endpoint de readiness (prêt à recevoir du trafic)
+ * @swagger
+ * /api/health/ready:
+ *   get:
+ *     summary: Endpoint de readiness (prêt à recevoir du trafic)
+ *     tags: [Health]
+ *     responses:
+ *       200:
+ *         description: L'application est prête
+ *       503:
+ *         description: L'application n'est pas prête
  */
 router.get('/ready', async (req, res) => {
   try {
@@ -185,8 +216,14 @@ router.get('/ready', async (req, res) => {
 });
 
 /**
- * GET /api/health/live
- * Endpoint de liveness (application en vie)
+ * @swagger
+ * /api/health/live:
+ *   get:
+ *     summary: Endpoint de liveness (application en vie)
+ *     tags: [Health]
+ *     responses:
+ *       200:
+ *         description: L'application est en cours d'exécution
  */
 router.get('/live', (req, res) => {
   res.status(200).json({

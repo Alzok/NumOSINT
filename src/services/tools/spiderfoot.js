@@ -1,115 +1,60 @@
-const { exec } = require('child_process');
-const fs = require('fs').promises;
-const path = require('path');
-const os = require('os');
+const axios = require('axios');
 const logger = require('../../utils/logger');
 const { IndicatorType } = require('@prisma/client');
 const eventBus = require('../../utils/eventBus');
+
+const spiderfootServiceUrl = process.env.SPIDERFOOT_SERVICE_URL;
 
 class SpiderFootService {
   constructor(prisma) {
     this.prisma = prisma;
     this.name = 'spiderfoot';
-    this.reportsDir = path.join(os.tmpdir(), 'numosint_reports', 'spiderfoot');
-    this.spiderfootPath = 'spiderfoot'; // Assumes sf.py is in PATH
-    this.init();
-  }
-
-  async init() {
-    try {
-      await fs.mkdir(this.reportsDir, { recursive: true });
-    } catch (error) {
-      logger.error(`Impossible de créer le répertoire pour les rapports SpiderFoot: ${error.message}`);
-    }
   }
 
   /**
-   * Démarre un scan SpiderFoot pour une liste d'indicateurs.
+   * Démarre un scan SpiderFoot pour une liste d'indicateurs via le microservice.
    * Le scan est lancé en arrière-plan et un événement est émis à la fin.
    */
-  startScan(investigationId, indicators) {
+  async startScan(investigationId, indicators) {
+    if (!spiderfootServiceUrl) {
+      logger.error('🕷️ SpiderFoot: URL du service non définie. Vérifiez SPIDERFOOT_SERVICE_URL.');
+      eventBus.emit('tool:scan_completed', { investigationId, tool: this.name, success: false, error: 'Service non configuré.' });
+      return;
+    }
+
     if (!indicators || indicators.length === 0) {
       logger.warn('🕷️ SpiderFoot: Aucun indicateur fourni pour le scan.');
-      // Émettre un événement d'échec ou de complétion immédiate pour ne pas bloquer le flux
       eventBus.emit('tool:scan_completed', { investigationId, tool: this.name, success: true, message: 'Aucun indicateur à scanner.' });
       return;
     }
 
-    const scanId = `inv_${investigationId}_${Date.now()}`;
     const targets = indicators.map(ind => ind.value).join(',');
-    const reportPath = path.join(this.reportsDir, `sf_report_${scanId}.json`);
-
     logger.info(`🕷️ SpiderFoot: Démarrage du scan pour ${indicators.length} indicateurs (investigation ${investigationId})`);
-    
-    this.executeScanCommand(investigationId, targets, reportPath);
-  }
 
-  /**
-   * Exécute une commande de scan SpiderFoot en arrière-plan.
-   */
-  executeScanCommand(investigationId, targets, reportPath) {
-    const safeTargets = targets.replace(/(["'$`\\])/g, '\\$1');
-    const command = `${this.spiderfootPath} -s "${safeTargets}" -o json -F "${reportPath}"`;
-
-    logger.info(`🕷️ SpiderFoot: Exécution de la commande: ${command}`);
-
-    const child = exec(command, { timeout: 900000 /* 15 minutes */ });
-
-    // --- Début de l'implémentation du "pulse" ---
-    const pulseInterval = setInterval(() => {
-      eventBus.emit('tool:pulse', { investigationId, tool: this.name });
-    }, 5000); // Émettre une pulsation toutes les 5 secondes
-    // --- Fin de l'implémentation du "pulse" ---
-
-    child.stdout.on('data', (data) => {
-      logger.debug(`🕷️ SpiderFoot stdout: ${data.trim()}`);
-    });
-
-    child.stderr.on('data', (data) => {
-      logger.warn(`🕷️ SpiderFoot stderr: ${data.trim()}`);
-    });
-
-    child.on('close', async (code) => {
-      clearInterval(pulseInterval); // Arrêter les pulsations à la fin du scan
-
-      if (code === 0) {
-        logger.info(`🕷️ SpiderFoot: Scan terminé avec succès pour l'investigation ${investigationId}.`);
-        try {
-          const scanData = await this.parseScanResults(reportPath);
-          await this.processAndSaveResults(investigationId, null, scanData); // indicatorId est null car multi-indicateurs
-          await this.extractAndSaveNewIndicators(investigationId, scanData);
-          
-          const graphData = this.generateGraphData(scanData);
-          await this.prisma.investigation.update({
-            where: { id: investigationId },
-            data: { graphData },
-          });
-
-          eventBus.emit('tool:scan_completed', { investigationId, tool: this.name, success: true });
-        } catch (processingError) {
-          logger.error(`🕷️ SpiderFoot: Erreur lors du traitement des résultats pour ${investigationId}:`, processingError);
-          eventBus.emit('tool:scan_completed', { investigationId, tool: this.name, success: false, error: processingError.message });
-        } finally {
-            await fs.unlink(reportPath).catch(() => {});
-        }
-      } else {
-        const errorMessage = `L'exécution de SpiderFoot a échoué avec le code ${code}.`;
-        logger.error(`🕷️ SpiderFoot: ${errorMessage} pour l'investigation ${investigationId}.`);
-        eventBus.emit('tool:scan_completed', { investigationId, tool: this.name, success: false, error: errorMessage });
-      }
-    });
-  }
-
-  /**
-   * Lit et analyse le rapport JSON de SpiderFoot.
-   */
-  async parseScanResults(reportPath) {
     try {
-      const reportContent = await fs.readFile(reportPath, 'utf8');
-      return JSON.parse(reportContent);
+      // L'appel est asynchrone, mais le service SpiderFoot lui-même prendra du temps.
+      // Nous ne bloquons pas ici, mais nous attendons la réponse initiale du service.
+      const response = await axios.post(`${spiderfootServiceUrl}/scan`, { targets }, { timeout: 15 * 60 * 1000 /* 15 minutes */ });
+      
+      const scanData = response.data;
+      
+      logger.info(`🕷️ SpiderFoot: Scan terminé avec succès pour l'investigation ${investigationId}.`);
+      
+      await this.processAndSaveResults(investigationId, null, scanData);
+      await this.extractAndSaveNewIndicators(investigationId, scanData);
+      
+      const graphData = this.generateGraphData(scanData);
+      await this.prisma.investigation.update({
+        where: { id: investigationId },
+        data: { graphData },
+      });
+
+      eventBus.emit('tool:scan_completed', { investigationId, tool: this.name, success: true });
+
     } catch (error) {
-      logger.error(`Impossible de lire ou d'analyser le rapport SpiderFoot à ${reportPath}:`, error);
-      throw new Error('Analyse du rapport SpiderFoot échouée.');
+      const errorMessage = error.response ? JSON.stringify(error.response.data) : error.message;
+      logger.error(`🕷️ SpiderFoot: Erreur lors du scan pour ${investigationId}: ${errorMessage}`);
+      eventBus.emit('tool:scan_completed', { investigationId, tool: this.name, success: false, error: errorMessage });
     }
   }
 

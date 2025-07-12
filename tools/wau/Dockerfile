@@ -6,11 +6,11 @@ WORKDIR /app
 RUN go install -v github.com/alpkeskin/wau@latest
 
 # Préparer le build du serveur wrapper
-COPY go.mod go.sum ./
+COPY go.mod .
 COPY server.go .
 
 # Télécharger les dépendances et builder
-RUN go mod download
+RUN go mod tidy
 RUN CGO_ENABLED=0 GOOS=linux go build -o /app/server server.go
 
 # Étape 2: Créer l'image finale

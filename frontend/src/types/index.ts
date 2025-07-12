@@ -63,7 +63,7 @@ export interface NotificationAction {
   onClick: () => void;
 }
 
-export interface NotificationState {
+export interface ToastNotification {
   id: string;
   type: 'success' | 'error' | 'warning' | 'info';
   title: string;
@@ -73,12 +73,36 @@ export interface NotificationState {
   isRead?: boolean;
 }
 
+export interface AppNotification {
+  id: string;
+  userId: string;
+  message: string;
+  read: boolean;
+  link?: string;
+  createdAt: string;
+}
+
+export type InputField = { id: number; value: string };
+
+export type InvestigationFormState = {
+    names: InputField[];
+    emails: InputField[];
+    usernames: InputField[];
+    phones: InputField[];
+    ips: InputField[];
+    domains: InputField[];
+    urls: InputField[];
+    maxGeneration: number;
+    minConfidence: number;
+};
+
 export interface AppState {
   activeSearches: SearchTask[];
   searchResults: SearchResults | null;
   allResults: SearchResults | null;
   searchLogs: string[];
-  notifications: NotificationState[];
+  toastNotifications: ToastNotification[];
+  appNotifications: AppNotification[];
   isLoading: boolean;
   darkMode: boolean;
   personFilter: string | null;
@@ -86,4 +110,5 @@ export interface AppState {
   categoryFilter: string | null;
   platformFilter: string | null;
   searchProgress: number;
+  investigationForm: InvestigationFormState;
 }

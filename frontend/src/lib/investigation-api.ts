@@ -45,6 +45,7 @@ export interface Investigation {
   caseId?: string | null;
   results?: Result[];
   indicators?: Indicator[];
+  error?: string;
 }
 
 export interface Case {
@@ -148,6 +149,11 @@ export interface GlobalStats {
   totalResults: number;
   resultsByTool: { toolSource: string; count: number }[];
   indicatorsByType: { type: string; count: number }[];
+}
+
+export interface InvestigationsOverTimeData {
+  date: string;
+  count: number;
 }
 
 export const investigationAPI = {
@@ -254,17 +260,34 @@ export const investigationAPI = {
       return { error: error.response?.data?.error || 'Erreur lors de la récupération des résultats récents' };
     }
   },
-getGroupedResults: async (): Promise<ApiResponse<{ persons: PersonResult[] }>> => {
+
+  getGroupedResults: async (params: {
+    page?: number;
+    limit?: number;
+    status?: string;
+    startDate?: string;
+    endDate?: string;
+    tools?: string;
+  }): Promise<ApiResponse<{ investigations: any[], pagination: PaginationInfo }>> => {
     try {
-      const response = await api.get('/api/results/grouped');
+      const response = await api.get('/api/results/grouped', { params });
       return { data: response.data };
     } catch (error: any) {
       return { error: error.response?.data?.error || 'Erreur lors de la récupération des résultats groupés' };
     }
   },
 
+  getInvestigationSummary: async (id: string): Promise<ApiResponse<{ summary: any[] }>> => {
+    try {
+      const response = await api.get(`/api/investigations/${id}/summary`);
+      return { data: response.data };
+    } catch (error: any) {
+      return { error: error.response?.data?.error || 'Erreur lors de la récupération du résumé de l\'investigation' };
+    }
+  },
+
   // Logs
-  getLogs: async (investigationId: string): Promise<ApiResponse<InvestigationLog[]>> => {
+  getLogs: async (investigationId: string): Promise<ApiResponse<{ logs: InvestigationLog[], count: number }>> => {
     try {
       const response = await api.get(`/api/investigations/${investigationId}/logs`);
       return { data: response.data };
@@ -384,6 +407,15 @@ getGroupedResults: async (): Promise<ApiResponse<{ persons: PersonResult[] }>> =
     }
   },
 
+  getInvestigationsOverTime: async (): Promise<ApiResponse<InvestigationsOverTimeData[]>> => {
+    try {
+      const response = await api.get('/api/statistics/investigations-over-time');
+      return { data: response.data };
+    } catch (error: any) {
+      return { error: error.response?.data?.error || 'Erreur lors de la récupération des statistiques temporelles' };
+    }
+  },
+
   // Case Management
   getCases: async (): Promise<ApiResponse<Case[]>> => {
     try {
@@ -415,6 +447,14 @@ getGroupedResults: async (): Promise<ApiResponse<{ persons: PersonResult[] }>> =
       return { data: response.data };
     } catch (error: any) {
       return { error: error.response?.data?.error || 'Erreur lors de la mise à jour du dossier' };
+    }
+  },
+  deleteCase: async (id: string): Promise<ApiResponse<{ message: string }>> => {
+    try {
+      const response = await api.delete(`/api/cases/${id}`);
+      return { data: response.data };
+    } catch (error: any) {
+      return { error: error.response?.data?.error || 'Erreur lors de la suppression du dossier' };
     }
   },
 

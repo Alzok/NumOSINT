@@ -43,7 +43,7 @@ func reverseWhoisHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	cmd := exec.Command("buster", "-e", req.Email, "-s", "reversewhois")
+	cmd := exec.Command("python", "/buster/buster.py", "-e", req.Email, "-s", "reversewhois")
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		log.Printf("Buster reverse whois execution finished with an error for '%s': %v\nOutput: %s", req.Email, err, string(output))
@@ -87,7 +87,7 @@ func scanHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Le script buster.py est dans le PATH via un lien symbolique
-	cmd := exec.Command("buster", "-f", req.FirstName, "-l", req.LastName, "-c", req.Domain)
+	cmd := exec.Command("python", "/buster/buster.py", "-f", req.FirstName, "-l", req.LastName, "-c", req.Domain)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		log.Printf("Buster execution finished with an error for '%s %s @ %s': %v\nOutput: %s", req.FirstName, req.LastName, req.Domain, err, string(output))

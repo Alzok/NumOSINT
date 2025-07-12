@@ -5,9 +5,9 @@ services:
     image: postgres:15-alpine
     container_name: numosint_postgres
     environment:
-      POSTGRES_DB: numosint
-      POSTGRES_USER: numosint
-      POSTGRES_PASSWORD: numosint_password
+      POSTGRES_DB: ${POSTGRES_DB:-numosint}
+      POSTGRES_USER: ${POSTGRES_USER:-numosint}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-numosint_password}
       POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=C"
     ports:
       - "5435:5432"
@@ -17,7 +17,7 @@ services:
     networks:
       - numosint_network
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U numosint -d numosint"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-numosint} -d ${POSTGRES_DB:-numosint}"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -42,19 +42,26 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: numosint_backend
+    env_file:
+      - .env
     environment:
-      - NODE_ENV=production
-      - PORT=5001
-      - DATABASE_URL=postgresql://numosint:numosint_password@postgres:5432/numosint
-      - REDIS_URL=redis://redis:6379
+      - NODE_ENV=${NODE_ENV:-production}
+      - PORT=${PORT:-5001}
+      - DATABASE_URL=${DATABASE_URL}
+      - REDIS_URL=${REDIS_URL}
       - FRONTEND_URL=http://frontend:3001
-      - MAIGRET_SERVICE_URL=http://maigret-service:5002
-      - BUSTER_SERVICE_URL=http://buster-service:5003
-      - MOSINT_SERVICE_URL=http://mosint-service:5004
-      - PHONEINFOGA_SERVICE_URL=http://phoneinfoga-service:5005
-      - ASN_SERVICE_URL=http://asn-service:5008
+      - MAIGRET_SERVICE_URL=${MAIGRET_SERVICE_URL}
+      - BUSTER_SERVICE_URL=${BUSTER_SERVICE_URL}
+      - MOSINT_SERVICE_URL=${MOSINT_SERVICE_URL}
+      - PHONEINFOGA_SERVICE_URL=${PHONEINFOGA_SERVICE_URL}
+      - ASN_SERVICE_URL=${ASN_SERVICE_URL}
+      - WAU_SERVICE_URL=${WAU_SERVICE_URL}
+      - WAYBULK_SERVICE_URL=${WAYBULK_SERVICE_URL}
+      - PDL_API_KEY=${PDL_API_KEY}
+      - SPIDERFOOT_SERVICE_URL=${SPIDERFOOT_SERVICE_URL}
+      - LOG_LEVEL=${LOG_LEVEL:-info}
     ports:
-      - "5001:5001"
+      - "${PORT:-5001}:${PORT:-5001}"
     volumes:
       - ./logs:/app/logs
       - ./results:/app/results
@@ -75,9 +82,15 @@ services:
         condition: service_started
       asn-service:
         condition: service_started
+      spiderfoot-service:
+        condition: service_started
+      wau-service:
+        condition: service_started
+      waybulk-service:
+        condition: service_started
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:5001/api/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:${PORT:-5001}/api/health"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -128,6 +141,35 @@ services:
       - numosint_network
     restart: unless-stopped
 
+  spiderfoot-service:
+    build:
+      context: ./tools/spiderfoot
+      dockerfile: Dockerfile
+    container_name: numosint_spiderfoot_service
+    volumes:
+      - ./tools/spiderfoot/config/sfconfig.py:/home/spiderfoot/sfconfig.py:ro
+    networks:
+      - numosint_network
+    restart: unless-stopped
+
+  wau-service:
+    build:
+      context: ./tools/wau
+      dockerfile: Dockerfile
+    container_name: numosint_wau_service
+    networks:
+      - numosint_network
+    restart: unless-stopped
+
+  waybulk-service:
+    build:
+      context: ./tools/waybulk
+      dockerfile: Dockerfile
+    container_name: numosint_waybulk_service
+    networks:
+      - numosint_network
+    restart: unless-stopped
+
   frontend:
     image: numosint-frontend
     build:
@@ -135,7 +177,7 @@ services:
       dockerfile: Dockerfile
     container_name: numosint_frontend
     environment:
-      - NEXT_PUBLIC_API_URL=http://localhost:5001
+      - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
     ports:
       - "3001:3000"
     volumes:

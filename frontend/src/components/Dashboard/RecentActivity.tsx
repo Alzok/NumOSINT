@@ -81,12 +81,12 @@ const RecentActivity = () => {
                 <Article className="h-5 w-5 text-secondary-foreground" />
               </div>
               <div className="flex-grow">
-                <p className="text-sm font-medium">
+                <div className="text-sm font-medium">
                   Nouveau résultat de <Badge variant="outline">{result.toolSource}</Badge> pour l'investigation sur{' '}
                   <Link href={`/investigation/${result.investigationId}`} className="text-primary hover:underline">
                     {getPrimaryTarget(result)}
                   </Link>
-                </p>
+                </div>
                 <p className="text-xs text-muted-foreground">
                   {formatDistanceToNow(new Date(result.createdAt), { addSuffix: true, locale: fr })}
                 </p>

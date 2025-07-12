@@ -22,5 +22,8 @@ COPY --from=builder /mosint-service .
 # Copier l'outil compilé
 COPY --from=tool_builder /go/bin/mosint /usr/local/bin/mosint
 
+# Copier le fichier de configuration
+COPY config.yaml /root/.mosint.yaml
+
 EXPOSE 5004
 CMD ["./mosint-service"]

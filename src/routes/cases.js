@@ -4,7 +4,25 @@ const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
 const router = express.Router();
 
-// GET /api/cases - Lister tous les dossiers
+/**
+ * @swagger
+ * tags:
+ *   name: Cases
+ *   description: Gestion des dossiers d'investigation
+ */
+
+/**
+ * @swagger
+ * /api/cases:
+ *   get:
+ *     summary: Lister tous les dossiers
+ *     tags: [Cases]
+ *     responses:
+ *       200:
+ *         description: Une liste de dossiers
+ *       500:
+ *         description: Erreur serveur
+ */
 router.get('/', async (req, res) => {
   try {
     const cases = await prisma.case.findMany({
@@ -19,7 +37,37 @@ router.get('/', async (req, res) => {
   }
 });
 
-// POST /api/cases - Créer un nouveau dossier
+/**
+ * @swagger
+ * /api/cases:
+ *   post:
+ *     summary: Créer un nouveau dossier
+ *     tags: [Cases]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - name
+ *             properties:
+ *               name:
+ *                 type: string
+ *               description:
+ *                 type: string
+ *               investigationIds:
+ *                 type: array
+ *                 items:
+ *                   type: string
+ *     responses:
+ *       201:
+ *         description: Dossier créé
+ *       400:
+ *         description: Nom manquant
+ *       500:
+ *         description: Erreur serveur
+ */
 router.post('/', async (req, res) => {
   const { name, description, investigationIds } = req.body;
 
@@ -47,7 +95,26 @@ router.post('/', async (req, res) => {
   }
 });
 
-// GET /api/cases/:id - Obtenir les détails d'un dossier
+/**
+ * @swagger
+ * /api/cases/{id}:
+ *   get:
+ *     summary: Obtenir les détails d'un dossier
+ *     tags: [Cases]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Détails du dossier
+ *       404:
+ *         description: Dossier non trouvé
+ *       500:
+ *         description: Erreur serveur
+ */
 router.get('/:id', async (req, res) => {
     const { id } = req.params;
     try {
@@ -74,8 +141,35 @@ router.get('/:id', async (req, res) => {
     }
 });
 
-
-// PUT /api/cases/:id - Mettre à jour un dossier
+/**
+ * @swagger
+ * /api/cases/{id}:
+ *   put:
+ *     summary: Mettre à jour un dossier
+ *     tags: [Cases]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               name:
+ *                 type: string
+ *               description:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Dossier mis à jour
+ *       500:
+ *         description: Erreur serveur
+ */
 router.put('/:id', async (req, res) => {
     const { id } = req.params;
     const { name, description } = req.body;
@@ -95,7 +189,24 @@ router.put('/:id', async (req, res) => {
     }
 });
 
-// DELETE /api/cases/:id - Supprimer un dossier
+/**
+ * @swagger
+ * /api/cases/{id}:
+ *   delete:
+ *     summary: Supprimer un dossier
+ *     tags: [Cases]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       204:
+ *         description: Dossier supprimé
+ *       500:
+ *         description: Erreur serveur
+ */
 router.delete('/:id', async (req, res) => {
     const { id } = req.params;
     try {
@@ -109,7 +220,39 @@ router.delete('/:id', async (req, res) => {
     }
 });
 
-// PUT /api/cases/:id/investigations - Associer/Dissocier des investigations
+/**
+ * @swagger
+ * /api/cases/{id}/investigations:
+ *   put:
+ *     summary: Associer/Dissocier des investigations à un dossier
+ *     tags: [Cases]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               investigationIdsToConnect:
+ *                 type: array
+ *                 items:
+ *                   type: string
+ *               investigationIdsToDisconnect:
+ *                 type: array
+ *                 items:
+ *                   type: string
+ *     responses:
+ *       200:
+ *         description: Investigations du dossier mises à jour
+ *       500:
+ *         description: Erreur serveur
+ */
 router.put('/:id/investigations', async (req, res) => {
     const { id } = req.params;
     const { investigationIdsToConnect, investigationIdsToDisconnect } = req.body;

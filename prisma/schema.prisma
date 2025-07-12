@@ -128,3 +128,13 @@ enum LogLevel {
   ERROR
   DEBUG
 }
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String   // Pour l'instant, pas de modèle User, mais on le prévoit
+  message   String
+  read      Boolean  @default(false)
+  link      String?
+  createdAt DateTime @default(now())
+
+  @@map("notifications")
+}

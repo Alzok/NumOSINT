@@ -1,7 +1,8 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { z } from 'zod';
 import { InvestigationInput } from '@/lib/investigation-api';
 import { useAppStore } from '@/lib/store';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -10,13 +11,12 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { CheckCircle, Cancel } from '@mui/icons-material';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import Person4Icon from '@mui/icons-material/Person4';
 import FingerprintIcon from '@mui/icons-material/Fingerprint';
 import TuneIcon from '@mui/icons-material/Tune';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Slider } from "@/components/ui/slider"
-
 
 // Local SVG Icon Components
 const SearchIcon = (props: React.SVGProps<SVGSVGElement>) => (
@@ -103,6 +103,20 @@ const HelpIcon = (props: React.SVGProps<SVGSVGElement>) => (
     </svg>
 );
 
+const SaveIcon = (props: React.SVGProps<SVGSVGElement>) => (
+    <svg {...props} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
+        <polyline points="17 21 17 13 7 13 7 21" />
+        <polyline points="7 3 7 8 15 8" />
+    </svg>
+);
+
+const LoadIcon = (props: React.SVGProps<SVGSVGElement>) => (
+    <svg {...props} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48" />
+    </svg>
+);
+
 
 interface InvestigationFormProps {
   onSubmit: (input: InvestigationInput) => Promise<boolean>;
@@ -110,204 +124,298 @@ interface InvestigationFormProps {
 }
 
 type InputField = { id: number; value: string };
-type IndicatorFields = Required<Omit<InvestigationInput, 'maxGeneration'>>;
-type FormState = { [K in keyof IndicatorFields]: InputField[] };
-
-// --- Début de l'ajout pour la validation ---
-type FieldValidity = { id: number; isValid: boolean | null };
-type FormValidityState = { [K in keyof IndicatorFields]: FieldValidity[] };
-
-const validationPatterns: Partial<Record<keyof IndicatorFields, RegExp>> = {
-  emails: /^[^\s@]+@[^\s@]+\.[^\s@]+$/,
-  // Regex simple pour les téléphones, accepte les chiffres, espaces, tirets, parenthèses et un + optionnel au début
-  phones: /^[\+]?[(]?[0-9]{1,4}[)]?[-\s\./0-9]*$/,
-  ips: /^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/,
-  domains: /^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z0-9][a-z0-9-]{0,61}[a-z0-9]$/,
-  urls: /^https?:\/\/[^\s/$.?#].[^\s]*$/i,
+type IndicatorFields = {
+    names: InputField[];
+    emails: InputField[];
+    usernames: InputField[];
+    phones: InputField[];
+    ips: InputField[];
+    domains: InputField[];
+    urls: InputField[];
 };
-// --- Fin de l'ajout pour la validation ---
+type FormState = IndicatorFields;
 
+// --- Zod Schemas for Validation ---
+const indicatorSchemas = {
+    names: z.string().min(1, "Le nom ne peut pas être vide."),
+    emails: z.string().email("Format d'email invalide."),
+    usernames: z.string().min(3, "Le nom d'utilisateur doit contenir au moins 3 caractères."),
+    phones: z.string().regex(/^[\+]?[(]?[0-9]{1,4}[)]?[-\s\./0-9]*$/, "Format de téléphone invalide."),
+    ips: z.string().regex(/^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/, "Format d'adresse IP invalide."),
+    domains: z.string().regex(/^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z0-9][a-z0-9-]{0,61}[a-z0-9]$/, "Format de domaine invalide."),
+    urls: z.string().url("Format d'URL invalide."),
+};
+
+type FieldError = { id: number; message: string | null };
+type FormErrors = {
+    [K in keyof IndicatorFields]: FieldError[];
+};
 
 export default function InvestigationForm({ onSubmit, isLoading: isSubmitting = false }: InvestigationFormProps) {
   const [isExpanded, setIsExpanded] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(isSubmitting);
-  const [maxGeneration, setMaxGeneration] = useState(3);
-  const [minConfidence, setMinConfidence] = useState(0.7);
-  const setIsSearchLogExpanded = useAppStore((state) => state.setIsSearchLogExpanded);
-  
-  const initialField = { id: 1, value: '' };
-  const [fields, setFields] = useState<FormState>({
-    names: [initialField],
-    emails: [initialField],
-    usernames: [initialField],
-    phones: [initialField],
-    ips: [initialField],
-    domains: [initialField],
-    urls: [initialField],
+  const [activeSection, setActiveSection] = useState<keyof FormState | null>(null);
+  const [formErrors, setFormErrors] = useState<FormErrors>({
+      names: [], emails: [], usernames: [], phones: [], ips: [], domains: [], urls: []
   });
+  const [templates, setTemplates] = useState<string[]>([]);
 
-  // --- Début de l'ajout pour la validation ---
-  const initialValidityField = { id: 1, isValid: null };
-  const [fieldsValidity, setFieldsValidity] = useState<FormValidityState>({
-    names: [initialValidityField],
-    emails: [initialValidityField],
-    usernames: [initialValidityField],
-    phones: [initialValidityField],
-    ips: [initialValidityField],
-    domains: [initialValidityField],
-    urls: [initialValidityField],
-  });
+  const {
+    investigationForm,
+    setInvestigationFormField,
+    addInvestigationFormField,
+    removeInvestigationFormField,
+    setInvestigationFormOptions,
+    resetInvestigationForm,
+    setInvestigationForm,
+    addToastNotification,
+    setIsSearchLogExpanded
+  } = useAppStore();
 
-  const validateField = (type: keyof IndicatorFields, value: string): boolean | null => {
-    if (!value) return null; // Pas de validation si le champ est vide
-    const pattern = validationPatterns[type];
-    if (!pattern) return true; // Pas de pattern, on considère valide
-    return pattern.test(value);
+  const { fields, maxGeneration, minConfidence } = {
+    fields: {
+        names: investigationForm.names,
+        emails: investigationForm.emails,
+        usernames: investigationForm.usernames,
+        phones: investigationForm.phones,
+        ips: investigationForm.ips,
+        domains: investigationForm.domains,
+        urls: investigationForm.urls,
+    },
+    maxGeneration: investigationForm.maxGeneration,
+    minConfidence: investigationForm.minConfidence,
   };
-  // --- Fin de l'ajout pour la validation ---
 
   useEffect(() => {
     setIsLoading(isSubmitting);
-    if (isSubmitting) {
-      setError(null);
-    }
   }, [isSubmitting]);
 
-  const handleFieldChange = (type: keyof IndicatorFields, id: number, value: string) => {
-    const isValid = validateField(type, value);
-    
-    setFields(prev => ({
-      ...prev,
-      [type]: prev[type].map(field => field.id === id ? { ...field, value } : field)
-    }));
+  const validateField = useCallback((type: keyof IndicatorFields, id: number, value: string) => {
+      if (!value.trim()) {
+          setFormErrors(prev => ({
+              ...prev,
+              [type]: prev[type].filter(e => e.id !== id)
+          }));
+          return;
+      }
 
-    setFieldsValidity(prev => ({
-        ...prev,
-        [type]: prev[type].map(field => field.id === id ? { ...field, isValid } : field)
-    }));
+      const schema = indicatorSchemas[type];
+      const result = schema.safeParse(value);
+
+      setFormErrors(prev => {
+          const otherErrors = prev[type].filter(e => e.id !== id);
+          if (!result.success) {
+              const message = result.error.format()._errors[0];
+              return { ...prev, [type]: [...otherErrors, { id, message }] };
+          }
+          return { ...prev, [type]: otherErrors };
+      });
+  }, []);
+
+  const handleFieldChange = (type: keyof FormState, id: number, value: string) => {
+    setInvestigationFormField(type, id, value);
+    validateField(type, id, value);
   };
 
-  const addField = (type: keyof IndicatorFields) => {
-    const newId = Date.now();
-    setFields(prev => ({
-      ...prev,
-      [type]: [...prev[type], { id: newId, value: '' }]
-    }));
-    setFieldsValidity(prev => ({
-        ...prev,
-        [type]: [...prev[type], { id: newId, isValid: null }]
-    }));
+  const addField = (type: keyof FormState) => {
+    addInvestigationFormField(type);
   };
 
-  const removeField = (type: keyof IndicatorFields, id: number) => {
-    setFields(prev => ({
-      ...prev,
-      [type]: prev[type].filter(field => field.id !== id)
-    }));
-    setFieldsValidity(prev => ({
+  const removeField = (type: keyof FormState, id: number) => {
+    removeInvestigationFormField(type, id);
+    setFormErrors(prev => ({
         ...prev,
-        [type]: prev[type].filter(field => field.id !== id)
+        [type]: prev[type].filter(e => e.id !== id)
     }));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    console.log('Form submitted');
-    setError(null);
     setIsLoading(true);
 
-    const formattedInput: InvestigationInput = Object.entries(fields).reduce((acc, [key, value]) => {
-      const nonEmptyValues = value.map(field => field.value.trim()).filter(Boolean);
-      if (nonEmptyValues.length > 0) {
-        acc[key as keyof IndicatorFields] = nonEmptyValues;
-      }
-      return acc;
-    }, {} as InvestigationInput);
+    const indicatorData: Partial<InvestigationInput> = {};
+    let hasErrors = false;
+    (Object.keys(fields) as Array<keyof typeof fields>).forEach(key => {
+        const nonEmptyValues = fields[key]
+            .map(field => {
+                validateField(key, field.id, field.value);
+                return field.value.trim();
+            })
+            .filter(Boolean);
+        
+        if (formErrors[key].length > 0) {
+            hasErrors = true;
+        }
 
-    if (maxGeneration > 0) {
-      formattedInput.maxGeneration = maxGeneration;
+        if (nonEmptyValues.length > 0) {
+            indicatorData[key] = nonEmptyValues;
+        }
+    });
+
+    if (hasErrors) {
+        addToastNotification({
+            title: "Erreurs de validation",
+            message: "Veuillez corriger les erreurs dans le formulaire.",
+            type: 'error'
+        });
+        setIsLoading(false);
+        return;
     }
-    formattedInput.minConfidence = minConfidence;
 
-    const hasIndicators = Object.values(formattedInput).some(v => Array.isArray(v) && v.length > 0);
+    const hasIndicators = Object.values(indicatorData).some(v => Array.isArray(v) && v.length > 0);
 
     if (!hasIndicators) {
-      setError('Veuillez fournir au moins un indicateur (nom, email, username, téléphone, etc.)');
-      setIsExpanded(true);
+      addToastNotification({
+        title: "Données invalrides",
+        message: "Veuillez fournir au moins un indicateur pour lancer une investigation.",
+        type: 'warning'
+      });
+      setIsLoading(false);
       return;
     }
+
+    const formattedInput: InvestigationInput = {
+      ...indicatorData,
+      maxGeneration,
+      minConfidence,
+    };
 
     setIsSearchLogExpanded(true);
     const success = await onSubmit(formattedInput);
     if (success) {
       setIsExpanded(false);
+      resetInvestigationForm();
+      addToastNotification({
+        title: "Investigation lancée",
+        message: "L'investigation a démarré avec succès.",
+        type: 'success'
+      });
     } else {
-      setError('Une erreur est survenue lors du lancement de l\'investigation.');
+      addToastNotification({
+        title: "Erreur",
+        message: "Une erreur est survenue lors du lancement de l'investigation.",
+        type: 'error'
+      });
       setIsExpanded(true);
     }
     setIsLoading(false);
   };
 
+  const saveTemplate = () => {
+      const templateName = prompt("Entrez un nom pour ce modèle :");
+      if (templateName) {
+          localStorage.setItem(`investigation_template_${templateName}`, JSON.stringify(investigationForm));
+          addToastNotification({ title: "Modèle sauvegardé", message: `Le modèle "${templateName}" a été sauvegardé.`, type: 'success' });
+          loadTemplates();
+      }
+  };
+
+  const loadTemplates = useCallback(() => {
+      const keys = Object.keys(localStorage).filter(k => k.startsWith('investigation_template_'));
+      setTemplates(keys.map(k => k.replace('investigation_template_', '')));
+  }, []);
+
+  const loadTemplate = (name: string) => {
+      if (!name) return;
+      const templateData = localStorage.getItem(`investigation_template_${name}`);
+      if (templateData) {
+          setInvestigationForm(JSON.parse(templateData));
+          addToastNotification({ title: "Modèle chargé", message: `Le modèle "${name}" a été chargé.`, type: 'info' });
+      }
+  };
+
+  useEffect(() => {
+      loadTemplates();
+  }, [loadTemplates]);
+
   const renderIndicatorSection = (
-    type: keyof IndicatorFields,
+    type: keyof FormState,
     label: string,
     placeholder: string,
-    IconComponent: React.ComponentType<{ className?: string }>
+    IconComponent: React.ComponentType<{ className?: string }>,
+    tooltipText: string
   ) => {
     const sectionFields = fields[type];
     const activeFields = sectionFields.filter(f => f.value.trim() !== '');
 
     return (
-      <div className="space-y-3">
-        <Label className="text-sm font-semibold flex items-center gap-2">
-          <IconComponent className="h-5 w-5 text-muted-foreground" />
-          {label}
-          {activeFields.length > 0 && (
-            <Badge variant="secondary" className="ml-auto">
-              {activeFields.length}
-            </Badge>
-          )}
-        </Label>
+      <div className="space-y-3 group">
+        <TooltipProvider delayDuration={200}>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Label className="text-sm font-semibold flex items-center gap-2 cursor-help">
+                <IconComponent className={`h-5 w-5 transition-colors duration-300 ${activeSection === type ? 'text-[#e5ee10]' : 'text-muted-foreground'} group-hover:text-[#e5ee10]`} />
+                {label}
+                {activeFields.length > 0 && (
+                  <Badge variant="secondary" className="ml-auto">
+                    {activeFields.length}
+                  </Badge>
+                )}
+              </Label>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>{tooltipText}</p>
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
         
-        {sectionFields.map((field, index) => (
-          <div key={field.id} className="flex items-center gap-2">
-            <Input
-              type="text"
-              placeholder={placeholder}
-              value={field.value}
-              onChange={(e) => handleFieldChange(type, field.id, e.target.value)}
-              disabled={isLoading}
-              className="flex-1 bg-gray-50 dark:bg-gray-900/50 border-gray-300 dark:border-gray-700 focus:border-blue-500 focus:ring-blue-500"
-            />
-            <div className="flex items-center gap-1">
-              {sectionFields.length > 1 && (
-                <Button
-                  type="button"
-                  onClick={() => removeField(type, field.id)}
+        {sectionFields.map((field, index) => {
+          const error = formErrors[type].find(e => e.id === field.id);
+          return (
+            <div key={field.id}>
+              <div className="flex items-center gap-2">
+                <Input
+                  type="text"
+                  placeholder={placeholder}
+                  value={field.value}
+                  onFocus={() => setActiveSection(type)}
+                  onBlur={() => validateField(type, field.id, field.value)}
+                  onChange={(e) => handleFieldChange(type, field.id, e.target.value)}
                   disabled={isLoading}
-                  size="icon"
-                  variant="ghost"
-                  className="h-8 w-8 hover:bg-red-100 hover:text-red-600"
-                >
-                  <CloseIcon className="h-4 w-4" />
-                </Button>
-              )}
-              {index === sectionFields.length - 1 && (
-                <Button
-                  type="button"
-                  onClick={() => addField(type)}
-                  disabled={isLoading}
-                  size="icon"
-                  variant="ghost"
-                  className="h-8 w-8 hover:bg-green-100 hover:text-green-600"
-                >
-                  <AddIcon className="h-4 w-4" />
-                </Button>
-              )}
+                  className={`flex-1 bg-gray-50 dark:bg-gray-900/50 border-gray-300 dark:border-gray-700 focus:border-blue-500 focus:ring-blue-500 ${error ? 'border-red-500' : ''}`}
+                />
+                <div className="flex items-center gap-1">
+                  {sectionFields.length > 1 && (
+                    <Button
+                      type="button"
+                      onClick={() => removeField(type, field.id)}
+                      disabled={isLoading}
+                      size="icon"
+                      variant="ghost"
+                      className="h-8 w-8 hover:bg-red-100 hover:text-red-600"
+                    >
+                      <CloseIcon className="h-4 w-4" />
+                    </Button>
+                  )}
+                  {index === sectionFields.length - 1 && (
+                    <Button
+                      type="button"
+                      onClick={() => addField(type)}
+                      disabled={isLoading}
+                      size="icon"
+                      variant="ghost"
+                      className="h-8 w-8 hover:bg-green-100 hover:text-green-600"
+                    >
+                      <AddIcon className="h-4 w-4" />
+                    </Button>
+                  )}
+                </div>
+              </div>
+              <AnimatePresence>
+                {error && (
+                  <motion.p
+                    initial={{ opacity: 0, y: -10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -10 }}
+                    className="text-xs text-red-500 mt-1 ml-1"
+                  >
+                    {error.message}
+                  </motion.p>
+                )}
+              </AnimatePresence>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
     );
   };
@@ -320,13 +428,23 @@ export default function InvestigationForm({ onSubmit, isLoading: isSubmitting = 
         <div className="relative">
           <div className="relative z-10 bg-transparent">
             <CardHeader
-              className="space-y-2 cursor-pointer"
-              onClick={() => setIsExpanded(!isExpanded)}
+              className="space-y-2"
             >
-              <CardTitle className="text-2xl font-bold flex items-center justify-center gap-3">
-                <TrackChangesIcon className="h-7 w-7 text-blue-600" />
-                Nouvelle Investigation OSINT
-                <div className="ml-auto">
+              <CardTitle className="text-xl font-bold flex items-center justify-between gap-3 w-full">
+                <TooltipProvider delayDuration={200}>
+                    <Tooltip>
+                        <TooltipTrigger asChild>
+                            <div className="flex items-center gap-3 cursor-help">
+                                <TrackChangesIcon className="h-6 w-6" style={{ color: '#e5ee10' }} />
+                                <span>Nouvelle Investigation OSINT</span>
+                            </div>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                            <p>Lancez une nouvelle enquête en fournissant un ou plusieurs indicateurs.<br/>Les outils OSINT collecteront et analyseront les données publiquement disponibles.</p>
+                        </TooltipContent>
+                    </Tooltip>
+                </TooltipProvider>
+                <div onClick={() => setIsExpanded(!isExpanded)} className="cursor-pointer p-2">
                   {isExpanded ? <ExpandLessIcon className="h-6 w-6" /> : <ExpandMoreIcon className="h-6 w-6" />}
                 </div>
               </CardTitle>
@@ -353,16 +471,16 @@ export default function InvestigationForm({ onSubmit, isLoading: isSubmitting = 
               <CardContent>
                 <form onSubmit={handleSubmit} className="space-y-8">
                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                    {renderIndicatorSection('names', 'Noms complets', 'ex: Jean Dupont', FingerprintIcon)}
-                    {renderIndicatorSection('usernames', 'Noms d\'utilisateur', 'ex: jdupont123', Person4Icon)}
-                    {renderIndicatorSection('emails', 'Adresses email', 'ex: jean.dupont@email.com', EmailIcon)}
-                    {renderIndicatorSection('phones', 'Numéros de téléphone', 'ex: +33 6 12 34 56 78', PhoneIcon)}
-                    {renderIndicatorSection('ips', 'Adresses IP', 'ex: 192.168.1.1', DnsIcon)}
-                    {renderIndicatorSection('domains', 'Noms de domaine', 'ex: exemple.com', LanguageIcon)}
+                    {renderIndicatorSection('names', 'Noms complets', 'ex: Jean Dupont', FingerprintIcon, "Noms et prénoms de la personne ciblée.")}
+                    {renderIndicatorSection('usernames', 'Noms d\'utilisateur', 'ex: jdupont123', Person4Icon, "Pseudos ou noms d'utilisateur utilisés sur les plateformes en ligne.")}
+                    {renderIndicatorSection('emails', 'Adresses email', 'ex: jean.dupont@email.com', EmailIcon, "Adresses e-mail personnelles ou professionnelles.")}
+                    {renderIndicatorSection('phones', 'Numéros de téléphone', 'ex: +33 6 12 34 56 78', PhoneIcon, "Numéros de téléphone, y compris l'indicatif du pays.")}
+                    {renderIndicatorSection('ips', 'Adresses IP', 'ex: 192.168.1.1', DnsIcon, "Adresses IP (IPv4) associées à la cible.")}
+                    {renderIndicatorSection('domains', 'Noms de domaine', 'ex: exemple.com', LanguageIcon, "Domaines web possédés ou gérés par la cible.")}
                   </div>
                   
                   <div className="w-full">
-                    {renderIndicatorSection('urls', 'URLs complètes', 'ex: https://exemple.com/profil', LinkIcon)}
+                    {renderIndicatorSection('urls', 'URLs complètes', 'ex: https://exemple.com/profil', LinkIcon, "Liens vers des profils spécifiques ou des pages web pertinentes.")}
                   </div>
 
                   <div className="border-t pt-6 space-y-6">
@@ -391,7 +509,7 @@ export default function InvestigationForm({ onSubmit, isLoading: isSubmitting = 
                                 max={20}
                                 step={1}
                                 value={[maxGeneration]}
-                                onValueChange={(value) => setMaxGeneration(value[0])}
+                                onValueChange={(value) => setInvestigationFormOptions({ maxGeneration: value[0] })}
                                 disabled={isLoading}
                             />
                         </div>
@@ -415,20 +533,33 @@ export default function InvestigationForm({ onSubmit, isLoading: isSubmitting = 
                                 max={1}
                                 step={0.05}
                                 value={[minConfidence]}
-                                onValueChange={(value) => setMinConfidence(value[0])}
+                                onValueChange={(value) => setInvestigationFormOptions({ minConfidence: value[0] })}
                                 disabled={isLoading}
                             />
                         </div>
                       </div>
                   </div>
 
-                  {error && (
-                    <Alert variant="destructive">
-                      <ErrorOutlineIcon className="h-4 w-4" />
-                      <AlertTitle>Erreur</AlertTitle>
-                      <AlertDescription>{error}</AlertDescription>
-                    </Alert>
-                  )}
+                  <div className="flex items-center justify-between pt-4 border-t">
+                      <div className="flex gap-2">
+                          <Button type="button" variant="outline" onClick={saveTemplate}>
+                              <SaveIcon className="h-4 w-4 mr-2" />
+                              Sauvegarder comme modèle
+                          </Button>
+                          <Select onValueChange={loadTemplate} value="">
+                              <SelectTrigger className="w-[200px]">
+                                  <SelectValue placeholder="Charger un modèle" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                  {templates.map(template => (
+                                      <SelectItem key={template} value={template}>
+                                          {template}
+                                      </SelectItem>
+                                  ))}
+                              </SelectContent>
+                          </Select>
+                      </div>
+                  </div>
 
                   <Button
                     type="submit"

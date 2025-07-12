@@ -13,13 +13,18 @@ class MaigretService {
 
   /**
    * Recherche des profils pour un username spécifique en appelant le microservice Maigret.
+   * @param {string} investigationId - L'ID de l'investigation.
+   * @param {object} usernameIndicator - L'indicateur de type USERNAME.
+   * @param {string} tags - Les tags pour filtrer la recherche (ex: 'gaming,social').
+   * @param {boolean} recursive - Activer la recherche récursive.
    */
-  async searchProfiles(investigationId, usernameIndicator) {
+  async searchProfiles(investigationId, usernameIndicator, tags = 'all', recursive = false) {
     const username = usernameIndicator.value;
     try {
-      logger.tool(this.toolName, investigationId, `Recherche de profils pour le username: ${username} via le microservice`);
+      const logMessage = `Recherche de profils pour ${username} (tags: ${tags}, récursif: ${recursive})`;
+      logger.tool(this.toolName, investigationId, logMessage);
 
-      const profiles = await this.executeMaigretCommand(username);
+      const profiles = await this.executeMaigretCommand(username, tags, recursive);
       
       // La logique de sauvegarde des résultats et de création de nouveaux indicateurs reste la même.
       const existingResult = await this.prisma.result.findFirst({

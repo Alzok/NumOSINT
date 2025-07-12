@@ -6,6 +6,8 @@ const morgan = require('morgan');
 const rateLimit = require('express-rate-limit');
 const { createServer } = require('http');
 const { Server } = require('socket.io');
+const swaggerJSDoc = require('swagger-jsdoc');
+const swaggerUi = require('swagger-ui-express');
 require('dotenv').config();
 
 const { PrismaClient } = require('@prisma/client');
@@ -22,6 +24,7 @@ const statisticsRoutes = require('./routes/statistics');
 const casesRoutes = require('./routes/cases.js');
 const reportRoutes = require('./routes/reports.js');
 const v1InvestigationRoutes = require('./routes/v1/investigations.js');
+const notificationRoutes = require('./routes/notifications.js');
 
 const app = express();
 const server = createServer(app);
@@ -83,6 +86,28 @@ app.use('/api/statistics', statisticsRoutes);
 app.use('/api/cases', casesRoutes);
 app.use('/api/reports', reportRoutes);
 app.use('/api/v1/investigations', v1InvestigationRoutes);
+app.use('/api/notifications', notificationRoutes(prisma, io));
+
+// Configuration Swagger
+const swaggerOptions = {
+  swaggerDefinition: {
+    openapi: '3.0.0',
+    info: {
+      title: 'NumOSINT API',
+      version: '1.0.0',
+      description: 'Documentation de l\'API pour la plateforme NumOSINT',
+      contact: {
+        name: 'Support NumOSINT'
+      },
+      servers: [{ url: `http://localhost:${PORT}` }]
+    }
+  },
+  apis: ['./src/routes/*.js']
+};
+
+const swaggerDocs = swaggerJSDoc(swaggerOptions);
+app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocs));
+
 
 // Route racine
 app.get('/', (req, res) => {
@@ -118,6 +143,9 @@ async function initializeApp() {
     // Test de connexion à la base de données
     await prisma.$connect();
     logger.info('✅ Connexion à PostgreSQL établie');
+
+    // Nettoyage des investigations en cours au démarrage
+    await cleanupOngoingInvestigations();
 
     // Initialisation de l'orchestrateur
     const orchestrator = await setupOrchestrator(prisma, io);
@@ -170,5 +198,40 @@ process.on('unhandledRejection', (reason, promise) => {
 
 // Démarrage de l'application
 initializeApp();
+
+/**
+ * Nettoie les investigations qui étaient en cours d'exécution lorsque le serveur s'est arrêté.
+ * Cela évite de relancer des analyses lourdes de manière inattendue au redémarrage.
+ */
+async function cleanupOngoingInvestigations() {
+  const activeStatuses = ['ENRICHING', 'SCANNING', 'CONSOLIDATING'];
+  try {
+    const investigationsToClean = await prisma.investigation.findMany({
+      where: {
+        status: { in: activeStatuses },
+      },
+    });
+
+    if (investigationsToClean.length > 0) {
+      logger.warn(`🧹 Nettoyage de ${investigationsToClean.length} investigation(s) 'zombie' trouvée(s) au démarrage.`);
+      
+      for (const inv of investigationsToClean) {
+        await prisma.investigation.update({
+          where: { id: inv.id },
+          data: {
+            status: 'FAILED',
+            currentStep: 'Interrompu par un redémarrage du serveur.',
+          },
+        });
+        logger.info(`   -> Investigation ${inv.id} marquée comme FAILED.`);
+      }
+    } else {
+      logger.info("✅ Aucune investigation 'zombie' à nettoyer. Démarrage propre.");
+    }
+  } catch (error) {
+    logger.error('❌ Erreur lors du nettoyage des investigations en cours:', error);
+    // On ne bloque pas le démarrage de l'application pour cette erreur
+  }
+}
 
 module.exports = { app, server, prisma };

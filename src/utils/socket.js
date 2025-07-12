@@ -28,6 +28,14 @@ function setupSocketIO(io) {
       });
     });
 
+    // Gestion des rooms par utilisateur pour les notifications
+    socket.on('join_user', (userId) => {
+      if (userId) {
+        socket.join(`user_${userId}`);
+        logger.socket('join_user', socket.id, { userId });
+      }
+    });
+
     socket.on('leave_investigation', (investigationId) => {
       socket.leave(investigationId);
       logger.socket('leave_investigation', socket.id, { investigationId });

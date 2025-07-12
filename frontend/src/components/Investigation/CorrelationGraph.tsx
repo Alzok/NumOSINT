@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect } from 'react';
 import ReactFlow, {
   MiniMap,
   Controls,
@@ -10,49 +10,44 @@ import ReactFlow, {
   Edge,
 } from 'reactflow';
 import 'reactflow/dist/style.css';
-import { investigationAPI } from '@/lib/investigation-api';
 import { toast } from "sonner";
 import { nodeTypes } from './GraphNodes';
+import { useInvestigationGraph } from '@/hooks/useInvestigationGraph';
+import { Skeleton } from '@/components/ui/skeleton';
 
 interface CorrelationGraphProps {
   investigationId: string;
 }
 
 const CorrelationGraph: React.FC<CorrelationGraphProps> = ({ investigationId }) => {
+  const { graphData, isLoading, error } = useInvestigationGraph(investigationId);
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
-  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    if (graphData) {
+      setNodes(graphData.nodes);
+      setEdges(graphData.edges);
+    }
+  }, [graphData, setNodes, setEdges]);
+
+  useEffect(() => {
+    if (error) {
+      toast.error(error);
+    }
+  }, [error]);
 
   const onConnect = useCallback(
     (params: Edge | Connection) => setEdges((eds) => addEdge(params, eds)),
     [setEdges],
   );
 
-  useEffect(() => {
-    const fetchGraphData = async () => {
-      setIsLoading(true);
-      try {
-        const response = await investigationAPI.getInvestigationGraph(investigationId);
-        if (response.data) {
-          setNodes(response.data.nodes || []);
-          setEdges(response.data.edges || []);
-        } else {
-          toast.error(response.error || "Impossible de charger les données du graphe.");
-        }
-      } catch (error) {
-        toast.error("Une erreur est survenue lors du chargement du graphe.");
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    if (investigationId) {
-      fetchGraphData();
-    }
-  }, [investigationId, setNodes, setEdges]);
-
   if (isLoading) {
-    return <div>Chargement du graphe...</div>;
+    return <Skeleton className="h-[70vh] w-full" />;
+  }
+
+  if (error) {
+    return <div className="text-red-500">Erreur: {error}</div>;
   }
 
   return (
@@ -65,6 +60,10 @@ const CorrelationGraph: React.FC<CorrelationGraphProps> = ({ investigationId }) 
         onConnect={onConnect}
         nodeTypes={nodeTypes}
         fitView
+        panOnScroll
+        zoomOnScroll
+        zoomOnDoubleClick
+        zoomOnPinch
       >
         <MiniMap />
         <Controls />

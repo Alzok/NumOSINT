@@ -32,6 +32,18 @@ import { Input } from "@/components/ui/input"
 import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 
+import { DataTableFacetedFilter } from "./ui/data-table-faceted-filter"
+
+interface FacetedFilterColumn<TData, TValue> {
+  id: string
+  title: string
+  options: {
+    label: string
+    value: string
+    icon?: React.ComponentType<{ className?: string }>
+  }[]
+}
+
 interface DataTableProps<TData, TValue> {
   columns: ColumnDef<TData, TValue>[]
   data: TData[]
@@ -42,6 +54,7 @@ interface DataTableProps<TData, TValue> {
   expanded?: ExpandedState
   onExpandedChange?: OnChangeFn<ExpandedState>
   showPagination?: boolean
+  facetedFilterColumns?: FacetedFilterColumn<TData, TValue>[]
 }
 
 export function DataTable<TData, TValue>({
@@ -54,6 +67,7 @@ export function DataTable<TData, TValue>({
   expanded,
   onExpandedChange,
   showPagination = true,
+  facetedFilterColumns = [],
 }: DataTableProps<TData, TValue>) {
   const [sorting, setSorting] = React.useState<SortingState>([])
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([])
@@ -88,19 +102,42 @@ export function DataTable<TData, TValue>({
     },
   })
 
+  const isFiltered = table.getState().columnFilters.length > 0
+
   return (
     <div className="space-y-4">
-      <div className="flex items-center">
-        {filterColumnId && (
-          <Input
-            placeholder={filterPlaceholder || "Filtrer..."}
-            value={(table.getColumn(filterColumnId)?.getFilterValue() as string) ?? ""}
-            onChange={(event) =>
-              table.getColumn(filterColumnId)?.setFilterValue(event.target.value)
-            }
-            className="max-w-sm"
-          />
-        )}
+      <div className="flex items-center justify-between">
+        <div className="flex flex-1 items-center space-x-2">
+          {filterColumnId && (
+            <Input
+              placeholder={filterPlaceholder || "Filtrer..."}
+              value={(table.getColumn(filterColumnId)?.getFilterValue() as string) ?? ""}
+              onChange={(event) =>
+                table.getColumn(filterColumnId)?.setFilterValue(event.target.value)
+              }
+              className="h-8 w-[150px] lg:w-[250px]"
+            />
+          )}
+          {facetedFilterColumns.map((col) => (
+            table.getColumn(col.id) && (
+              <DataTableFacetedFilter
+                key={col.id}
+                column={table.getColumn(col.id)}
+                title={col.title}
+                options={col.options}
+              />
+            )
+          ))}
+          {isFiltered && (
+            <Button
+              variant="ghost"
+              onClick={() => table.resetColumnFilters()}
+              className="h-8 px-2 lg:px-3"
+            >
+              Reset
+            </Button>
+          )}
+        </div>
       </div>
       <div className="rounded-md border">
         <Table>

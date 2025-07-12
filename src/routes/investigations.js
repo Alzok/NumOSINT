@@ -3,6 +3,7 @@ const { PrismaClient } = require('@prisma/client');
 const { InvestigationStatus } = require('@prisma/client');
 const logger = require('../utils/logger');
 const Joi = require('joi');
+const ResultTransformer = require('../utils/resultTransformer');
 
 const router = express.Router();
 const prisma = new PrismaClient();
@@ -16,7 +17,7 @@ const createInvestigationSchema = Joi.object({
   domains: Joi.array().items(Joi.string().domain()).optional(),
   ips: Joi.array().items(Joi.string().ip()).optional(),
   urls: Joi.array().items(Joi.string().uri()).optional(),
-  maxGeneration: Joi.number().integer().min(1).max(10).optional(),
+  maxGeneration: Joi.number().integer().min(1).max(20).optional(),
   minConfidence: Joi.number().min(0).max(1).optional()
 }).min(1);
 
@@ -27,8 +28,61 @@ const updateInvestigationSchema = Joi.object({
 });
 
 /**
- * GET /api/investigations
- * Récupère la liste des investigations
+ * @swagger
+ * tags:
+ *   name: Investigations
+ *   description: Gestion des investigations
+ */
+
+/**
+ * @swagger
+ * /api/investigations:
+ *   get:
+ *     summary: Récupère la liste des investigations
+ *     tags: [Investigations]
+ *     parameters:
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *           default: 1
+ *         description: Numéro de la page
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           default: 10
+ *         description: Nombre d'éléments par page
+ *       - in: query
+ *         name: status
+ *         schema:
+ *           type: string
+ *           enum: [INITIALIZING, ENRICHING, SCANNING, CONSOLIDATING, COMPLETED, FAILED, CANCELLED]
+ *         description: Filtrer par statut d'investigation
+ *       - in: query
+ *         name: search
+ *         schema:
+ *           type: string
+ *         description: Recherche par nom, email ou nom d'utilisateur
+ *       - in: query
+ *         name: sortBy
+ *         schema:
+ *           type: string
+ *           enum: [createdAt, updatedAt, status, progress]
+ *           default: createdAt
+ *         description: Champ de tri
+ *       - in: query
+ *         name: sortOrder
+ *         schema:
+ *           type: string
+ *           enum: [asc, desc]
+ *           default: desc
+ *         description: Ordre de tri
+ *     responses:
+ *       200:
+ *         description: Liste des investigations récupérée avec succès
+ *       500:
+ *         description: Erreur interne du serveur
  */
 router.get('/', async (req, res) => {
   try {
@@ -117,8 +171,25 @@ router.get('/', async (req, res) => {
 });
 
 /**
- * GET /api/investigations/:id
- * Récupère une investigation spécifique
+ * @swagger
+ * /api/investigations/{id}:
+ *   get:
+ *     summary: Récupère une investigation spécifique par son ID
+ *     tags: [Investigations]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: ID de l'investigation
+ *     responses:
+ *       200:
+ *         description: Investigation récupérée avec succès
+ *       404:
+ *         description: Investigation non trouvée
+ *       500:
+ *         description: Erreur interne du serveur
  */
 router.get('/:id', async (req, res) => {
   try {
@@ -171,8 +242,61 @@ router.get('/:id', async (req, res) => {
 });
 
 /**
- * POST /api/investigations
- * Crée une nouvelle investigation
+ * @swagger
+ * /api/investigations:
+ *   post:
+ *     summary: Crée une nouvelle investigation
+ *     tags: [Investigations]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               names:
+ *                 type: array
+ *                 items:
+ *                   type: string
+ *               emails:
+ *                 type: array
+ *                 items:
+ *                   type: string
+ *                   format: email
+ *               usernames:
+ *                 type: array
+ *                 items:
+ *                   type: string
+ *               phones:
+ *                 type: array
+ *                 items:
+ *                   type: string
+ *               domains:
+ *                 type: array
+ *                 items:
+ *                   type: string
+ *               ips:
+ *                 type: array
+ *                 items:
+ *                   type: string
+ *               urls:
+ *                 type: array
+ *                 items:
+ *                   type: string
+ *               maxGeneration:
+ *                 type: integer
+ *                 default: 3
+ *               minConfidence:
+ *                 type: number
+ *                 format: float
+ *                 default: 0.7
+ *     responses:
+ *       201:
+ *         description: Investigation créée avec succès
+ *       400:
+ *         description: Données invalides
+ *       500:
+ *         description: Erreur interne du serveur
  */
 router.post('/', async (req, res) => {
   try {
@@ -233,8 +357,41 @@ router.post('/', async (req, res) => {
 });
 
 /**
- * PUT /api/investigations/:id
- * Met à jour une investigation
+ * @swagger
+ * /api/investigations/{id}:
+ *   put:
+ *     summary: Met à jour une investigation existante
+ *     tags: [Investigations]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: ID de l'investigation
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               status:
+ *                 type: string
+ *                 enum: [INITIALIZING, ENRICHING, SCANNING, CONSOLIDATING, COMPLETED, FAILED, CANCELLED]
+ *               progress:
+ *                 type: integer
+ *               currentStep:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Investigation mise à jour avec succès
+ *       400:
+ *         description: Données invalides
+ *       404:
+ *         description: Investigation non trouvée
+ *       500:
+ *         description: Erreur interne du serveur
  */
 router.put('/:id', async (req, res) => {
   try {
@@ -292,8 +449,25 @@ router.put('/:id', async (req, res) => {
 });
 
 /**
- * DELETE /api/investigations/:id
- * Supprime une investigation
+ * @swagger
+ * /api/investigations/{id}:
+ *   delete:
+ *     summary: Supprime une investigation
+ *     tags: [Investigations]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: ID de l'investigation
+ *     responses:
+ *       200:
+ *         description: Investigation supprimée avec succès
+ *       404:
+ *         description: Investigation non trouvée
+ *       500:
+ *         description: Erreur interne du serveur
  */
 router.delete('/:id', async (req, res) => {
   try {
@@ -333,8 +507,27 @@ router.delete('/:id', async (req, res) => {
 });
 
 /**
- * POST /api/investigations/:id/start
- * Démarre une investigation
+ * @swagger
+ * /api/investigations/{id}/start:
+ *   post:
+ *     summary: Démarre une investigation
+ *     tags: [Investigations]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: ID de l'investigation
+ *     responses:
+ *       200:
+ *         description: Investigation démarrée avec succès
+ *       400:
+ *         description: Investigation déjà en cours
+ *       404:
+ *         description: Investigation non trouvée
+ *       500:
+ *         description: Erreur interne du serveur ou orchestrateur non disponible
  */
 router.post('/:id/start', async (req, res) => {
   try {
@@ -396,8 +589,23 @@ router.post('/:id/start', async (req, res) => {
 });
 
 /**
- * POST /api/investigations/:id/stop
- * Arrête une investigation en cours
+ * @swagger
+ * /api/investigations/{id}/stop:
+ *   post:
+ *     summary: Arrête une investigation en cours
+ *     tags: [Investigations]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: ID de l'investigation
+ *     responses:
+ *       202:
+ *         description: Demande d'arrêt acceptée
+ *       500:
+ *         description: Erreur interne du serveur ou orchestrateur non disponible
  */
 router.post('/:id/stop', async (req, res) => {
   try {
@@ -427,8 +635,39 @@ router.post('/:id/stop', async (req, res) => {
 });
 
 /**
- * GET /api/investigations/:id/results
- * Récupère les résultats d'une investigation
+ * @swagger
+ * /api/investigations/{id}/results:
+ *   get:
+ *     summary: Récupère les résultats d'une investigation
+ *     tags: [Investigations]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: ID de l'investigation
+ *       - in: query
+ *         name: tool
+ *         schema:
+ *           type: string
+ *         description: Filtrer les résultats par outil source
+ *       - in: query
+ *         name: type
+ *         schema:
+ *           type: string
+ *         description: Filtrer les résultats par type d'indicateur
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           default: 100
+ *         description: Nombre maximum de résultats à retourner
+ *     responses:
+ *       200:
+ *         description: Résultats récupérés avec succès
+ *       500:
+ *         description: Erreur interne du serveur
  */
 router.get('/:id/results', async (req, res) => {
   try {
@@ -475,8 +714,40 @@ router.get('/:id/results', async (req, res) => {
 });
 
 /**
- * GET /api/investigations/:id/logs
- * Récupère les logs d'une investigation
+ * @swagger
+ * /api/investigations/{id}/logs:
+ *   get:
+ *     summary: Récupère les logs d'une investigation
+ *     tags: [Investigations]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: ID de l'investigation
+ *       - in: query
+ *         name: step
+ *         schema:
+ *           type: string
+ *         description: Filtrer les logs par étape
+ *       - in: query
+ *         name: level
+ *         schema:
+ *           type: string
+ *           enum: [INFO, WARNING, ERROR, DEBUG]
+ *         description: Filtrer les logs par niveau
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           default: 100
+ *         description: Nombre maximum de logs à retourner
+ *     responses:
+ *       200:
+ *         description: Logs récupérés avec succès
+ *       500:
+ *         description: Erreur interne du serveur
  */
 router.get('/:id/logs', async (req, res) => {
   try {
@@ -516,6 +787,54 @@ router.get('/:id/logs', async (req, res) => {
     });
   }
 });
+
+/**
+ * @swagger
+ * /api/investigations/{id}/summary:
+ *   get:
+ *     summary: Récupère un résumé standardisé des résultats pour une investigation
+ *     tags: [Investigations]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: ID de l'investigation
+ *     responses:
+ *       200:
+ *         description: Résumé récupéré avec succès
+ *       500:
+ *         description: Erreur interne du serveur
+ */
+router.get('/:id/summary', async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const results = await prisma.result.findMany({
+      where: { investigationId: id },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    if (!results) {
+      return res.json({ summary: [] });
+    }
+
+    const summary = ResultTransformer.transform(results);
+
+    logger.database('SELECT', 'investigation_summary', { investigationId: id, count: summary.length });
+
+    res.json({ summary });
+
+  } catch (error) {
+    logger.error(`Erreur lors de la récupération du résumé pour l'investigation ${req.params.id}:`, error);
+    res.status(500).json({
+      error: 'Erreur interne du serveur',
+      message: error.message,
+    });
+  }
+});
+
 
 /**
  * Fonction utilitaire pour extraire les indicateurs initiaux

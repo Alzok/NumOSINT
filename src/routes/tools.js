@@ -4,8 +4,21 @@ const logger = require('../utils/logger');
 const router = express.Router();
 
 /**
- * GET /api/tools
- * Récupère la liste des outils disponibles
+ * @swagger
+ * tags:
+ *   name: Tools
+ *   description: Gestion et information des outils OSINT
+ */
+
+/**
+ * @swagger
+ * /api/tools:
+ *   get:
+ *     summary: Récupère la liste des outils disponibles
+ *     tags: [Tools]
+ *     responses:
+ *       200:
+ *         description: Une liste d'outils disponibles
  */
 router.get('/', (req, res) => {
   const tools = [
@@ -64,8 +77,22 @@ router.get('/', (req, res) => {
 });
 
 /**
- * GET /api/tools/:toolId
- * Récupère les informations détaillées d'un outil
+ * @swagger
+ * /api/tools/{toolId}:
+ *   get:
+ *     summary: Récupère les informations détaillées d'un outil
+ *     tags: [Tools]
+ *     parameters:
+ *       - in: path
+ *         name: toolId
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Informations détaillées de l'outil
+ *       404:
+ *         description: Outil non trouvé
  */
 router.get('/:toolId', (req, res) => {
   const { toolId } = req.params;
@@ -180,8 +207,33 @@ router.get('/:toolId', (req, res) => {
 });
 
 /**
- * POST /api/tools/:toolId/test
- * Teste un outil spécifique
+ * @swagger
+ * /api/tools/{toolId}/test:
+ *   post:
+ *     summary: Teste un outil spécifique
+ *     tags: [Tools]
+ *     parameters:
+ *       - in: path
+ *         name: toolId
+ *         required: true
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               testData:
+ *                 type: object
+ *     responses:
+ *       200:
+ *         description: Résultat du test de l'outil
+ *       404:
+ *         description: Outil non trouvé
+ *       500:
+ *         description: Erreur serveur
  */
 router.post('/:toolId/test', async (req, res) => {
   const { toolId } = req.params;
@@ -264,8 +316,22 @@ router.post('/:toolId/test', async (req, res) => {
 });
 
 /**
- * GET /api/tools/:toolId/status
- * Récupère le statut d'un outil
+ * @swagger
+ * /api/tools/{toolId}/status:
+ *   get:
+ *     summary: Récupère le statut d'un outil
+ *     tags: [Tools]
+ *     parameters:
+ *       - in: path
+ *         name: toolId
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Statut de l'outil
+ *       404:
+ *         description: Outil non trouvé
  */
 router.get('/:toolId/status', (req, res) => {
   const { toolId } = req.params;
@@ -325,8 +391,35 @@ router.get('/:toolId/status', (req, res) => {
 });
 
 /**
- * POST /api/tools/:toolId/configure
- * Configure un outil spécifique
+ * @swagger
+ * /api/tools/{toolId}/configure:
+ *   post:
+ *     summary: Configure un outil spécifique
+ *     tags: [Tools]
+ *     parameters:
+ *       - in: path
+ *         name: toolId
+ *         required: true
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               configuration:
+ *                 type: object
+ *     responses:
+ *       200:
+ *         description: Configuration de l'outil mise à jour
+ *       400:
+ *         description: Configuration invalide
+ *       404:
+ *         description: Outil non trouvé
+ *       500:
+ *         description: Erreur serveur
  */
 router.post('/:toolId/configure', (req, res) => {
   const { toolId } = req.params;
@@ -383,8 +476,34 @@ router.post('/:toolId/configure', (req, res) => {
 });
 
 /**
- * GET /api/tools/:toolId/logs
- * Récupère les logs d'un outil
+ * @swagger
+ * /api/tools/{toolId}/logs:
+ *   get:
+ *     summary: Récupère les logs d'un outil
+ *     tags: [Tools]
+ *     parameters:
+ *       - in: path
+ *         name: toolId
+ *         required: true
+ *         schema:
+ *           type: string
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           default: 50
+ *       - in: query
+ *         name: level
+ *         schema:
+ *           type: string
+ *           enum: [INFO, WARNING, ERROR]
+ *     responses:
+ *       200:
+ *         description: Logs de l'outil
+ *       404:
+ *         description: Outil non trouvé
+ *       500:
+ *         description: Erreur serveur
  */
 router.get('/:toolId/logs', (req, res) => {
   const { toolId } = req.params;
@@ -415,7 +534,7 @@ router.get('/:toolId/logs', (req, res) => {
       ],
       spiderfoot: [
         { timestamp: new Date().toISOString(), level: 'INFO', message: 'SpiderFoot en cours d\'exécution' },
-        { timestamp: new Date(Date.now() - 60000).toISOString(), level: 'INFO', message: 'Scan en cours - 45% terminé' },
+        { timestamp: new Date(Date.now() - 60000).toISOString(), level: 'INFO', message: 'Scan en cours - 45%' },
         { timestamp: new Date(Date.now() - 120000).toISOString(), level: 'INFO', message: '12 modules exécutés avec succès' }
       ]
     };

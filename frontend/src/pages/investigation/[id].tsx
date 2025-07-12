@@ -52,7 +52,7 @@ import PhoneAnalysisView from '@/components/Investigation/PhoneAnalysisView';
 import ComprehensiveReportView from '@/components/Investigation/ComprehensiveReportView';
 import RealTimeNotifications from '@/components/Investigation/RealTimeNotifications';
 import InvestigationReportView from '@/components/Investigation/InvestigationReportView';
-import InvestigationTimeline from '@/components/Investigation/InvestigationTimeline';
+import ModernInvestigationTimeline from '@/components/Investigation/ModernInvestigationTimeline';
 import WaybackResults from '@/components/Investigation/WaybackResults';
 import { SocialProfiles } from '@/components/Investigation/Buster/SocialProfiles';
 import { ReverseWhoisResults } from '@/components/Investigation/Buster/ReverseWhoisResults';
@@ -62,6 +62,7 @@ import DarkWebResults from '@/components/Investigation/DarkWebResults';
 import CorrelationGraph from '@/components/Investigation/CorrelationGraph';
 import IpAnalysisView from '@/components/Investigation/IpAnalysisView';
 import PersonProfileView from '@/components/Investigation/PersonProfileView';
+import { UnifiedResultsTable, ProofItem } from '@/components/Results/UnifiedResultsTable';
 
 interface Profile {
   siteName: string;
@@ -90,8 +91,28 @@ export default function InvestigationDetailPage() {
     deleteInvestigation,
   } = useInvestigation(investigationId);
   
-  const { addNotification } = useAppStore();
-  const [activeTab, setActiveTab] = useState('overview');
+  const { addToastNotification } = useAppStore();
+  const [activeTab, setActiveTab] = useState('summary'); // Onglet par défaut
+  const [summaryItems, setSummaryItems] = useState<ProofItem[]>([]);
+  const [summaryLoading, setSummaryLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchSummary = async () => {
+      if (!investigationId) return;
+      setSummaryLoading(true);
+      try {
+        const response = await investigationAPI.getInvestigationSummary(investigationId);
+        if (response.data) {
+          setSummaryItems(response.data.summary || []);
+        }
+      } catch (error) {
+        console.error("Failed to fetch investigation summary:", error);
+      } finally {
+        setSummaryLoading(false);
+      }
+    };
+    fetchSummary();
+  }, [investigationId]);
 
   const handleExport = async (format: 'pdf' | 'csv' | 'json') => {
     if (!investigationId) return;
@@ -433,9 +454,8 @@ export default function InvestigationDetailPage() {
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent>
-                    <DropdownMenuItem onClick={() => handleExport('pdf')}>PDF</DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => handleExport('csv')}>CSV</DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => handleExport('json')}>JSON</DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => handleExport('pdf')}>Exporter en PDF</DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => handleExport('csv')}>Exporter en CSV</DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
               </div>
@@ -443,10 +463,14 @@ export default function InvestigationDetailPage() {
           </div>
 
           <div className="px-4 lg:px-6">
-            <InvestigationTimeline
-              currentPhase={mapStatusToPhase(currentInvestigation.status)}
-              status={currentInvestigation.status}
-            />
+            <Card>
+              <CardHeader>
+                <CardTitle>Journal de l'investigation</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <ModernInvestigationTimeline logs={logs} />
+              </CardContent>
+            </Card>
           </div>
 
           {isAnalysisRunning && (
@@ -463,10 +487,11 @@ export default function InvestigationDetailPage() {
 
           <div className="px-4 lg:px-6">
             <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-              <TabsList className="grid w-full grid-cols-11">
+              <TabsList className="grid w-full grid-cols-12">
+                <TabsTrigger value="summary">Résumé ({summaryItems.length})</TabsTrigger>
                 <TabsTrigger value="overview">Vue d'ensemble</TabsTrigger>
                 <TabsTrigger value="indicators">Indicateurs ({indicators.length})</TabsTrigger>
-                <TabsTrigger value="results">Résultats ({results.length})</TabsTrigger>
+                <TabsTrigger value="results">Résultats Bruts ({results.length})</TabsTrigger>
                 <TabsTrigger value="email-analysis">
                   <Email className="h-4 w-4 mr-1" />
                   Emails ({emailResults.length})
@@ -517,6 +542,23 @@ export default function InvestigationDetailPage() {
                   Rapport
                 </TabsTrigger>
               </TabsList>
+
+              <TabsContent value="summary" className="space-y-4">
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Résumé des Données Trouvées</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    {summaryLoading ? (
+                      <div className="flex justify-center items-center h-48">
+                        <CircularProgress />
+                      </div>
+                    ) : (
+                      <UnifiedResultsTable items={summaryItems} />
+                    )}
+                  </CardContent>
+                </Card>
+              </TabsContent>
 
               <TabsContent value="overview" className="space-y-4">
                 <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">

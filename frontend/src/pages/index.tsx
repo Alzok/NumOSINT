@@ -1,14 +1,19 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
+import Link from 'next/link';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useInvestigation } from '@/hooks/useInvestigation';
+import { Investigation, InvestigationLog, investigationAPI } from '@/lib/investigation-api';
 import { useAppStore } from '@/lib/store';
+import AnimationOutlinedIcon from '@mui/icons-material/AnimationOutlined';
+import Silk from '@/components/ui/Backgrounds/Silk/Silk';
 
 import InvestigationForm from '@/components/Investigation/InvestigationForm';
 import SearchLogs from '@/components/Search/SearchLogs';
 import ActiveInvestigations from '@/components/Investigation/ActiveInvestigations';
 import RecentActivity from '@/components/Dashboard/RecentActivity';
+import InvestigationsChart from '@/components/Dashboard/InvestigationsChart';
 import ModernInvestigationTimeline from '@/components/Investigation/ModernInvestigationTimeline';
 import { mapStatusToPhase } from '@/lib/utils';
 
@@ -23,7 +28,9 @@ export default function DashboardPage() {
     startInvestigation
   } = useInvestigation();
   
-  const { addNotification } = useAppStore();
+  const { addToastNotification } = useAppStore();
+  const [timelineLogs, setTimelineLogs] = useState<InvestigationLog[]>([]);
+  const [timelineLoading, setTimelineLoading] = useState<boolean>(false);
 
   useEffect(() => {
     loadInvestigations();
@@ -45,6 +52,24 @@ export default function DashboardPage() {
     // Sinon, montrer la dernière investigation terminée
     investigationForTimeline = completedInvestigationsList.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0];
   }
+  
+  useEffect(() => {
+    if (investigationForTimeline) {
+      console.log("Investigation for timeline:", investigationForTimeline.id);
+      setTimelineLoading(true);
+      investigationAPI.getLogs(investigationForTimeline.id)
+        .then(response => {
+          console.log("Logs response:", response);
+          if (response.data && response.data.logs) {
+            setTimelineLogs(response.data.logs);
+          }
+        })
+        .finally(() => setTimelineLoading(false));
+    } else {
+      console.log("No investigation for timeline.");
+      setTimelineLogs([]);
+    }
+  }, [investigationForTimeline]);
 
   const totalIndicators = indicators.length;
   const totalResults = results.length;
@@ -52,17 +77,24 @@ export default function DashboardPage() {
   return (
         <div className="flex flex-col gap-4 py-4 md:gap-6 md:py-6">
             <div className="px-4 lg:px-6">
-              <Card>
-                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <CardTitle className="text-lg font-bold flex items-center gap-2">
-                      <svg focusable="false" aria-hidden="true" viewBox="0 0 24 24" className="h-6 w-6" fill="currentColor">
-                        <path d="M17 14c-.24-.24-.44-.49-.65-.75C17.51 11.5 19 8.56 19 5c0-1.95-.74-3-2-3-1.54 0-3.96 2.06-5 5.97C10.96 4.06 8.54 2 7 2 5.74 2 5 3.05 5 5c0 3.56 1.49 6.5 2.65 8.25-.21.26-.41.51-.65.75-.25.25-2 1.39-2 3.5C5 19.98 7.02 22 9.5 22c1.5 0 2.5-.5 2.5-.5s1 .5 2.5.5c2.48 0 4.5-2.02 4.5-4.5 0-2.11-1.75-3.25-2-3.5m-.12-9.97c.06.17.12.48.12.97 0 2.84-1.11 5.24-2.07 6.78-.38-.26-.83-.48-1.4-.62.24-4.52 2.44-6.83 3.35-7.13M7 5c0-.49.06-.8.12-.97.91.3 3.11 2.61 3.36 7.13-.58.14-1.03.35-1.4.62C8.11 10.24 7 7.84 7 5m7.5 15c-1 0-1.8-.33-2.22-.56.42-.18.72-.71.72-.94 0-.28-.45-.5-1-.5s-1 .22-1 .5c0 .23.3.76.72.94-.42.23-1.22.56-2.22.56C8.12 20 7 18.88 7 17.5c0-.7.43-1.24 1-1.73.44-.36.61-.52 1.3-1.37.76-.95 1.09-1.4 2.7-1.4s1.94.45 2.7 1.4c.69.85.86 1.01 1.3 1.37.57.49 1 1.03 1 1.73 0 1.38-1.12 2.5-2.5 2.5m-.5-4c0 .41-.22.75-.5.75s-.5-.34-.5-.75.22-.75.5-.75.5.34.5.75m-3 0c0 .41-.22.75-.5.75s-.5-.34-.5-.75.22-.75.5-.75.5.34.5.75"></path>
-                      </svg>
+                              <Card className="relative overflow-hidden">
+                  <CardHeader className="relative flex flex-row items-center justify-between space-y-0 pb-2 z-10">
+                    <CardTitle className="text-2xl font-bold flex items-center gap-2">
+                      <AnimationOutlinedIcon />
                       NumOSINT
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <div className="text-sm text-muted-foreground">Plateforme d'investigation numérique unifiée</div>
+                    <div className="absolute inset-0 overflow-hidden rounded-md">
+                      <Silk
+                        speed={4}
+                        scale={0.8}
+                        color="#6B6B6B"
+                        noiseIntensity={10}
+                        rotation={0}
+                      />
+                    </div>
+                    <div className="relative z-10 text-xl font-bold text-[#e5ee10]">Plateforme d'investigation numérique unifiée</div>
                   </CardContent>
                 </Card>
             </div>
@@ -88,11 +120,15 @@ export default function DashboardPage() {
                           </CardTitle>
                       </CardHeader>
                       <CardContent>
-                          <ModernInvestigationTimeline
-                              currentPhase={investigationForTimeline ? mapStatusToPhase(investigationForTimeline.status) : ''}
-                              status={investigationForTimeline ? investigationForTimeline.status : 'NONE'}
-                              createdAt={investigationForTimeline ? investigationForTimeline.createdAt : undefined}
-                          />
+                          {timelineLoading ? (
+                            <div className="flex justify-center items-center h-24">
+                              <p className="text-sm text-muted-foreground">Chargement de la timeline...</p>
+                            </div>
+                          ) : (
+                            <ModernInvestigationTimeline
+                                logs={timelineLogs}
+                            />
+                          )}
                       </CardContent>
                   </Card>
               </div>
@@ -107,51 +143,63 @@ export default function DashboardPage() {
               <RecentActivity />
             </div>
 
+            <div className="px-4 lg:px-6">
+                <InvestigationsChart />
+            </div>
+
             <div className="grid gap-4 px-4 md:grid-cols-2 md:gap-8 lg:grid-cols-4 lg:px-6">
-              <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">Investigations</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold">{totalInvestigations}</div>
-                  <p className="text-xs text-muted-foreground">
-                    {completedInvestigations} terminées, {runningInvestigations} en cours
-                  </p>
-                </CardContent>
-              </Card>
-              <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">Indicateurs</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold">{totalIndicators}</div>
-                  <p className="text-xs text-muted-foreground">
-                    Analysés
-                  </p>
-                </CardContent>
-              </Card>
-              <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">Résultats</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold">{totalResults}</div>
-                  <p className="text-xs text-muted-foreground">
-                    Trouvés
-                  </p>
-                </CardContent>
-              </Card>
-               <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">Taux de succès</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold">{totalInvestigations > 0 ? Math.round((completedInvestigations / totalInvestigations) * 100) : 0}%</div>
-                  <p className="text-xs text-muted-foreground">
-                    Basé sur les investigations terminées
-                  </p>
-                </CardContent>
-              </Card>
+              <Link href="/investigations?status=active">
+                <Card className="hover:bg-muted/50 transition-colors">
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium">Investigations en cours</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold">{runningInvestigations}</div>
+                    <p className="text-xs text-muted-foreground">
+                      Cliquez pour voir les détails
+                    </p>
+                  </CardContent>
+                </Card>
+              </Link>
+              <Link href="/investigations?status=completed">
+                <Card className="hover:bg-muted/50 transition-colors">
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium">Investigations terminées</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold">{completedInvestigations}</div>
+                    <p className="text-xs text-muted-foreground">
+                      {totalInvestigations > 0 ? `${Math.round((completedInvestigations / totalInvestigations) * 100)}% du total` : '0% du total'}
+                    </p>
+                  </CardContent>
+                </Card>
+              </Link>
+              <Link href="/investigations">
+                <Card className="hover:bg-muted/50 transition-colors">
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium">Toutes les investigations</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold">{totalInvestigations}</div>
+                    <p className="text-xs text-muted-foreground">
+                      Voir l'historique complet
+                    </p>
+                  </CardContent>
+                </Card>
+              </Link>
+              <Link href="/results">
+                <Card className="hover:bg-muted/50 transition-colors">
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium">Total des résultats</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold">{totalResults}</div>
+                    <p className="text-xs text-muted-foreground">
+                      Tous types confondus
+                    </p>
+                  </CardContent>
+                </Card>
+              </Link>
             </div>
         </div>
   );
