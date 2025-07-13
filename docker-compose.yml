@@ -60,6 +60,17 @@ services:
       - PDL_API_KEY=${PDL_API_KEY}
       - SPIDERFOOT_SERVICE_URL=${SPIDERFOOT_SERVICE_URL}
       - LOG_LEVEL=${LOG_LEVEL:-info}
+      # Clés API pour Mosint
+      - BREACH_DIRECTORY_API_KEY=${BREACH_DIRECTORY_API_KEY}
+      - EMAILREP_API_KEY=${EMAILREP_API_KEY}
+      - HUNTER_API_KEY=${HUNTER_API_KEY}
+      - INTELX_API_KEY=${INTELX_API_KEY}
+      - HAVEIBEENPWNED_API_KEY=${HAVEIBEENPWNED_API_KEY}
+      # Clés API pour SpiderFoot
+      - SPIDERFOOT_GOOGLE_API_KEY=${SPIDERFOOT_GOOGLE_API_KEY}
+      - SPIDERFOOT_GOOGLE_CSE_ID=${SPIDERFOOT_GOOGLE_CSE_ID}
+      - SPIDERFOOT_SHODAN_API_KEY=${SPIDERFOOT_SHODAN_API_KEY}
+      - SPIDERFOOT_VIRUSTOTAL_API_KEY=${SPIDERFOOT_VIRUSTOTAL_API_KEY}
     ports:
       - "${PORT:-5001}:${PORT:-5001}"
     volumes:
@@ -118,6 +129,12 @@ services:
       context: ./tools/mosint
       dockerfile: Dockerfile
     container_name: numosint_mosint_service
+    environment:
+      - BREACH_DIRECTORY_API_KEY=${BREACH_DIRECTORY_API_KEY}
+      - EMAILREP_API_KEY=${EMAILREP_API_KEY}
+      - HUNTER_API_KEY=${HUNTER_API_KEY}
+      - INTELX_API_KEY=${INTELX_API_KEY}
+      - HAVEIBEENPWNED_API_KEY=${HAVEIBEENPWNED_API_KEY}
     networks:
       - numosint_network
     restart: unless-stopped
@@ -146,6 +163,13 @@ services:
       context: ./tools/spiderfoot
       dockerfile: Dockerfile
     container_name: numosint_spiderfoot_service
+    environment:
+      - SPIDERFOOT_GOOGLE_API_KEY=${SPIDERFOOT_GOOGLE_API_KEY}
+      - SPIDERFOOT_GOOGLE_CSE_ID=${SPIDERFOOT_GOOGLE_CSE_ID}
+      - SPIDERFOOT_SHODAN_API_KEY=${SPIDERFOOT_SHODAN_API_KEY}
+      - SPIDERFOOT_VIRUSTOTAL_API_KEY=${SPIDERFOOT_VIRUSTOTAL_API_KEY}
+      - HAVEIBEENPWNED_API_KEY=${HAVEIBEENPWNED_API_KEY}
+      - HUNTER_API_KEY=${HUNTER_API_KEY}
     volumes:
       - ./tools/spiderfoot/config/sfconfig.py:/home/spiderfoot/sfconfig.py:ro
     networks:
@@ -177,7 +201,7 @@ services:
       dockerfile: Dockerfile
     container_name: numosint_frontend
     environment:
-      - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
+      - NEXT_PUBLIC_API_URL=http://backend:5001
     ports:
       - "3001:3000"
     volumes:

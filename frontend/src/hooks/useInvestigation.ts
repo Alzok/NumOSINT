@@ -33,7 +33,7 @@ export function useInvestigation(investigationId?: string) {
   const socketRef = useRef<Socket | null>(null);
 
   const {
-    addNotification,
+    addToastNotification: addNotification,
     setLoading,
     addSearchLog,
     clearSearchLogs,
@@ -268,9 +268,9 @@ export function useInvestigation(investigationId?: string) {
   const loadLogs = useCallback(async (id: string) => {
     try {
       const response = await investigationAPI.getLogs(id);
-      if (response.data) {
-        setLogs(response.data);
-        response.data.forEach(log => addSearchLog(`[${new Date(log.timestamp).toLocaleTimeString()}] ${log.message}`));
+      if (response.data && response.data.logs) {
+        setLogs(response.data.logs);
+        response.data.logs.forEach(log => addSearchLog(`[${new Date(log.timestamp).toLocaleTimeString()}] ${log.message}`));
       } else {
         setLogs([]);
       }

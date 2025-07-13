@@ -1,98 +1,98 @@
 'use client';
 
-import { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
+import { io, Socket } from 'socket.io-client';
+import { useAppStore } from '@/lib/store';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Button } from '@/components/ui/button';
+import { BellIcon } from 'lucide-react';
 import Link from 'next/link';
-import { Close, CheckCircleOutline, ErrorOutline, InfoOutlined, WarningAmber, DeleteSweep } from '@mui/icons-material';
-import { motion, AnimatePresence } from 'framer-motion';
-import { useAppStore, NotificationAction } from '@/lib/store';
 
-const NotificationActionButton = ({ action, onActionClick }: { action: NotificationAction, onActionClick: () => void }) => {
-  const commonClass = "px-2 py-1 text-xs rounded-md bg-white/20 hover:bg-white/30 transition-colors";
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5001';
 
-  if (action.href) {
-    return (
-      <Link href={action.href} passHref legacyBehavior>
-        <a onClick={onActionClick} className={commonClass}>
-          {action.label}
-        </a>
-      </Link>
-    );
-  }
+export function Notifications() {
+  const { notifications, setNotifications, addNotification } = useAppStore();
+  const [socket, setSocket] = useState<Socket | null>(null);
+  const unreadCount = notifications.filter(n => !n.read).length;
 
-  return (
-    <button onClick={onActionClick} className={commonClass}>
-      {action.label}
-    </button>
-  );
-};
+  useEffect(() => {
+    // Connexion au serveur Socket.IO
+    const newSocket = io(API_URL, {
+      transports: ['websocket'],
+    });
+    setSocket(newSocket);
 
+    // Rejoindre la room de l'utilisateur
+    // TODO: Remplacer 'static_user_id' par l'ID de l'utilisateur authentifié
+    newSocket.emit('join_user', 'static_user_id');
 
-export default function Notifications() {
-  const { notifications, removeNotification, clearNotifications } = useAppStore();
+    // Écouter les nouvelles notifications
+    newSocket.on('notification:new', (notification) => {
+      addNotification(notification);
+    });
 
-  const getIcon = (type: string) => {
-    switch (type) {
-      case 'success':
-        return <CheckCircleOutline className="h-5 w-5 text-green-500" />;
-      case 'error':
-        return <ErrorOutline className="h-5 w-5 text-red-500" />;
-      case 'warning':
-        return <WarningAmber className="h-5 w-5 text-yellow-500" />;
-      case 'info':
-      default:
-        return <InfoOutlined className="h-5 w-5 text-blue-500" />;
-    }
-  };
+    // Récupérer les notifications initiales
+    fetch(`${API_URL}/api/notifications`)
+      .then(res => res.json())
+      .then(data => setNotifications(data));
 
-  const getStyles = (type: string) => {
-    switch (type) {
-      case 'success':
-        return 'bg-green-50 border-green-200 text-green-800 dark:bg-green-900/20 dark:border-green-800 dark:text-green-200';
-      case 'error':
-        return 'bg-red-50 border-red-200 text-red-800 dark:bg-red-900/20 dark:border-red-800 dark:text-red-200';
-      case 'warning':
-        return 'bg-yellow-50 border-yellow-200 text-yellow-800 dark:bg-yellow-900/20 dark:border-yellow-800 dark:text-yellow-200';
-      case 'info':
-      default:
-        return 'bg-blue-50 border-blue-200 text-blue-800 dark:bg-blue-900/20 dark:border-blue-800 dark:text-blue-200';
-    }
+    return () => {
+      newSocket.off('notification:new');
+      newSocket.disconnect();
+    };
+  }, [addNotification, setNotifications]);
+
+  const handleMarkAsRead = async (id: string) => {
+    await fetch(`${API_URL}/api/notifications/mark-as-read`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ids: [id] }),
+    });
+    // Mettre à jour l'état local
+    setNotifications(notifications.map(n => n.id === id ? { ...n, read: true } : n));
   };
 
   return (
-    <div className="fixed top-4 right-4 z-50 space-y-2 max-w-sm w-full">
-      <AnimatePresence>
-        {notifications.length > 1 && (
-          <motion.div
-            layout
-            initial={{ opacity: 0, y: -20 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -20 }}
-            className={`rounded-lg border p-2 shadow-lg backdrop-blur-sm flex items-center justify-between text-sm ${getStyles('info')}`}
-          >
-            <span className="font-medium">
-              {notifications.length} notifications
+    <Popover>
+      <PopoverTrigger asChild>
+        <Button variant="ghost" size="icon" className="relative">
+          <BellIcon className="h-5 w-5" />
+          {unreadCount > 0 && (
+            <span className="absolute top-0 right-0 flex h-2 w-2">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500"></span>
             </span>
-            <button
-              onClick={clearNotifications}
-              className="p-1 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 transition-colors"
-              aria-label="Clear all notifications"
-            >
-              <DeleteSweep className="h-5 w-5" />
-            </button>
-          </motion.div>
-        )}
-      </AnimatePresence>
-      <AnimatePresence>
-        {notifications.map((notification) => (
-          <motion.div
-            key={notification.id}
-            layout
-            initial={{ opacity: 0, x: 300, scale: 0.3 }}
-            animate={{ opacity: 1, x: 0, scale: 1 }}
-            exit={{ opacity: 0, x: 300, scale: 0.5, transition: { duration: 0.2 } }}
-          >
-            <div className={`rounded-lg border p-4 shadow-lg backdrop-blur-sm ${getStyles(notification.type)}`}>
-              <div className="flex items-start space-x-3">
+          )}
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-80">
+        <div className="grid gap-4">
+          <div className="space-y-2">
+            <h4 className="font-medium leading-none">Notifications</h4>
+            <p className="text-sm text-muted-foreground">
+              Vous avez {unreadCount} notification(s) non lue(s).
+            </p>
+          </div>
+          <div className="grid gap-2">
+            {notifications.slice(0, 5).map((notification) => (
+              <div
+                key={notification.id}
+                className="grid grid-cols-[25px_1fr] items-start pb-4 last:mb-0 last:pb-0"
+              >
+                <span className={`flex h-2 w-2 translate-y-1 rounded-full ${!notification.read ? 'bg-sky-500' : ''}`} />
+                <div className="space-y-1">
+                  <p className="text-sm font-medium leading-none">
+                    {notification.message}
+                  </p>
+                  <p className="text-sm text-muted-foreground">
+                    {new Date(notification.createdAt).toLocaleString()}
+                  </p>
+                  {notification.link && (
+                    <Link href={notification.link} className="text-sm text-blue-500 hover:underline">
+                      Voir les détails
+                    </Link>
+                  )}
+                </div>
                 <div className="flex-shrink-0 mt-0.5">
                   {getIcon(notification.type)}
                 </div>

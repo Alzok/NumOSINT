@@ -64,5 +64,4 @@ data.json
 .Trashes
 ehthumbs.db
 Thumbs.db
-
-config.yaml
+.env

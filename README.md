@@ -137,8 +137,23 @@ Recherche d'URLs archivées via la Wayback Machine pour l'analyse historique.
 DATABASE_URL=postgresql://numosint:numosint_password@postgres:5432/numosint
 REDIS_URL=redis://redis:6379
 
-# Clé API People Data Labs (optionnelle mais recommandée)
+# ===== CLÉS API EXTERNES (optionnelles) =====
+
+# People Data Labs - Enrichissement de profils
 PDL_API_KEY=votre_clé_api_pdl_ici
+
+# Mosint - Analyse d'emails
+BREACH_DIRECTORY_API_KEY=votre_clé_breach_directory
+EMAILREP_API_KEY=votre_clé_emailrep
+HUNTER_API_KEY=votre_clé_hunter
+INTELX_API_KEY=votre_clé_intelx
+HAVEIBEENPWNED_API_KEY=votre_clé_hibp
+
+# SpiderFoot - Modules externes
+SPIDERFOOT_GOOGLE_API_KEY=votre_clé_google
+SPIDERFOOT_GOOGLE_CSE_ID=votre_google_cse_id
+SPIDERFOOT_SHODAN_API_KEY=votre_clé_shodan
+SPIDERFOOT_VIRUSTOTAL_API_KEY=votre_clé_virustotal
 ```
 
 ### 🎯 Accès à l'application
@@ -155,41 +170,65 @@ Une fois démarré, l'application sera disponible sur : **http://localhost:3001*
 
 ## 🔑 Configuration des Clés API
 
-Plusieurs outils intégrés peuvent utiliser des clés API pour étendre leurs capacités et fournir de meilleurs résultats. Voici comment les configurer :
+> 🎯 **Toutes les clés API sont maintenant centralisées dans le fichier `.env` !**
 
-### 1. Mosint
+Plusieurs outils intégrés peuvent utiliser des clés API pour étendre leurs capacités et fournir de meilleurs résultats. **Toutes les clés se configurent désormais dans le fichier `.env` à la racine du projet.**
 
-L'outil `mosint` peut utiliser plusieurs clés API pour enrichir les adresses e-mail. La configuration se fait dans le fichier [`tools/mosint/config.yaml`](tools/mosint/config.yaml).
+### 📧 Mosint - Analyse d'emails
+```env
+# Recherche de fuites de données
+BREACH_DIRECTORY_API_KEY=votre_clé_ici
+HAVEIBEENPWNED_API_KEY=votre_clé_ici
 
--   **Clés API générales :** Remplissez les champs `breach_directory_api_key`, `hunter_api_key`, etc., avec vos clés.
--   **Pour IntelX :**
-    -   Ajoutez votre clé dans le champ `intelx_api_key`.
-    -   Assurez-vous que le champ `intelx_host` correspond à votre type de licence :
-        -   Licence gratuite/trial : `https://free.intelx.io`
-        -   Licence commerciale : `https://api.intelx.io`
+# Recherche d'informations sur les emails
+HUNTER_API_KEY=votre_clé_ici
+EMAILREP_API_KEY=votre_clé_ici
 
-### 2. People Data Labs (PDL)
+# Intelligence X (remplacez par free.intelx.io pour version gratuite)
+INTELX_API_KEY=votre_clé_ici
+```
 
-Ce service est utilisé pour un enrichissement de données de haute qualité.
+### 🤵 People Data Labs - Enrichissement de profils
+```env
+# API premium pour enrichissement de données personnelles
+PDL_API_KEY=votre_clé_ici
+```
 
--   **Fichier de configuration :** [`.env`](.env)
--   **Instructions :** Dans le fichier `.env` à la racine du projet, ajoutez ou modifiez la ligne suivante en remplaçant `VOTRE_CLE_API_PDL_ICI` par votre clé :
-    ```env
-    PDL_API_KEY=VOTRE_CLE_API_PDL_ICI
-    ```
+### 🕷️ SpiderFoot - Framework OSINT avancé
+```env
+# Google Search
+SPIDERFOOT_GOOGLE_API_KEY=votre_clé_ici
+SPIDERFOOT_GOOGLE_CSE_ID=votre_cse_id
 
-### 3. SpiderFoot
+# Autres services populaires
+SPIDERFOOT_SHODAN_API_KEY=votre_clé_ici
+SPIDERFOOT_VIRUSTOTAL_API_KEY=votre_clé_ici
+```
 
-SpiderFoot est un framework d'automatisation OSINT très puissant avec des dizaines de modules configurables.
+### 🔧 Instructions
+1. **Ajoutez vos clés** dans le fichier `.env` à la racine du projet
+2. **Redémarrez les services** : `docker-compose restart`
+3. **Les outils utilisent automatiquement** les clés disponibles
 
--   **Fichier de configuration :** [`tools/spiderfoot/config/sfconfig.py`](tools/spiderfoot/config/sfconfig.py)
--   **Instructions :** Modifiez ce fichier pour ajouter les configurations des modules que vous souhaitez utiliser. Le fichier contient un exemple pour vous guider. Vous pouvez trouver la liste complète des modules et de leurs options dans la documentation officielle de SpiderFoot.
+ > **💡 Conseil :** Les clés non renseignées ne cassent pas l'application - les outils fonctionnent avec leurs capacités de base.
 
----
+### ✅ Avantages de cette approche centralisée
 
-Après toute modification de configuration :
-- **Modifications du fichier `.env`** : Redémarrer simplement avec `docker-compose restart`
-- **Modifications de `docker-compose.yml`** ou des fichiers de configuration des outils : Rebuilder avec `docker-compose up -d --build`
+- **🔒 Sécurité** : Toutes les clés dans un seul fichier `.env` (déjà dans `.gitignore`)
+- **🎯 Simplicité** : Une seule configuration à gérer
+- **🔄 Cohérence** : Même approche pour tous les services
+- **⚡ Rapidité** : Modification et redémarrage en 2 commandes
+
+### 🔄 Comment appliquer vos modifications
+
+```bash
+# 1. Modifiez votre fichier .env avec vos clés API
+# 2. Redémarrez les services concernés
+docker-compose restart mosint-service spiderfoot-service backend
+
+# Ou redémarrage complet si vous préférez
+docker-compose restart
+```
 
 ---
 
@@ -305,8 +344,10 @@ Certains outils nécessitent des clés API pour fonctionner. Si une clé n'est p
 - `PDL_API_KEY`: Votre clé API pour le service People Data Labs.
 - `SPIDERFOOT_USERNAME` / `SPIDERFOOT_PASSWORD`: Identifiants pour l'API de SpiderFoot si vous l'avez sécurisée.
 
-### Exemple de fichier .env
+### Exemple de fichier .env complet
 ```env
+# ===== CONFIGURATION DE BASE =====
+
 # PostgreSQL Database Configuration
 POSTGRES_DB=numosint
 POSTGRES_USER=numosint
@@ -318,9 +359,6 @@ DATABASE_URL=postgresql://numosint:numosint_password@postgres:5432/numosint
 # Redis Configuration
 REDIS_URL=redis://redis:6379
 
-# External API Keys
-PDL_API_KEY=votre_clé_api_pdl_ici
-
 # Application Configuration
 NODE_ENV=production
 PORT=5001
@@ -328,6 +366,35 @@ LOG_LEVEL=info
 
 # Frontend Configuration
 NEXT_PUBLIC_API_URL=http://localhost:5001
+
+# ===== CLÉS API EXTERNES (optionnelles) =====
+
+# People Data Labs - Enrichissement de profils
+PDL_API_KEY=votre_clé_api_pdl_ici
+
+# Mosint - Analyse d'emails
+BREACH_DIRECTORY_API_KEY=votre_clé_breach_directory
+EMAILREP_API_KEY=votre_clé_emailrep
+HUNTER_API_KEY=votre_clé_hunter
+INTELX_API_KEY=votre_clé_intelx
+HAVEIBEENPWNED_API_KEY=votre_clé_hibp
+
+# SpiderFoot - Framework OSINT
+SPIDERFOOT_GOOGLE_API_KEY=votre_clé_google
+SPIDERFOOT_GOOGLE_CSE_ID=votre_google_cse_id
+SPIDERFOOT_SHODAN_API_KEY=votre_clé_shodan
+SPIDERFOOT_VIRUSTOTAL_API_KEY=votre_clé_virustotal
+
+# ===== URLS DE SERVICES =====
+
+# Service URLs (communication inter-conteneurs Docker)
+MAIGRET_SERVICE_URL=http://maigret-service:5002
+BUSTER_SERVICE_URL=http://buster-service:5003
+MOSINT_SERVICE_URL=http://mosint-service:5004
+PHONEINFOGA_SERVICE_URL=http://phoneinfoga-service:5005
+ASN_SERVICE_URL=http://asn-service:5008
+WAU_SERVICE_URL=http://wau-service:8080
+WAYBULK_SERVICE_URL=http://waybulk-service:5004
 ```
 
 > **⚠️ Important :** Assurez-vous d'ajouter votre clé API People Data Labs dans le fichier `.env` avant de démarrer l'application avec `docker-compose up`.

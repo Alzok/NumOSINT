@@ -60,7 +60,8 @@ export interface ApiResponse<T> {
 
 export interface NotificationAction {
   label: string;
-  onClick: () => void;
+  onClick?: () => void;
+  href?: string;
 }
 
 export interface ToastNotification {

@@ -1,0 +1,12 @@
+# Config file for github.com/alpkeskin/mosint
+# Toutes les clés API sont maintenant configurées via les variables d'environnement
+# Configurez vos clés dans le fichier .env à la 93b4a5ba9298c1bc122d21ec171dd69deach_directory_api_key: "${BREACH_DIRECTORY_API_KEY}"
+  breach_directory_api_key: "${BREACH_DIRECTORY_API_KEY}"
+  emailrep_api_key: "${EMAILREP_API_KEY}"
+  hunter_api_key: "${HUNTER_API_KEY}"
+  intelx_api_key: "${INTELX_API_KEY}"
+  haveibeenpwned_api_key: "${HAVEIBEENPWNED_API_KEY}"
+
+settings:
+  intelx_max_results: 20
+  intelx_host: "https://api.intelx.io" # Utilisez https://free.intelx.io pour la version gratuite
