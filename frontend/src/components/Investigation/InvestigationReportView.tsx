@@ -1,10 +1,11 @@
 'use client';
 
 import React, { useMemo } from 'react';
-import { Investigation, Result, Indicator } from '@/lib/investigation-api';
+import { Investigation, Result, Indicator } from '@/types';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Person, Email, Phone as PhoneIcon, LocationOn, Link as MuiLink, Language, Image } from '@mui/icons-material';
+import { Person, Email, Phone as PhoneIcon, LocationOn, Link as MuiLink, Language } from '@mui/icons-material';
+import Image from 'next/image';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Carousel, CarouselContent, CarouselItem, CarouselNext, CarouselPrevious } from '@/components/ui/carousel';
 
@@ -128,7 +129,7 @@ const InvestigationReportView: React.FC<InvestigationReportViewProps> = ({
         </CardHeader>
         <CardContent>
           <p className="text-muted-foreground">
-            Ce rapport consolide toutes les informations collectées lors de l'investigation sur{" "}
+            Ce rapport consolide toutes les informations collectées lors de l&apos;investigation sur{" "}
             <span className="font-semibold text-primary">{getPrimaryTarget()}</span>.
           </p>
         </CardContent>
@@ -158,8 +159,8 @@ const InvestigationReportView: React.FC<InvestigationReportViewProps> = ({
                   <CarouselContent>
                     {imageUrls.map((url, index) => (
                       <CarouselItem key={index}>
-                        <div className="p-1">
-                          <img src={url} alt={`Image associée ${index + 1}`} className="rounded-lg object-cover w-full h-48" />
+                        <div className="p-1 relative w-full h-48">
+                          <Image src={url} alt={`Image associée ${index + 1}`} layout="fill" objectFit="cover" className="rounded-lg" />
                         </div>
                       </CarouselItem>
                     ))}
@@ -183,7 +184,7 @@ const InvestigationReportView: React.FC<InvestigationReportViewProps> = ({
                   <TableHeader>
                     <TableRow>
                       <TableHead>Plateforme</TableHead>
-                      <TableHead>Nom d'utilisateur</TableHead>
+                      <TableHead>Nom d&apos;utilisateur</TableHead>
                       <TableHead>Catégorie</TableHead>
                       <TableHead>Lien</TableHead>
                     </TableRow>

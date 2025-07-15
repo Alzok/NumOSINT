@@ -1,6 +1,7 @@
 const express = require('express');
 const logger = require('../utils/logger');
 const NotificationService = require('../services/notificationService');
+const protect = require('../middlewares/auth');
 
 /**
  * @swagger
@@ -12,12 +13,8 @@ function createNotificationRoutes(prisma, io) {
   const router = express.Router();
   const notificationService = new NotificationService(prisma, io);
 
-  // Middleware pour simuler un utilisateur authentifié
-  // TODO: Remplacer par une vraie authentification
-  const fakeAuth = (req, res, next) => {
-    req.userId = 'static_user_id';
-    next();
-  };
+  // Toutes les routes de notification sont maintenant protégées
+  router.use(protect);
 
   /**
    * @swagger
@@ -30,20 +27,27 @@ function createNotificationRoutes(prisma, io) {
    *         name: unread
    *         schema:
    *           type: boolean
-   *         description: 'true' pour ne récupérer que les non lues.
+   *         description: "Si 'true', ne retourne que les notifications non lues."
    *     responses:
    *       200:
    *         description: Liste des notifications
    *       500:
    *         description: Erreur serveur
    */
-  router.get('/', fakeAuth, async (req, res) => {
+  router.get('/', async (req, res) => {
+    logger.debug(`[Notif Route] GET / avec userId: ${req.user.id}`);
     try {
       const unreadOnly = req.query.unread === 'true';
-      const notifications = await notificationService.getNotifications(req.userId, unreadOnly);
+      logger.debug(`[Notif Route] Appel de notificationService.getNotifications avec unreadOnly: ${unreadOnly}`);
+      const notifications = await notificationService.getNotifications(req.user.id, unreadOnly);
+      logger.debug(`[Notif Route] Succès. ${notifications.length} notifications trouvées.`);
       res.json(notifications);
     } catch (error) {
-      logger.error("Erreur API - GET /notifications:", error);
+      logger.error("Erreur API - GET /notifications:", {
+        message: error.message,
+        stack: error.stack,
+        details: error
+      });
       res.status(500).json({ error: "Impossible de récupérer les notifications." });
     }
   });
@@ -65,6 +69,7 @@ function createNotificationRoutes(prisma, io) {
    *                 type: array
    *                 items:
    *                   type: string
+   *                 description: "Un tableau d'IDs de notifications à marquer comme lues."
    *     responses:
    *       200:
    *         description: Notifications marquées comme lues
@@ -73,14 +78,14 @@ function createNotificationRoutes(prisma, io) {
    *       500:
    *         description: Erreur serveur
    */
-  router.post('/mark-as-read', fakeAuth, async (req, res) => {
+  router.post('/mark-as-read', async (req, res) => {
     const { ids } = req.body;
     if (!ids || !Array.isArray(ids) || ids.length === 0) {
       return res.status(400).json({ error: "Le tableau 'ids' est requis." });
     }
 
     try {
-      const result = await notificationService.markAsRead(req.userId, ids);
+      const result = await notificationService.markAsRead(req.user.id, ids);
       res.json({ message: `${result.count} notification(s) marquée(s) comme lue(s).` });
     } catch (error) {
       logger.error("Erreur API - POST /notifications/mark-as-read:", error);
@@ -100,9 +105,9 @@ function createNotificationRoutes(prisma, io) {
    *       500:
    *         description: Erreur serveur
    */
-  router.post('/mark-all-as-read', fakeAuth, async (req, res) => {
+  router.post('/mark-all-as-read', async (req, res) => {
     try {
-      const result = await notificationService.markAllAsRead(req.userId);
+      const result = await notificationService.markAllAsRead(req.user.id);
       res.json({ message: `${result.count} notification(s) marquée(s) comme lue(s).` });
     } catch (error) {
       logger.error("Erreur API - POST /notifications/mark-all-as-read:", error);

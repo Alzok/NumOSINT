@@ -1,7 +1,7 @@
 'use client';
 
-import { Case } from '@/lib/investigation-api';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Case, Investigation, Result, Indicator } from '@/types';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 
 interface CaseSummaryViewProps {
@@ -10,26 +10,25 @@ interface CaseSummaryViewProps {
 
 export function CaseSummaryView({ caseDetails }: CaseSummaryViewProps) {
   // 1. Agréger les données
-  // 1. Agréger les données
   const totalInvestigations = caseDetails.investigations.length;
-  const allResults = caseDetails.investigations.flatMap(inv => inv.results || []);
+  const allResults = caseDetails.investigations.flatMap((inv: Investigation) => inv.results || []);
   const totalResults = allResults.length;
 
-  const investigationStatus = caseDetails.investigations.reduce((acc, inv) => {
+  const investigationStatus = caseDetails.investigations.reduce((acc: Record<string, number>, inv: Investigation) => {
     acc[inv.status] = (acc[inv.status] || 0) + 1;
     return acc;
-  }, {} as Record<string, number>);
+  }, {});
 
-  const resultsByTool = allResults.reduce((acc, result) => {
+  const resultsByTool = allResults.reduce((acc: Record<string, number>, result: Result) => {
     acc[result.toolSource] = (acc[result.toolSource] || 0) + 1;
     return acc;
-  }, {} as Record<string, number>);
+  }, {});
 
-  const allIndicators = caseDetails.investigations.flatMap(inv => inv.indicators || []);
-  const indicatorsByType = allIndicators.reduce((acc, indicator) => {
+  const allIndicators = caseDetails.investigations.flatMap((inv: Investigation) => inv.indicators || []);
+  const indicatorsByType = allIndicators.reduce((acc: Record<string, number>, indicator: Indicator) => {
     acc[indicator.type] = (acc[indicator.type] || 0) + 1;
     return acc;
-  }, {} as Record<string, number>);
+  }, {});
 
   const resultsByToolChartData = Object.entries(resultsByTool).map(([name, value]) => ({ name, value }));
   const indicatorsByTypeChartData = Object.entries(indicatorsByType).map(([name, value]) => ({ name, value }));
@@ -92,7 +91,10 @@ export function CaseSummaryView({ caseDetails }: CaseSummaryViewProps) {
 
       <Card>
         <CardHeader>
-          <CardTitle>Répartition par Type d'Indicateur</CardTitle>
+          <CardTitle>Indicateurs par Type</CardTitle>
+          <CardDescription>
+            Distribution des types d&apos;indicateurs collectés.
+          </CardDescription>
         </CardHeader>
         <CardContent>
           <ResponsiveContainer width="100%" height={300}>

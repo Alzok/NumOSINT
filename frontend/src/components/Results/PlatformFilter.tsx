@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo } from 'react';
-import { useAllResults, usePlatformFilter, useEmailFilter, useCategoryFilter, useAppActions } from '@/lib/store';
+import { useAllResults, usePlatformFilter, useEmailFilter, useCategoryFilter, useAppActions } from '@/lib/stores/searchSlice';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Label } from "@/components/ui/label"
 

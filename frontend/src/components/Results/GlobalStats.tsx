@@ -3,12 +3,12 @@
 import { useMemo } from 'react';
 import { PersonResult } from '@/types';
 import { PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer, RadarChart, PolarGrid, PolarAngleAxis, Radar, BarChart, Bar, XAxis, YAxis } from 'recharts';
-import { useAppActions } from '@/lib/store';
+import { useAppStore } from '@/lib/store';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { CATEGORY_COLORS } from '@/lib/utils';
 
 const CategoryPieChart = ({ data }: { data: { name: string, value: number }[] }) => {
-  const { setCategoryFilter } = useAppActions();
+  const setCategoryFilter = useAppStore((state) => state.setCategoryFilter);
   return (
     <ResponsiveContainer width="100%" height={250}>
       <PieChart>

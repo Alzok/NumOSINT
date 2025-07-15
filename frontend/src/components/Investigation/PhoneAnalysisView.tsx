@@ -296,7 +296,7 @@ const PhoneAnalysisView: React.FC<PhoneAnalysisViewProps> = ({ data, loading = f
               </AccordionItem>
 
               <AccordionItem value="carrier">
-                <AccordionTrigger>Informations de l'opérateur</AccordionTrigger>
+                <AccordionTrigger>Informations de l&apos;opérateur</AccordionTrigger>
                 <AccordionContent>
                   <div className="grid grid-cols-2 gap-4">
                     <div>

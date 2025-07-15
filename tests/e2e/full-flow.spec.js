@@ -2,27 +2,26 @@ const { test, expect } = require('@playwright/test');
 const fs = require('fs');
 const path = require('path');
 
-test.describe('Full Investigation Flow', () => {
+test.describe('Full Investigation Flow (Authenticated)', () => {
   test.setTimeout(180000); // 3 minutes timeout for the whole test
 
+  // This test now relies on the global setup for authentication.
+  // The user is already logged in.
   test('should allow creating an investigation, running it, creating a case, assigning it, and exporting a report', async ({ page }) => {
-    // 1. Go to the homepage and create a new investigation
-    await page.goto('/');
+    // 1. Go to the investigations page and create a new investigation
+    await page.goto('/investigations');
     
     // Wait for the form to be visible
     const emailInput = page.locator('input[placeholder="ex: jean.dupont@email.com"]');
     await emailInput.waitFor({ state: 'visible', timeout: 60000 });
-    await emailInput.fill('test@example.com');
+    await emailInput.fill('test-e2e-flow@example.com');
     const submitButton = page.locator('button:has-text("Lancer l\'investigation")');
     await submitButton.click();
     
     // Wait for the button to be disabled
     await expect(submitButton).toBeDisabled({ timeout: 60000 });
-
-    // Now go to the investigations page
-    await page.goto('/investigations');
     
-    const investigationCard = page.locator('text=test@example.com');
+    const investigationCard = page.locator('text=test-e2e-flow@example.com');
     await expect(investigationCard).toBeVisible();
 
     // 2. Go to the investigation page and start the analysis

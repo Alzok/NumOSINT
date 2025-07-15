@@ -10,10 +10,12 @@ const swaggerJSDoc = require('swagger-jsdoc');
 const swaggerUi = require('swagger-ui-express');
 require('dotenv').config();
 
-const { PrismaClient } = require('@prisma/client');
+const prisma = require('./utils/prisma');
 const logger = require('./utils/logger');
 const { setupSocketIO } = require('./utils/socket');
 const { setupOrchestrator } = require('./services/orchestrator');
+const errorHandler = require('./middlewares/errorHandler');
+const protect = require('./middlewares/auth');
 
 // Import des routes
 const investigationRoutes = require('./routes/investigations');
@@ -23,20 +25,17 @@ const resultsRoutes = require('./routes/results');
 const statisticsRoutes = require('./routes/statistics');
 const casesRoutes = require('./routes/cases.js');
 const reportRoutes = require('./routes/reports.js');
-const v1InvestigationRoutes = require('./routes/v1/investigations.js');
 const notificationRoutes = require('./routes/notifications.js');
+const authRoutes = require('./routes/auth.js');
 
 const app = express();
 const server = createServer(app);
 const io = new Server(server, {
   cors: {
-    origin: ["http://localhost:3001", "http://frontend:3001"],
+    origin: ["http://localhost:3001", "http://frontend:3001", "http://localhost:8081"],
     methods: ["GET", "POST"]
   }
 });
-
-// Initialisation Prisma
-const prisma = new PrismaClient();
 
 // Configuration de base
 const PORT = process.env.PORT || 5001;
@@ -67,7 +66,7 @@ app.use('/api/', limiter);
 // Middleware de base
 app.use(compression());
 app.use(cors({
-  origin: ["http://localhost:3001", "http://frontend:3001"],
+  origin: ["http://localhost:3001", "http://frontend:3001", "http://localhost:8081"],
   credentials: true
 }));
 app.use(morgan('combined', { stream: { write: message => logger.info(message.trim()) } }));
@@ -78,15 +77,17 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 setupSocketIO(io);
 
 // Routes
-app.use('/api/investigations', investigationRoutes);
-app.use('/api/tools', toolRoutes);
+app.use('/api/auth', authRoutes);
 app.use('/api/health', healthRoutes);
-app.use('/api/results', resultsRoutes);
-app.use('/api/statistics', statisticsRoutes);
-app.use('/api/cases', casesRoutes);
-app.use('/api/reports', reportRoutes);
-app.use('/api/v1/investigations', v1InvestigationRoutes);
-app.use('/api/notifications', notificationRoutes(prisma, io));
+
+// Protected Routes
+app.use('/api/investigations', protect, investigationRoutes);
+app.use('/api/tools', protect, toolRoutes);
+app.use('/api/results', protect, resultsRoutes);
+app.use('/api/statistics', protect, statisticsRoutes);
+app.use('/api/cases', protect, casesRoutes);
+app.use('/api/reports', protect, reportRoutes);
+app.use('/api/notifications', protect, notificationRoutes(prisma, io));
 
 // Configuration Swagger
 const swaggerOptions = {
@@ -128,14 +129,7 @@ app.use('*', (req, res) => {
 });
 
 // Middleware de gestion d'erreurs global
-app.use((err, req, res, next) => {
-  logger.error('Erreur non gérée:', err);
-  
-  res.status(err.status || 500).json({
-    error: NODE_ENV === 'production' ? 'Erreur interne du serveur' : err.message,
-    ...(NODE_ENV === 'development' && { stack: err.stack })
-  });
-});
+app.use(errorHandler);
 
 // Fonction d'initialisation
 async function initializeApp() {
@@ -196,8 +190,10 @@ process.on('unhandledRejection', (reason, promise) => {
   process.exit(1);
 });
 
-// Démarrage de l'application
-initializeApp();
+// Démarrage de l'application seulement si le fichier est exécuté directement
+if (require.main === module) {
+  initializeApp();
+}
 
 /**
  * Nettoie les investigations qui étaient en cours d'exécution lorsque le serveur s'est arrêté.
@@ -234,4 +230,4 @@ async function cleanupOngoingInvestigations() {
   }
 }
 
-module.exports = { app, server, prisma };
+module.exports = app;

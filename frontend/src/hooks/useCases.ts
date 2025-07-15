@@ -1,106 +1,63 @@
-import { useState, useCallback } from 'react';
-import { investigationAPI, Case } from '@/lib/investigation-api';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useSession } from 'next-auth/react';
+import { api } from '@/lib/api-client';
 import { useAppStore } from '@/lib/store';
+import { Case } from '@/types';
 
 export function useCases() {
-  const [cases, setCases] = useState<Case[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
-  const { addNotification } = useAppStore();
+  const { data: session } = useSession();
+  const token = session?.accessToken;
+  const queryClient = useQueryClient();
+  const { addToastNotification } = useAppStore();
 
-  const loadCases = useCallback(async () => {
-    setIsLoading(true);
-    try {
-      const response = await investigationAPI.getCases();
-      if (response.data) {
-        setCases(response.data);
-      } else {
-        addNotification({
-          type: 'error',
-          title: 'Erreur de chargement',
-          message: response.error || 'Impossible de charger les dossiers.',
-        });
+  const {
+    data: cases,
+    isLoading,
+    error,
+    refetch: refetchCases,
+  } = useQuery<Case[], Error>({
+    queryKey: ['cases', token],
+    queryFn: async () => {
+      if (!token) return [];
+      const response = await api.getCases(token);
+      if (response.error) {
+        throw new Error(response.error);
       }
-    } catch (error) {
-      addNotification({
-        type: 'error',
-        title: 'Erreur réseau',
-        message: 'Impossible de se connecter au serveur pour charger les dossiers.',
-      });
-    } finally {
-      setIsLoading(false);
-    }
-  }, [addNotification]);
+      return response.data || [];
+    },
+    enabled: !!token,
+  });
 
-  const createCase = useCallback(async (name: string, description: string, investigationIds: string[]) => {
-    setIsLoading(true);
-    try {
-      const response = await investigationAPI.createCase({ name, description, investigationIds });
-      if (response.data) {
-        addNotification({
-          type: 'success',
-          title: 'Dossier créé',
-          message: `Le dossier "${name}" a été créé avec succès.`,
-        });
-        await loadCases(); // Recharger la liste
-        return true;
-      } else {
-        addNotification({
-          type: 'error',
-          title: 'Erreur de création',
-          message: response.error || 'Impossible de créer le dossier.',
-        });
-        return false;
-      }
-    } catch (error) {
-      addNotification({
-        type: 'error',
-        title: 'Erreur réseau',
-        message: 'Impossible de se connecter au serveur pour créer le dossier.',
-      });
-      return false;
-    } finally {
-      setIsLoading(false);
-    }
-  }, [addNotification, loadCases]);
+  const createCaseMutation = useMutation({
+    mutationFn: (data: { name: string, description?: string }) => api.createCase(data, token),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['cases'] });
+      addToastNotification({ type: 'success', title: 'Dossier créé', message: 'Le nouveau dossier a été créé avec succès.' });
+    },
+    onError: (error) => {
+      addToastNotification({ type: 'error', title: 'Erreur de création', message: error.message });
+    },
+  });
 
-  const updateCaseInvestigations = useCallback(async (caseId: string, investigationIdsToConnect: string[], investigationIdsToDisconnect: string[]) => {
-    setIsLoading(true);
-    try {
-      const response = await investigationAPI.updateCaseInvestigations(caseId, { investigationIdsToConnect, investigationIdsToDisconnect });
-      if (response.data) {
-        addNotification({
-          type: 'success',
-          title: 'Dossier mis à jour',
-          message: 'Les investigations du dossier ont été mises à jour.',
-        });
-        await loadCases(); // Recharger la liste
-        return true;
-      } else {
-        addNotification({
-          type: 'error',
-          title: 'Erreur de mise à jour',
-          message: response.error || 'Impossible de mettre à jour le dossier.',
-        });
-        return false;
-      }
-    } catch (error) {
-      addNotification({
-        type: 'error',
-        title: 'Erreur réseau',
-        message: 'Impossible de se connecter au serveur pour mettre à jour le dossier.',
-      });
-      return false;
-    } finally {
-      setIsLoading(false);
-    }
-  }, [addNotification, loadCases]);
-
+  const updateCaseInvestigationsMutation = useMutation({
+    mutationFn: ({ caseId, investigationIdsToConnect, investigationIdsToDisconnect }: { caseId: string, investigationIdsToConnect?: string[], investigationIdsToDisconnect?: string[] }) =>
+      api.assignToCase(caseId, investigationIdsToConnect?.[0] ?? '', token), // Simplified for one investigation
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['cases'] });
+      queryClient.invalidateQueries({ queryKey: ['investigations'] }); // Also invalidate investigations
+      addToastNotification({ type: 'success', title: 'Assignation réussie', message: 'L\'investigation a été assignée.' });
+    },
+    onError: (error) => {
+      addToastNotification({ type: 'error', title: 'Erreur d\'assignation', message: error.message });
+    },
+  });
 
   return {
-    cases,
+    cases: cases || [],
     isLoading,
-    loadCases,
-    createCase,
-    updateCaseInvestigations,
+    error,
+    refetchCases,
+    createCase: createCaseMutation.mutateAsync,
+    updateCaseInvestigations: updateCaseInvestigationsMutation.mutateAsync,
   };
 }

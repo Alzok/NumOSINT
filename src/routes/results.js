@@ -1,10 +1,10 @@
 const express = require('express');
-const { PrismaClient } = require('@prisma/client');
+const prisma = require('../utils/prisma');
+const protect = require('../middlewares/auth');
 const logger = require('../utils/logger');
 const ResultTransformer = require('../utils/resultTransformer');
 
 const router = express.Router();
-const prisma = new PrismaClient();
 
 /**
  * @swagger
@@ -56,7 +56,7 @@ const prisma = new PrismaClient();
  *       500:
  *         description: Erreur serveur
  */
-router.get('/', async (req, res) => {
+router.get('/', protect, async (req, res) => {
   try {
     const { 
       page = 1, 
@@ -180,7 +180,7 @@ router.get('/', async (req, res) => {
  *       500:
  *         description: Erreur serveur
  */
-router.get('/grouped', async (req, res) => {
+router.get('/grouped', protect, async (req, res) => {
   try {
     const {
       page = 1,
@@ -297,7 +297,7 @@ router.get('/grouped', async (req, res) => {
  *       500:
  *         description: Erreur serveur
  */
-router.get('/recent', async (req, res) => {
+router.get('/recent', protect, async (req, res) => {
   try {
     const { limit = 10 } = req.query;
     const take = parseInt(limit);

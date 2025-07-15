@@ -1,49 +1,41 @@
-import { useState, useEffect, useCallback } from 'react';
-import { investigationAPI, Case } from '@/lib/investigation-api';
+import { useQuery } from '@tanstack/react-query';
+import { useSession } from 'next-auth/react';
+import { api } from '@/lib/api-client';
 import { useAppStore } from '@/lib/store';
+import { Case } from '@/types';
 
 export function useCase(caseId: string | undefined) {
-  const [caseDetails, setCaseDetails] = useState<Case | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const { addNotification } = useAppStore();
+  const { data: session } = useSession();
+  const token = session?.accessToken;
+  const { addToastNotification } = useAppStore();
 
-  const loadCase = useCallback(async () => {
-    if (!caseId) {
-        setError("Aucun ID de dossier fourni.");
-        setIsLoading(false);
-        return;
-    }
-
-    setIsLoading(true);
-    setError(null);
-    try {
-      const response = await investigationAPI.getCase(caseId);
-      if (response.data) {
-        setCaseDetails(response.data);
-      } else {
-        setCaseDetails(null);
-        const errorMessage = response.error || `Impossible de charger le dossier ${caseId}.`;
-        setError(errorMessage);
-        addNotification({ type: 'error', title: 'Erreur de chargement', message: errorMessage });
+  const {
+    data: caseDetails,
+    isLoading,
+    error,
+    refetch,
+  } = useQuery<Case | null, Error>({
+    queryKey: ['case', caseId, token],
+    queryFn: async () => {
+      if (!caseId || !token) return null;
+      const response = await api.getCase(caseId, token);
+      if (response.error) {
+        addToastNotification({
+          type: 'error',
+          title: 'Erreur de chargement',
+          message: response.error,
+        });
+        throw new Error(response.error);
       }
-    } catch (err) {
-        const errorMessage = 'Impossible de se connecter au serveur pour charger le dossier.';
-        setError(errorMessage);
-        addNotification({ type: 'error', title: 'Erreur réseau', message: errorMessage });
-    } finally {
-      setIsLoading(false);
-    }
-  }, [caseId, addNotification]);
-
-  useEffect(() => {
-    loadCase();
-  }, [loadCase]);
+      return response.data || null;
+    },
+    enabled: !!caseId && !!token,
+  });
 
   return {
     caseDetails,
     isLoading,
     error,
-    reloadCase: loadCase,
+    reloadCase: refetch,
   };
 }

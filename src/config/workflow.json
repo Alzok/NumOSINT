@@ -1,0 +1,74 @@
+{
+  "strategies": {
+    "EMAIL": {
+      "description": "Workflow optimisé pour un email comme point de départ.",
+      "phases": {
+        "enrichment": [
+          { "tool": "wauService", "condition": "indicator.unverified" },
+          { "tool": "mosintService" },
+          { "tool": "pdlService", "condition": "strategy.primary" }
+        ],
+        "scanning": [
+          { "tool": "spiderfootService" }
+        ]
+      }
+    },
+    "PHONE": {
+      "description": "Workflow optimisé pour un numéro de téléphone.",
+      "phases": {
+        "enrichment": [
+          { "tool": "phoneinfogaService" },
+          { "tool": "pdlService", "condition": "strategy.primary" }
+        ],
+        "scanning": []
+      }
+    },
+    "USERNAME": {
+      "description": "Workflow pour un nom d'utilisateur.",
+      "phases": {
+        "enrichment": [
+          { "tool": "maigretService" }
+        ],
+        "scanning": []
+      }
+    },
+    "DOMAIN": {
+        "description": "Workflow pour un nom de domaine.",
+        "phases": {
+            "enrichment": [
+                { "tool": "waybulkService" }
+            ],
+            "scanning": [
+                { "tool": "spiderfootService" }
+            ]
+        }
+    },
+    "NAME": {
+        "description": "Workflow pour un nom de personne.",
+        "phases": {
+            "enrichment": [
+                { "tool": "busterService" }
+            ],
+            "scanning": []
+        }
+    },
+    "IP": {
+        "description": "Workflow pour une adresse IP.",
+        "phases": {
+            "enrichment": [
+                { "tool": "asnService" }
+            ],
+            "scanning": []
+        }
+    },
+    "DEFAULT": {
+      "description": "Workflow par défaut si aucune stratégie spécifique ne correspond.",
+      "phases": {
+        "enrichment": [],
+        "scanning": [
+          { "tool": "spiderfootService" }
+        ]
+      }
+    }
+  }
+}

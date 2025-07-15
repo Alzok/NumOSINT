@@ -1,292 +1,63 @@
-const { PrismaClient } = require('@prisma/client');
+const axios = require('axios');
 const { IndicatorType } = require('@prisma/client');
 const logger = require('../../utils/logger');
-const axios = require('axios');
+const BaseToolService = require('./BaseToolService');
 
-const mosintServiceUrl = process.env.MOSINT_SERVICE_URL;
-
-class MosintService {
+class MosintService extends BaseToolService {
   constructor(prisma) {
-    this.prisma = prisma;
-    this.toolName = 'mosint';
+    super(prisma, 'mosint');
+    this.serviceUrl = process.env.MOSINT_SERVICE_URL;
+    if (!this.serviceUrl) {
+      throw new Error("La variable d'environnement MOSINT_SERVICE_URL est requise.");
+    }
+    this.axios = axios.create({
+      baseURL: this.serviceUrl,
+      timeout: 180000, // 3 minutes
+    });
   }
 
-  /**
-   * Analyse un email spécifique d'une investigation.
-   */
   async analyzeEmail(investigationId, emailIndicator) {
     const email = emailIndicator.value;
-    if (!mosintServiceUrl) {
-        logger.toolError(this.toolName, investigationId, "La variable d'environnement MOSINT_SERVICE_URL n'est pas définie.");
-        return;
-    }
-
     try {
-      logger.tool(this.toolName, investigationId, `Analyse de l'email: ${email}`);
-
-      const response = await axios.post(`${mosintServiceUrl}/scan`, { email }, {
-        timeout: 180000, // 3 minutes
-      });
-      
+      logger.info(`[${this.toolName}] Analyse de l'email: ${email}`);
+      const response = await this.axios.post('/scan', { email });
       const analysis = response.data;
 
-      // Vérification des doublons avant de sauvegarder les résultats
-      const existingResult = await this.prisma.result.findFirst({
-        where: {
-          investigationId,
-          indicatorId: emailIndicator.id,
-          toolSource: this.toolName,
-        }
-      });
+      await this._saveResult(investigationId, emailIndicator.id, analysis);
+      await this._addDiscoveredIndicators(investigationId, analysis, emailIndicator);
 
-      if (!existingResult) {
-        await this.prisma.result.create({
-          data: {
-            investigationId,
-            indicatorId: emailIndicator.id,
-            toolSource: this.toolName,
-            data: analysis,
-            score: this.calculateEmailScore(analysis),
-          },
-        });
-      } else {
-        logger.tool(this.toolName, investigationId, `Résultat déjà existant pour l'email ${email}. Pas de nouvelle sauvegarde.`);
-      }
-
-      // Ajout des nouveaux indicateurs découverts
-      await this.addDiscoveredIndicators(investigationId, analysis, emailIndicator);
-
-      logger.tool(this.toolName, investigationId, `Email ${email}: ${analysis.breaches?.length || 0} fuites, ${analysis.social_media?.length || 0} profils sociaux`);
-
+      logger.info(`[${this.toolName}] Email ${email}: ${analysis.breaches?.length || 0} fuites, ${analysis.social_media?.length || 0} profils sociaux.`);
     } catch (error) {
-      const errorMessage = error.response ? JSON.stringify(error.response.data) : error.message;
-      logger.toolError(this.toolName, investigationId, `Erreur lors de l'appel au service Mosint pour ${email}: ${errorMessage}`);
-      await this.prisma.result.create({
-        data: {
-          investigationId,
-          indicatorId: emailIndicator.id,
-          toolSource: this.toolName,
-          data: {
-            email,
-            error: `Erreur du service Mosint: ${errorMessage}`,
-          },
-          score: 0,
-        },
-      });
+      this._handleApiError(error, `analyser l'email ${email}`);
     }
   }
 
-  /**
-   * Calcule le score global d'un email basé sur les résultats de Mosint.
-   */
-  calculateEmailScore(analysis) {
-    let score = 0.1; // Score de base si l'analyse réussit
-
-    if (analysis.breaches && analysis.breaches.length > 0) {
-      score += 0.4;
-    }
-    if (analysis.social_media && analysis.social_media.length > 0) {
-      score += 0.3;
-    }
-    if (analysis.related_emails && analysis.related_emails.length > 0) {
-        score += 0.2;
-    }
-
-    return Math.min(score, 1.0);
-  }
-
-  /**
-   * Ajoute les indicateurs découverts à l'investigation.
-   */
-  async addDiscoveredIndicators(investigationId, analysis, parentIndicator) {
-    const indicators = [];
-    const newGeneration = parentIndicator.generation + 1;
+  async _addDiscoveredIndicators(investigationId, analysis, parentIndicator) {
+    const newIndicators = [];
 
     if (analysis.social_media) {
       for (const profile of analysis.social_media) {
         if (profile.url) {
-            indicators.push({
-                type: IndicatorType.URL,
-                value: profile.url,
-                source: this.toolName,
-                confidence: 0.7, // Confiance haute pour un profil social trouvé
-                generation: newGeneration,
-            });
+          newIndicators.push({
+            type: IndicatorType.URL,
+            value: profile.url,
+            confidence: 70,
+          });
         }
       }
     }
-    
+
     if (analysis.related_emails) {
-        for (const relEmail of analysis.related_emails) {
-            indicators.push({
-                type: IndicatorType.EMAIL,
-                value: relEmail,
-                source: this.toolName,
-                confidence: 0.8, // Confiance très haute pour un email relié
-                generation: newGeneration,
-            });
-        }
-    }
-
-    if (indicators.length > 0) {
-        const dataToCreate = indicators.map(ind => ({
-            ...ind,
-            investigationId,
-            verified: false,
-            processed: false,
-        }));
-
-        await this.prisma.indicator.createMany({
-            data: dataToCreate,
-            skipDuplicates: true,
+      for (const relEmail of analysis.related_emails) {
+        newIndicators.push({
+          type: IndicatorType.EMAIL,
+          value: relEmail,
+          confidence: 80,
         });
-    }
-  }
-
-  /**
-   * Recherche les fuites de données pour un email via HIBP.
-   */
-  async hibpLookup(investigationId, emailIndicator) {
-    const email = emailIndicator.value;
-    if (!mosintServiceUrl) {
-        logger.toolError(this.toolName, investigationId, "La variable d'environnement MOSINT_SERVICE_URL n'est pas définie.");
-        return;
-    }
-
-    try {
-      logger.tool(this.toolName, investigationId, `Recherche HIBP pour: ${email}`);
-      
-      const response = await axios.post(`${mosintServiceUrl}/hibp-lookup`, { email }, { timeout: 60000 });
-      const breaches = response.data;
-
-      if (breaches && breaches.length > 0) {
-        // On enrichit le résultat existant de l'analyse Mosint
-        const existingResult = await this.prisma.result.findFirst({
-          where: {
-            investigationId,
-            indicatorId: emailIndicator.id,
-            toolSource: this.toolName,
-          }
-        });
-
-        if (existingResult) {
-          const updatedData = { ...existingResult.data, hibp_breaches: breaches };
-          await this.prisma.result.update({
-            where: { id: existingResult.id },
-            data: { data: updatedData },
-          });
-        }
-        logger.tool(this.toolName, investigationId, `${breaches.length} fuite(s) HIBP trouvée(s) pour ${email}.`);
       }
-    } catch (error) {
-      const errorMessage = error.response ? JSON.stringify(error.response.data) : error.message;
-      logger.toolError(this.toolName, investigationId, `Erreur lors de la recherche HIBP pour ${email}: ${errorMessage}`);
-    }
-  }
-
-  /**
-   * Recherche les informations IP pour un email.
-   */
-  async ipLookup(investigationId, emailIndicator) {
-    const email = emailIndicator.value;
-    if (!mosintServiceUrl) {
-        logger.toolError(this.toolName, investigationId, "La variable d'environnement MOSINT_SERVICE_URL n'est pas définie.");
-        return;
     }
 
-    try {
-      logger.tool(this.toolName, investigationId, `Recherche IP pour: ${email}`);
-      
-      const response = await axios.post(`${mosintServiceUrl}/ip-lookup`, { email }, { timeout: 60000 });
-      const ipInfo = response.data;
-
-      if (ipInfo) {
-        const existingResult = await this.prisma.result.findFirst({
-          where: {
-            investigationId,
-            indicatorId: emailIndicator.id,
-            toolSource: this.toolName,
-          }
-        });
-
-        if (existingResult) {
-          const updatedData = { ...existingResult.data, ip_info: ipInfo };
-          await this.prisma.result.update({
-            where: { id: existingResult.id },
-            data: { data: updatedData },
-          });
-        }
-        logger.tool(this.toolName, investigationId, `Informations IP trouvées pour ${email}.`);
-      }
-    } catch (error) {
-      const errorMessage = error.response ? JSON.stringify(error.response.data) : error.message;
-      logger.toolError(this.toolName, investigationId, `Erreur lors de la recherche IP pour ${email}: ${errorMessage}`);
-    }
-  }
-
-  /**
-   * Recherche les liens associés à un email.
-   */
-  async linkSearch(investigationId, emailIndicator) {
-    const email = emailIndicator.value;
-    if (!mosintServiceUrl) {
-        logger.toolError(this.toolName, investigationId, "La variable d'environnement MOSINT_SERVICE_URL n'est pas définie.");
-        return;
-    }
-
-    try {
-      logger.tool(this.toolName, investigationId, `Recherche de liens pour: ${email}`);
-      
-      const response = await axios.post(`${mosintServiceUrl}/link-search`, { email }, { timeout: 120000 });
-      const links = response.data;
-
-      if (links && links.length > 0) {
-        const existingResult = await this.prisma.result.findFirst({
-          where: {
-            investigationId,
-            indicatorId: emailIndicator.id,
-            toolSource: this.toolName,
-          }
-        });
-
-        if (existingResult) {
-          const updatedData = { ...existingResult.data, google_links: links };
-          await this.prisma.result.update({
-            where: { id: existingResult.id },
-            data: { data: updatedData },
-          });
-        }
-        logger.tool(this.toolName, investigationId, `${links.length} lien(s) trouvé(s) pour ${email}.`);
-      }
-    } catch (error) {
-      const errorMessage = error.response ? JSON.stringify(error.response.data) : error.message;
-      logger.toolError(this.toolName, investigationId, `Erreur lors de la recherche de liens pour ${email}: ${errorMessage}`);
-    }
-  }
-
-  /**
-   * Teste la configuration de Mosint.
-   */
-  async testConfiguration() {
-    if (!mosintServiceUrl) {
-        return { status: 'error', message: "La variable d'environnement MOSINT_SERVICE_URL n'est pas définie." };
-    }
-    try {
-      // Le service mosint n'a pas de route /health, on teste avec une requête vide qui devrait échouer avec un 400
-      await axios.post(`${mosintServiceUrl}/scan`, {}, { timeout: 5000 });
-      // Si on arrive ici, c'est inattendu, mais le service répond
-      return { status: 'success', message: 'Le service Mosint est accessible.' };
-    } catch (error) {
-      if (error.response && error.response.status === 400) {
-        return { status: 'success', message: 'Le service Mosint est correctement configuré et répond.' };
-      }
-      logger.error('Erreur lors du test de configuration Mosint:', error.message);
-      return {
-        status: 'error',
-        message: 'Impossible de contacter le service Mosint.',
-        error: error.message,
-      };
-    }
+    await this._saveIndicators(investigationId, parentIndicator, newIndicators);
   }
 }
 

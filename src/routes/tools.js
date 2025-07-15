@@ -1,5 +1,6 @@
 const express = require('express');
 const logger = require('../utils/logger');
+const protect = require('../middlewares/auth');
 
 const router = express.Router();
 
@@ -20,7 +21,7 @@ const router = express.Router();
  *       200:
  *         description: Une liste d'outils disponibles
  */
-router.get('/', (req, res) => {
+router.get('/', protect, (req, res) => {
   const tools = [
     {
       id: 'buster',
@@ -94,7 +95,7 @@ router.get('/', (req, res) => {
  *       404:
  *         description: Outil non trouvé
  */
-router.get('/:toolId', (req, res) => {
+router.get('/:toolId', protect, (req, res) => {
   const { toolId } = req.params;
 
   const toolDetails = {
@@ -235,7 +236,7 @@ router.get('/:toolId', (req, res) => {
  *       500:
  *         description: Erreur serveur
  */
-router.post('/:toolId/test', async (req, res) => {
+router.post('/:toolId/test', protect, async (req, res) => {
   const { toolId } = req.params;
   const { testData } = req.body;
 
@@ -333,7 +334,7 @@ router.post('/:toolId/test', async (req, res) => {
  *       404:
  *         description: Outil non trouvé
  */
-router.get('/:toolId/status', (req, res) => {
+router.get('/:toolId/status', protect, (req, res) => {
   const { toolId } = req.params;
 
   const toolStatuses = {
@@ -421,7 +422,7 @@ router.get('/:toolId/status', (req, res) => {
  *       500:
  *         description: Erreur serveur
  */
-router.post('/:toolId/configure', (req, res) => {
+router.post('/:toolId/configure', protect, (req, res) => {
   const { toolId } = req.params;
   const { configuration } = req.body;
 
@@ -505,7 +506,7 @@ router.post('/:toolId/configure', (req, res) => {
  *       500:
  *         description: Erreur serveur
  */
-router.get('/:toolId/logs', (req, res) => {
+router.get('/:toolId/logs', protect, (req, res) => {
   const { toolId } = req.params;
   const { limit = 50, level } = req.query;
 

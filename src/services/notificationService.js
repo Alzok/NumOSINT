@@ -40,19 +40,27 @@ class NotificationService {
    * @param {boolean} [unreadOnly=false] - Si vrai, ne retourne que les notifications non lues.
    */
   async getNotifications(userId, unreadOnly = false) {
+    logger.debug(`[Notif Service] getNotifications pour userId: ${userId}, unreadOnly: ${unreadOnly}`);
     try {
       const where = { userId };
       if (unreadOnly) {
         where.read = false;
       }
-
-      return this.prisma.notification.findMany({
+      
+      logger.debug(`[Notif Service] Exécution de prisma.notification.findMany avec la condition:`, where);
+      const notifications = await this.prisma.notification.findMany({
         where,
         orderBy: { createdAt: 'desc' },
         take: 50, // Limite pour ne pas surcharger
       });
+      logger.debug(`[Notif Service] Prisma a retourné ${notifications.length} notifications.`);
+      return notifications;
     } catch (error) {
-      logger.error(`Erreur lors de la récupération des notifications pour l'utilisateur ${userId}:`, error);
+      logger.error(`Erreur dans getNotifications pour l'utilisateur ${userId}:`, {
+        message: error.message,
+        stack: error.stack,
+        details: error
+      });
       throw error;
     }
   }

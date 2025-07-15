@@ -13,6 +13,7 @@ const PdlService = require('./tools/pdl');
 const WauService = require('./tools/wau');
 const WaybulkService = require('./tools/waybulk');
 const NotificationService = require('./notificationService');
+const EnrichmentPhaseManager = require('./phases/EnrichmentPhaseManager');
 
 class OrchestratorService {
   constructor(prisma, io) {
@@ -22,15 +23,22 @@ class OrchestratorService {
     this.activeInvestigations = new Map();
     
     // Initialisation des services
-    this.busterService = new BusterService(prisma);
-    this.mosintService = new MosintService(prisma);
-    this.maigretService = new MaigretService(prisma);
-    this.phoneinfogaService = new PhoneInfogaService(prisma);
-    this.spiderfootService = new SpiderFootService(prisma);
-    this.asnService = new AsnService(prisma);
-    this.pdlService = new PdlService(prisma);
-    this.wauService = new WauService(prisma);
-    this.waybulkService = new WaybulkService(prisma);
+    const toolServices = {
+      busterService: new BusterService(prisma),
+      mosintService: new MosintService(prisma),
+      maigretService: new MaigretService(prisma),
+      phoneinfogaService: new PhoneInfogaService(prisma),
+      spiderfootService: new SpiderFootService(prisma),
+      asnService: new AsnService(prisma),
+      pdlService: new PdlService(prisma),
+      wauService: new WauService(prisma),
+      waybulkService: new WaybulkService(prisma),
+    };
+
+    this.spiderfootService = toolServices.spiderfootService;
+
+    // Initialisation des managers de phase
+    this.enrichmentManager = new EnrichmentPhaseManager(prisma, io, toolServices, this);
 
     // Écoute des événements globaux de l'application
     eventBus.on('tool:scan_completed', this.handleToolCompletion.bind(this));
@@ -41,8 +49,12 @@ class OrchestratorService {
    * Démarre et pilote le flux d'une investigation en fonction de sa phase.
    * C'est le routeur principal de la machine à états.
    */
-  async runInvestigationFlow(investigationId) {
+  async runInvestigationFlow(investigationId, userId) {
     try {
+      // Stocker le userId pour une utilisation ultérieure dans le flux
+      const activeInvestigation = this.activeInvestigations.get(investigationId) || {};
+      this.activeInvestigations.set(investigationId, { ...activeInvestigation, userId });
+
       let investigation = await this.prisma.investigation.findUnique({ where: { id: investigationId } });
       if (!investigation) {
         logger.error(`Investigation ${investigationId} non trouvée pour le démarrage du flux.`);
@@ -64,7 +76,7 @@ class OrchestratorService {
 
       switch (investigation.currentPhase) {
         case 'ENRICHMENT':
-          await this.runPhaseEnrichment(investigationId);
+          await this.enrichmentManager.run(investigationId);
           break;
         case 'SCANNING':
           await this.runPhaseScanning(investigationId);
@@ -80,12 +92,12 @@ class OrchestratorService {
       logger.error(`Erreur dans le flux principal de l'investigation ${investigationId}:`, error);
       await this.handleInvestigationError(investigationId, error);
     }
-    }
+  }
     
-    /**
-     * Gère les pulsations des outils longue durée pour montrer une progression.
-     */
-    async handleToolPulse(data) {
+  /**
+   * Gère les pulsations des outils longue durée pour montrer une progression.
+   */
+  async handleToolPulse(data) {
     const { investigationId, tool } = data;
     try {
       const investigation = await this.prisma.investigation.findUnique({
@@ -102,46 +114,6 @@ class OrchestratorService {
       }
     } catch (error) {
       logger.warn(`Impossible de traiter la pulsation pour l'investigation ${investigationId}:`, error);
-    }
-    }
-
-  /**
-   * PHASE 1: Enrichissement spécialisé ("Frappes Chirurgicales")
-   */
-  async runPhaseEnrichment(investigationId) {
-    await this.updateInvestigationStatus(investigationId, InvestigationStatus.ENRICHING, 5, 'enrichment_started');
-
-    // Déterminer la stratégie de workflow au début de la phase d'enrichissement
-    const strategy = await this._determineWorkflowStrategy(investigationId);
-    const activeInvestigation = this.activeInvestigations.get(investigationId) || {};
-    this.activeInvestigations.set(investigationId, { ...activeInvestigation, strategy });
-    await this.logStep(investigationId, 'strategy_determined', `Stratégie de workflow déterminée: Primaire=${strategy.primary}, Secondaires=${strategy.secondary.join(',') || 'aucune'}`);
-
-
-    while (true) {
-      if (this.isCancelled(investigationId)) {
-        logger.info(`[Enrichment] Annulation détectée pour l'investigation ${investigationId}. Arrêt de la phase.`);
-        await this.cancelInvestigation(investigationId);
-        return;
-      }
-
-      const indicator = await this.findNextSpecializedIndicator(investigationId);
-
-      if (indicator) {
-        await this.prisma.indicator.update({
-          where: { id: indicator.id },
-          data: { processed: true },
-        });
-
-        await this.dispatchForEnrichment(indicator, strategy);
-        await this.updateProgress(investigationId, 5, 70);
-      } else {
-        // Plus d'indicateurs à enrichir, la phase est terminée.
-        logger.info(`Phase d'enrichissement terminée pour ${investigationId}. Passage au scanning.`);
-        await this.updateInvestigationPhase(investigationId, 'SCANNING');
-        this.runInvestigationFlow(investigationId);
-        break; // Sortir de la boucle while
-      }
     }
   }
 
@@ -213,125 +185,6 @@ class OrchestratorService {
     }
   }
 
-  async dispatchForEnrichment(indicator, strategy) {
-    const { investigationId, type } = indicator;
-    const toolName = this.getToolForIndicator(type);
-    await this.logStep(investigationId, 'enrichment_dispatch', `Traitement de l'indicateur ${type} '${indicator.value}' avec ${toolName || 'plusieurs outils'}.`);
-
-    try {
-      switch (type) {
-        case IndicatorType.NAME:
-          await this._enrichName(investigationId, indicator, strategy);
-          break;
-        case IndicatorType.EMAIL:
-          await this._enrichEmail(investigationId, indicator, strategy);
-          break;
-        case IndicatorType.USERNAME:
-          await this._enrichUsername(investigationId, indicator, strategy);
-          break;
-        case IndicatorType.PHONE:
-          await this._enrichPhone(investigationId, indicator, strategy);
-          break;
-        case IndicatorType.DOMAIN:
-          await this._enrichDomain(investigationId, indicator, strategy);
-          break;
-        case IndicatorType.IP:
-          await this._enrichIp(investigationId, indicator, strategy);
-          break;
-        default:
-          logger.warn(`Type d'indicateur non traité en phase d'enrichissement: ${type}`);
-      }
-    } catch (error) {
-        logger.error(`Erreur lors du dispatch de l'indicateur ${indicator.id} pour enrichissement. L'investigation va être marquée comme échouée.`, error);
-        await this.handleInvestigationError(investigationId, error);
-    }
-  }
-
-  async _enrichName(investigationId, indicator, strategy) {
-    // Workflow "Nom" : On lance Buster pour générer des emails en se basant sur les domaines connus.
-    // Le service Buster récupère lui-même les domaines de l'investigation.
-    await this._runToolWithRetry(this.busterService.generateEmails.bind(this.busterService), investigationId, indicator);
-  }
-
-  async _enrichEmail(investigationId, indicator, strategy) {
-    // La validation avec WAU est toujours une priorité.
-    if (!indicator.verified) {
-      await this._runToolWithRetry(this.wauService.validateEmail.bind(this.wauService), investigationId, indicator);
-      const updatedIndicator = await this.prisma.indicator.findUnique({ where: { id: indicator.id } });
-      if (!updatedIndicator.verified) {
-        await this.logStep(investigationId, 'enrichment_stopped', `Arrêt du traitement pour l'email non vérifié: ${indicator.value}`, 'INFO');
-        return;
-      }
-    }
-    
-    // Mosint est toujours lancé pour un email validé.
-    await this._runToolWithRetry(this.mosintService.analyzeEmail.bind(this.mosintService), investigationId, indicator);
-
-    // Si l'email est la stratégie primaire, on lance les outils d'enrichissement avancés.
-    if (strategy.primary === 'EMAIL') {
-        await this._runToolWithRetry(this.pdlService.enrichEmail.bind(this.pdlService), investigationId, indicator);
-    }
-  }
-
-  async _enrichUsername(investigationId, indicator, strategy) {
-    // Si le pseudo est la stratégie primaire, recherche complète.
-    if (strategy.primary === 'USERNAME') {
-        await this._runToolWithRetry(this.maigretService.searchProfiles.bind(this.maigretService), investigationId, indicator, 'all', false);
-    } else {
-        // Sinon, recherche rapide sur les sites les plus populaires (stratégie secondaire).
-        // Note: Maigret ne supporte pas de "top 10", on utilise les tags par défaut qui sont déjà une sélection.
-        await this._runToolWithRetry(this.maigretService.searchProfiles.bind(this.maigretService), investigationId, indicator, 'all', false);
-    }
-  }
-
-  async _enrichPhone(investigationId, indicator, strategy) {
-    // PhoneInfoga est toujours lancé pour un numéro de téléphone.
-    await this._runToolWithRetry(this.phoneinfogaService.analyzePhone.bind(this.phoneinfogaService), investigationId, indicator);
-    // Si le téléphone est la stratégie primaire, on lance l'enrichissement avancé.
-    if (strategy.primary === 'PHONE') {
-        await this._runToolWithRetry(this.pdlService.enrichPhone.bind(this.pdlService), investigationId, indicator);
-    }
-  }
-
-  async _enrichDomain(investigationId, indicator, strategy) {
-    // Waybulk et Spiderfoot ne sont lancés que si le domaine est la stratégie primaire.
-    if (strategy.primary === 'DOMAIN') {
-        await this._runToolWithRetry(this.waybulkService.lookupDomain.bind(this.waybulkService), investigationId, indicator);
-        // Note: Spiderfoot est maintenant lancé dans sa propre phase, donc on ne l'appelle plus ici.
-    }
-  }
-
-  async _enrichIp(investigationId, indicator, strategy) {
-    await this._runToolWithRetry(this.asnService.lookupIp.bind(this.asnService), investigationId, indicator, strategy);
-  }
-
-  /**
-   * Détermine la stratégie de workflow basée sur les indicateurs initiaux.
-   */
-  async _determineWorkflowStrategy(investigationId) {
-    const initialIndicators = await this.prisma.indicator.findMany({
-      where: {
-        investigationId,
-        generation: 0,
-      },
-    });
-
-    const initialTypes = new Set(initialIndicators.map(i => i.type));
-    const priorityOrder = [IndicatorType.EMAIL, IndicatorType.PHONE, IndicatorType.DOMAIN, IndicatorType.USERNAME, IndicatorType.NAME];
-    
-    let primary = 'Default';
-    for (const type of priorityOrder) {
-      if (initialTypes.has(type)) {
-        primary = type;
-        break;
-      }
-    }
-
-    const secondary = Array.from(initialTypes).filter(type => type !== primary);
-
-    return { primary, secondary };
-  }
-
   /**
    * Déclenche un enrichissement avancé avec People Data Labs.
    */
@@ -356,35 +209,6 @@ class OrchestratorService {
       logger.error(`[PDL] Échec de l'enrichissement pour ${indicator.value}:`, error);
       await this.logStep(investigationId, 'pdl_enrichment_error', `Échec de l'enrichissement PDL pour ${indicator.value}: ${error.message}`, 'ERROR');
     }
-  }
-
-  /**
-   * Trouve le prochain indicateur pour la phase d'enrichissement.
-   */
-  async findNextSpecializedIndicator(investigationId) {
-    const investigation = await this.prisma.investigation.findUnique({
-      where: { id: investigationId },
-      select: { maxGeneration: true, minConfidence: true }
-    });
-
-    if (!investigation) return null;
-
-    const minConfidence = investigation.minConfidence || 0;
-
-    return this.prisma.indicator.findFirst({
-      where: {
-        investigationId: investigationId,
-        processed: false,
-        type: { in: [IndicatorType.NAME, IndicatorType.EMAIL, IndicatorType.USERNAME, IndicatorType.PHONE, IndicatorType.DOMAIN, IndicatorType.IP] },
-        generation: { lte: investigation.maxGeneration },
-        confidence: { gte: minConfidence }
-      },
-      orderBy: [
-        { confidence: 'desc' },
-        { generation: 'asc' },
-        { createdAt: 'asc' }
-      ]
-    });
   }
 
   /**
@@ -570,12 +394,16 @@ class OrchestratorService {
       await this.logStep(investigationId, 'finalization', 'Investigation terminée avec succès');
       
       // Envoyer une notification
-      // TODO: Remplacer 'static_user_id' par le vrai ID de l'utilisateur quand il sera disponible
-      await this.notificationService.createNotification(
-        'static_user_id',
-        `L'investigation #${investigationId.substring(0, 8)} est terminée.`,
-        `/investigation/${investigationId}`
-      );
+      const activeInvestigation = this.activeInvestigations.get(investigationId);
+      if (activeInvestigation && activeInvestigation.userId) {
+        await this.notificationService.createNotification(
+          activeInvestigation.userId,
+          `L'investigation #${investigationId.substring(0, 8)} est terminée.`,
+          `/investigation/${investigationId}`
+        );
+      } else {
+        logger.warn(`Impossible d'envoyer la notification de fin pour l'investigation ${investigationId}, userId non trouvé.`);
+      }
     } catch (error) {
       logger.error(`❌ Erreur lors de la finalisation de ${investigationId}:`, error);
       throw error;

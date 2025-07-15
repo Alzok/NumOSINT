@@ -1,6 +1,9 @@
-FROM node:18-slim
+# =================================
+# Etape 1: Builder
+# =================================
+FROM node:18 as builder
 
-# Installer les dépendances système
+# Installer les dépendances système pour la compilation
 RUN apt-get update && apt-get install -y \
     git \
     curl \
@@ -12,33 +15,72 @@ RUN apt-get update && apt-get install -y \
     python3 \
     python3-pip \
     dos2unix \
+    golang \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
-# Copier les fichiers de dépendances et installer
+# Copier les fichiers de dépendances et installer toutes les dépendances (y compris dev)
 COPY package*.json ./
-RUN npm install --only=production && npm cache clean --force
+RUN npm install && npm cache clean --force
 
 # Copier le reste de l'application
 COPY . .
 
-# Installer les outils Go et Python
-RUN apt-get update && apt-get install -y golang && rm -rf /var/lib/apt/lists/*
-COPY tools/wau/install.sh /usr/local/bin/install-wau.sh
-RUN chmod +x /usr/local/bin/install-wau.sh && dos2unix /usr/local/bin/install-wau.sh && /usr/local/bin/install-wau.sh
-COPY tools/waybulk /app/tools/waybulk
-RUN chmod +x /app/tools/waybulk/install.sh && dos2unix /app/tools/waybulk/install.sh && /app/tools/waybulk/install.sh
-RUN apt-get purge -y --auto-remove golang
+# L'installation des outils Go est maintenant gérée dans leurs propres services.
 
 # Générer le client Prisma
 RUN npx prisma generate
 
-# Rendre le script de démarrage exécutable
-RUN chmod +x start-backend.sh && dos2unix start-backend.sh
+# =================================
+# Etape 2: Production
+# =================================
+FROM node:18-slim
+
+# Créer un utilisateur et un groupe non-root
+RUN addgroup --system app && adduser --system --ingroup app app
+
+# Installer uniquement les dépendances système nécessaires à l'exécution
+RUN apt-get update && apt-get install -y \
+    curl \
+    procps \
+    netcat-openbsd \
+    openssl \
+    ca-certificates \
+    python3 \
+    python3-pip \
+    dos2unix \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Copier les dépendances de production depuis l'étape builder
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/package*.json ./
+
+# Copier le code de l'application
+COPY --from=builder /app/src ./src
+COPY --from=builder /app/prisma ./prisma
+COPY --from=builder /app/scripts ./scripts
+COPY --from=builder /app/start-backend.sh .
+COPY --from=builder /app/jsrepo.json .
+
+# S'assurer que le script de démarrage a les bonnes permissions et fins de ligne
+RUN dos2unix /app/start-backend.sh && chmod +x /app/start-backend.sh
+
+# Les outils ne sont plus copiés dans l'image du backend.
+
+# Créer les répertoires pour les logs, les résultats et les rapports
+RUN mkdir -p /app/logs /app/results /app/reports
+
+# Changer les permissions du répertoire de l'application
+RUN chown -R app:app /app
+
+# Repasser à l'utilisateur non-root
+USER app
 
 # Exposer le port
 EXPOSE 5001
 
-# Script de démarrage (sera exécuté en tant que root)
-CMD ["./start-backend.sh"]
+# Script de démarrage
+CMD ["/app/start-backend.sh"]

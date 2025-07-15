@@ -15,6 +15,14 @@ error_exit() {
     exit 1
 }
 
+# Attendre que Postgres soit prêt
+log "⏳ Attente de PostgreSQL..."
+while ! nc -z postgres 5432; do
+  log "Postgres est indisponible - en attente..."
+  sleep 1
+done
+log "✅ PostgreSQL est prêt."
+
 # Vérifier que les variables d'environnement sont définies
 log "🔍 Vérification des variables d'environnement..."
 if [ -z "$DATABASE_URL" ]; then
@@ -27,18 +35,17 @@ fi
 
 # Appliquer les migrations de la base de données
 log "⏳ Application des migrations de la base de données..."
-npx prisma migrate dev --name init || error_exit "Échec de l'application des migrations Prisma."
+# Utiliser "migrate deploy" pour les environnements non-interactifs comme Docker
+npx prisma migrate deploy || error_exit "Échec de l'application des migrations"
 
-log "✅ PostgreSQL est prêt et le schéma est synchronisé!"
+log "✅ Migrations appliquées !"
 
 # Générer le client Prisma
 log "🔧 Génération du client Prisma..."
 npx prisma generate || error_exit "Échec de la génération du client Prisma"
 
-# Créer les répertoires nécessaires
-log "📁 Création des répertoires..."
-mkdir -p /app/logs /app/results
+# Les répertoires sont maintenant créés dans le Dockerfile
 
 # Démarrer le serveur principal
 log "🚀 Démarrage du serveur Node.js..."
-exec node src/index.js 
+exec node src/index.js

@@ -13,7 +13,6 @@ services:
       - "5435:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./init-db.sql:/docker-entrypoint-initdb.d/init-db.sql:ro
     networks:
       - numosint_network
     healthcheck:
@@ -23,7 +22,7 @@ services:
       retries: 5
 
   redis:
-    image: redis:7-alpine
+    image: redis:alpine
     container_name: numosint_redis
     ports:
       - "6380:6379"
@@ -48,7 +47,8 @@ services:
       - NODE_ENV=${NODE_ENV:-production}
       - PORT=${PORT:-5001}
       - DATABASE_URL=${DATABASE_URL}
-      - REDIS_URL=${REDIS_URL}
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
       - FRONTEND_URL=http://frontend:3001
       - MAIGRET_SERVICE_URL=${MAIGRET_SERVICE_URL}
       - BUSTER_SERVICE_URL=${BUSTER_SERVICE_URL}
@@ -71,11 +71,15 @@ services:
       - SPIDERFOOT_GOOGLE_CSE_ID=${SPIDERFOOT_GOOGLE_CSE_ID}
       - SPIDERFOOT_SHODAN_API_KEY=${SPIDERFOOT_SHODAN_API_KEY}
       - SPIDERFOOT_VIRUSTOTAL_API_KEY=${SPIDERFOOT_VIRUSTOTAL_API_KEY}
+      # Configuration JWT
+      - JWT_SECRET=${JWT_SECRET}
+      - JWT_EXPIRES_IN=${JWT_EXPIRES_IN}
     ports:
       - "${PORT:-5001}:${PORT:-5001}"
     volumes:
-      - ./logs:/app/logs
-      - ./results:/app/results
+      - logs_data:/app/logs
+      - results_data:/app/results
+      - reports_data:/app/reports
     networks:
       - numosint_network
     depends_on:
@@ -111,6 +115,8 @@ services:
       context: ./tools/maigret
       dockerfile: Dockerfile
     container_name: numosint_maigret_service
+    volumes:
+      - maigret_data:/app/data
     networks:
       - numosint_network
     restart: unless-stopped
@@ -201,12 +207,13 @@ services:
       dockerfile: Dockerfile
     container_name: numosint_frontend
     environment:
-      - NEXT_PUBLIC_API_URL=http://backend:5001
+      - NEXT_PUBLIC_API_URL=http://localhost:8081
+      - INTERNAL_API_URL=http://backend:5001
     ports:
       - "3001:3000"
-    volumes:
-      - ./frontend:/app
-      - /app/node_modules
+    # Le montage de volume est supprimé pour éviter les problèmes de permissions.
+    # Le code est copié dans l'image via le Dockerfile.
+    # Pour les changements de code, reconstruire l'image est nécessaire.
     networks:
       - numosint_network
     depends_on:
@@ -227,11 +234,34 @@ services:
       - frontend
       - backend
     restart: unless-stopped
+  
+  e2e-tester:
+    build:
+      context: .
+      dockerfile: tests/Dockerfile.e2e
+    container_name: numosint_e2e_tester
+    depends_on:
+      - nginx
+      - backend
+      - frontend
+    networks:
+      - numosint_network
+    volumes:
+      - .:/app
+    command: ["npm", "run", "test:e2e"]
 
 volumes:
   postgres_data:
     driver: local
   redis_data:
+    driver: local
+  maigret_data:
+    driver: local
+  logs_data:
+    driver: local
+  results_data:
+    driver: local
+  reports_data:
     driver: local
 
 networks:

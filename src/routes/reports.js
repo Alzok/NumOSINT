@@ -1,8 +1,8 @@
 const express = require('express');
-const { PrismaClient } = require('@prisma/client');
+const prisma = require('../utils/prisma');
 const { generatePdfReport, generateCsvReport } = require('../services/reportService');
+const protect = require('../middlewares/auth');
 
-const prisma = new PrismaClient();
 const router = express.Router();
 
 /**
@@ -42,7 +42,7 @@ const router = express.Router();
  *       500:
  *         description: Erreur interne du serveur
  */
-router.get('/investigation/:id/export', async (req, res) => {
+router.get('/investigation/:id/export', protect, async (req, res) => {
   const { id } = req.params;
   const { format } = req.query;
 

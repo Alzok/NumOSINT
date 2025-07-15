@@ -12,7 +12,7 @@ import {
   Close
 } from '@mui/icons-material';
 import { motion, AnimatePresence } from 'framer-motion';
-import { InvestigationLog } from '@/lib/investigation-api';
+import { InvestigationLog } from '@/types';
 
 interface RealTimeNotificationsProps {
   logs: InvestigationLog[];
@@ -126,7 +126,7 @@ const RealTimeNotifications: React.FC<RealTimeNotificationsProps> = ({
             {visibleLogs.length === 0 && (
               <div className="text-center py-8 text-gray-500">
                 <Schedule className="h-8 w-8 mx-auto mb-2" />
-                <p>En attente des logs d'investigation...</p>
+                <p>En attente des logs d&apos;investigation...</p>
               </div>
             )}
           </div>

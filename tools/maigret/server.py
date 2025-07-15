@@ -6,6 +6,12 @@ from flask import Flask, request, jsonify
 
 app = Flask(__name__)
 
+# Créer le répertoire de données s'il n'existe pas
+DATA_DIR = "/app/data"
+DB_PATH = os.path.join(DATA_DIR, "maigret_db.json")
+if not os.path.exists(DATA_DIR):
+    os.makedirs(DATA_DIR)
+
 @app.route('/scan', methods=['POST'])
 def scan():
     """
@@ -28,6 +34,7 @@ def scan():
         # Construire la commande Maigret
         command = [
             "maigret",
+            "--db", DB_PATH,
             "--json-file", output_filename,
             "--tags", tags,
             username
@@ -85,6 +92,7 @@ def recursive_search():
     try:
         command = [
             "maigret",
+            "--db", DB_PATH,
             "--json-file", output_filename,
             "--recursive",
             username

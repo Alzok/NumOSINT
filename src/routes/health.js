@@ -1,9 +1,8 @@
 const express = require('express');
-const { PrismaClient } = require('@prisma/client');
+const prisma = require('../utils/prisma');
 const logger = require('../utils/logger');
 
 const router = express.Router();
-const prisma = new PrismaClient();
 
 /**
  * @swagger

@@ -7,10 +7,12 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { useInvestigation } from '@/hooks/useInvestigation';
+import { useInvestigationsList } from '@/hooks/useInvestigationsList';
+import { useInvestigationActions } from '@/hooks/useInvestigationActions';
 import { useCases } from '@/hooks/useCases';
 import { useAppStore } from '@/lib/store';
-import { Investigation, Case, investigationAPI } from '@/lib/investigation-api';
+import { api } from '@/lib/api-client';
+import type { Investigation, Case } from '@/types';
 import { CreateCaseModal } from '@/components/Investigation/CreateCaseModal';
 import { AssignCaseModal } from '@/components/Investigation/AssignCaseModal';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
@@ -224,8 +226,10 @@ const CreateCaseCard = ({ onClick }: { onClick: () => void }) => {
 
 export default function InvestigationsPage() {
   const router = useRouter();
-  const { investigations, isLoading: isLoadingInvestigations, loadInvestigations, stopInvestigation } = useInvestigation();
-  const { cases, isLoading: isLoadingCases, loadCases, createCase, updateCaseInvestigations } = useCases();
+  const { investigations, isLoading: isLoadingInvestigations, refreshInvestigations: loadInvestigations } = useInvestigationsList();
+  const { stopInvestigation, deleteInvestigation } = useInvestigationActions();
+  const { cases, isLoading: isLoadingCases, refetchCases, createCase, updateCaseInvestigations } = useCases();
+  const { addToastNotification } = useAppStore();
   const [isCreateModalOpen, setCreateIsModalOpen] = useState(false);
   const [isAssignModalOpen, setAssignIsModalOpen] = useState(false);
   const [selectedInvestigation, setSelectedInvestigation] = useState<Investigation | null>(null);
@@ -236,8 +240,8 @@ export default function InvestigationsPage() {
 
   useEffect(() => {
     loadInvestigations();
-    loadCases();
-  }, [loadInvestigations, loadCases]);
+    refetchCases();
+  }, [loadInvestigations, refetchCases]);
 
   useEffect(() => {
     const statusFilter = router.query.status as string;
@@ -274,37 +278,52 @@ export default function InvestigationsPage() {
     setIsDeleteDialogOpen(true);
   };
 
+  const { data: session } = useSession();
+  const token = session?.accessToken;
+
   const handleDeleteConfirm = async () => {
     if (!deletingItemId || !deleteType) return;
-
-    if (deleteType === 'investigation') {
-        await investigationAPI.deleteInvestigation(deletingItemId);
-        loadInvestigations();
-    } else if (deleteType === 'case') {
-        await investigationAPI.deleteCase(deletingItemId);
-        loadCases();
+    try {
+      if (deleteType === 'investigation') {
+        await deleteInvestigation(deletingItemId);
+      } else {
+        await api.deleteCase(deletingItemId, token);
+      }
+      addToastNotification({ type: 'success', title: 'Suppression réussie', message: `${deleteType === 'investigation' ? 'L\'investigation' : 'Le dossier'} a été supprimé(e).` });
+      loadInvestigations();
+      refetchCases();
+    } catch (error) {
+      console.error('Erreur lors de la suppression:', error);
+      addToastNotification({ type: 'error', title: 'Erreur de suppression', message: `Impossible de supprimer ${deleteType === 'investigation' ? 'l\'investigation' : 'le dossier'}.` });
     }
-
     setIsDeleteDialogOpen(false);
     setDeletingItemId(null);
     setDeleteType(null);
   };
 
   const handleAssignSubmit = async (caseId: string | null, investigationId: string) => {
-    const originalCaseId = investigations.find(inv => inv.id === investigationId)?.caseId;
-    let success = false;
-    if (originalCaseId && originalCaseId !== caseId) {
-        await updateCaseInvestigations(originalCaseId, [], [investigationId]);
+    if (!caseId) return false;
+    try {
+      await updateCaseInvestigations({ caseId, investigationIdsToConnect: [investigationId] });
+      return true;
+    } catch (error) {
+      return false;
     }
-    if (caseId && originalCaseId !== caseId) {
-        success = await updateCaseInvestigations(caseId, [investigationId], []);
-    } else if (!caseId && originalCaseId) {
-        success = true; // Already disconnected
-    } else {
-        success = true; // No change
+  };
+
+  const handleCreateCase = async (name: string, description: string, investigationIds: string[]) => {
+    try {
+      const newCase = await createCase({ name, description });
+      if (newCase.data && investigationIds.length > 0) {
+        for (const invId of investigationIds) {
+          await updateCaseInvestigations({ caseId: newCase.data.id, investigationIdsToConnect: [invId] });
+        }
+      }
+      return true;
+    } catch (error) {
+      console.error("Failed to create case or assign investigations", error);
+      return false;
     }
-    loadInvestigations(); // Refresh investigations to get updated caseId
-    return success;
   };
 
   return (
@@ -319,7 +338,7 @@ export default function InvestigationsPage() {
             </p>
           </div>
           <div className="flex gap-2">
-            <Button onClick={() => { loadInvestigations(); loadCases(); }} disabled={isLoading}>
+            <Button onClick={() => { loadInvestigations(); refetchCases(); }} disabled={isLoading}>
               <RefreshIcon className={`h-4 w-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
               Actualiser
             </Button>
@@ -379,7 +398,7 @@ export default function InvestigationsPage() {
       <CreateCaseModal
         isOpen={isCreateModalOpen}
         onClose={() => setCreateIsModalOpen(false)}
-        onCreate={createCase}
+        onCreate={handleCreateCase}
         investigations={unclassifiedInvestigations}
         isLoading={isLoadingCases}
       />

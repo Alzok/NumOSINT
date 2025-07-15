@@ -16,7 +16,16 @@ RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o main .
 # Étape 2: Créer l'image finale
 FROM alpine:latest
 RUN apk --no-cache add ca-certificates
-WORKDIR /root/
+
+# Créer un utilisateur non-privilégié
+RUN addgroup -S app && adduser -S -G app app
+
+WORKDIR /app
 COPY --from=builder /app/main .
+
+# Définir les permissions et l'utilisateur
+RUN chown -R app:app /app
+USER app
+
 EXPOSE 5008
 CMD ["./main"]

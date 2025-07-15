@@ -1,23 +1,48 @@
 'use client';
 
+import { useState } from 'react';
+import { useSession } from 'next-auth/react';
 import { useAppStore } from '@/lib/store';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
+import { Card, CardContent } from '@/components/ui/card';
 import Link from 'next/link';
 import { BellIcon, CheckCheck } from 'lucide-react';
+import { api } from '@/lib/api-client';
 
 export default function NotificationsPage() {
-  const { appNotifications, markAppNotificationsAsRead, markAllAppNotificationsAsRead } = useAppStore();
+  const { data: session } = useSession();
+  const token = session?.accessToken;
+  const { appNotifications, markAppNotificationsAsRead, markAllAppNotificationsAsRead, addToastNotification } = useAppStore();
+  const [loading, setLoading] = useState(false);
 
-  const handleMarkAsRead = (id: string) => {
+  const handleMarkAsRead = async (id: string) => {
+    // Optimistic UI update
     markAppNotificationsAsRead([id]);
-    // Idéalement, appeler aussi l'API ici
+    const { error } = await api.markNotificationsAsRead([id], token);
+    if (error) {
+      addToastNotification({
+        type: 'error',
+        title: 'Erreur',
+        message: "Impossible de marquer la notification comme lue.",
+      });
+      // TODO: Revert state on error
+    }
   };
 
-  const handleMarkAllAsRead = () => {
+  const handleMarkAllAsRead = async () => {
+    setLoading(true);
+    // Optimistic UI update
     markAllAppNotificationsAsRead();
-    // Idéalement, appeler aussi l'API ici
+    const { error } = await api.markAllNotificationsAsRead(token);
+    if (error) {
+      addToastNotification({
+        type: 'error',
+        title: 'Erreur',
+        message: "Impossible de marquer les notifications comme lues.",
+      });
+       // TODO: Revert state on error
+    }
+    setLoading(false);
   };
 
   return (
@@ -27,9 +52,9 @@ export default function NotificationsPage() {
           <BellIcon className="h-8 w-8" />
           Centre de Notifications
         </h1>
-        <Button onClick={handleMarkAllAsRead} variant="outline" disabled={appNotifications.every(n => n.read)}>
+        <Button onClick={handleMarkAllAsRead} variant="outline" disabled={appNotifications.every(n => n.read) || loading}>
           <CheckCheck className="h-4 w-4 mr-2" />
-          Tout marquer comme lu
+          {loading ? "Chargement..." : "Tout marquer comme lu"}
         </Button>
       </div>
 
@@ -68,7 +93,7 @@ export default function NotificationsPage() {
         ) : (
           <div className="text-center py-20 text-muted-foreground">
             <BellIcon className="h-12 w-12 mx-auto mb-4" />
-            <p className="text-lg">C'est bien calme ici.</p>
+            <p className="text-lg">C&apos;est bien calme ici.</p>
             <p>Aucune notification pour le moment.</p>
           </div>
         )}

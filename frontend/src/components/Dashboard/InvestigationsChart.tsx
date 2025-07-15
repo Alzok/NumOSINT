@@ -1,20 +1,28 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useSession } from 'next-auth/react';
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { investigationAPI, InvestigationsOverTimeData } from '@/lib/investigation-api';
+import { api } from '@/lib/api-client';
+import { InvestigationsOverTimeData } from '@/types';
 import { Skeleton } from '@/components/ui/skeleton';
 
 export default function InvestigationsChart() {
+  const { data: session } = useSession();
+  const token = session?.accessToken;
   const [data, setData] = useState<InvestigationsOverTimeData[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchData = async () => {
+      if (!token) {
+        setLoading(false);
+        return;
+      };
       setLoading(true);
-      const response = await investigationAPI.getInvestigationsOverTime();
+      const response = await api.getInvestigationsOverTime(token);
       if (response.data) {
         setData(response.data);
         setError(null);
@@ -25,7 +33,7 @@ export default function InvestigationsChart() {
     };
 
     fetchData();
-  }, []);
+  }, [token]);
 
   if (error) {
     return (

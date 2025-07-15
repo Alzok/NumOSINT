@@ -318,12 +318,13 @@ const TextTrail: React.FC<TextTrailProps> = ({
       [rt0, rt1] = [rt1, rt0];
     });
 
+    const currentRef = ref.current;
     return () => {
       renderer.setAnimationLoop(null);
       clearInterval(timer);
-      ref.current?.removeEventListener("pointermove", onMove);
+      currentRef?.removeEventListener("pointermove", onMove);
       ro.disconnect();
-      ref.current?.removeChild(renderer.domElement);
+      currentRef?.removeChild(renderer.domElement);
       renderer.dispose();
       rt0.dispose();
       rt1.dispose();

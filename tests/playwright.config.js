@@ -4,8 +4,14 @@ const { defineConfig, devices } = require('@playwright/test');
 /**
  * @see https://playwright.dev/docs/test-configuration
  */
+const path = require('path');
+
 module.exports = defineConfig({
   testDir: './e2e',
+  
+  // Path to the global setup file.
+  globalSetup: require.resolve('./e2e/global.setup'),
+
   /* Run tests in files in parallel */
   fullyParallel: true,
   /* Fail the build on CI if you accidentally left test.only in the source code. */
@@ -19,10 +25,13 @@ module.exports = defineConfig({
   /* Shared settings for all the projects below. See https://playwright.dev/docs/api/class-testoptions. */
   use: {
     /* Base URL to use in actions like `await page.goto('/')`. */
-    baseURL: 'http://localhost:3001',
+    baseURL: 'http://nginx:80',
 
     /* Collect trace when retrying the failed test. See https://playwright.dev/docs/trace-viewer */
     trace: 'on-first-retry',
+    
+    // Use the saved storage state.
+    storageState: path.join(__dirname, 'e2e/storageState.json'),
   },
 
   /* Configure projects for major browsers */
@@ -43,10 +52,13 @@ module.exports = defineConfig({
     },
   ],
 
-  /* Run your local dev server before starting the tests */
-  webServer: {
-    command: 'npm run dev --prefix ../frontend',
-    url: 'http://localhost:3001',
-    reuseExistingServer: !process.env.CI,
-  },
+  /*
+  * webServer is now removed.
+  * To run E2E tests, you must first start the application environment.
+  * A common way to do this is by running:
+  *
+  *   docker-compose up -d
+  *
+  * And then run the tests.
+  */
 });

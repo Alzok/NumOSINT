@@ -15,12 +15,19 @@ RUN CGO_ENABLED=0 GOOS=linux go build -o /app/server server.go
 
 # Étape 2: Créer l'image finale
 FROM alpine:latest
+WORKDIR /app
+
+# Créer un utilisateur non-privilégié
+RUN addgroup -S app && adduser -S -G app app
 RUN apk --no-cache add ca-certificates
-WORKDIR /root/
 
 # Copier l'outil et le serveur depuis l'étape de build
 COPY --from=builder /go/bin/wau /usr/local/bin/wau
 COPY --from=builder /app/server .
+
+# Définir les permissions et l'utilisateur
+RUN chown -R app:app /app
+USER app
 
 EXPOSE 8080
 CMD ["./server"]

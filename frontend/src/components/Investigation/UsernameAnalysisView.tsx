@@ -74,7 +74,7 @@ const UsernameAnalysisView: React.FC<UsernameAnalysisViewProps> = ({ data, loadi
       <Alert>
         <Person className="h-4 w-4" />
         <AlertDescription>
-          Aucune analyse de nom d'utilisateur disponible pour cette investigation.
+          Aucune analyse de nom d&apos;utilisateur disponible pour cette investigation.
         </AlertDescription>
       </Alert>
     );
@@ -107,7 +107,7 @@ const UsernameAnalysisView: React.FC<UsernameAnalysisViewProps> = ({ data, loadi
     <div className="space-y-6">
       <div className="flex items-center space-x-2">
         <Person className="h-5 w-5 text-blue-600" />
-        <h2 className="text-xl font-semibold">Analyse des Noms d'Utilisateur</h2>
+        <h2 className="text-xl font-semibold">Analyse des Noms d&apos;Utilisateur</h2>
         <Badge variant="outline">{data.length} recherche(s)</Badge>
       </div>
 
@@ -219,7 +219,7 @@ const UsernameAnalysisView: React.FC<UsernameAnalysisViewProps> = ({ data, loadi
 
                       {profile.bio && (
                         <div className="text-sm text-gray-600 italic">
-                          "{profile.bio}"
+                          &quot;{profile.bio}&quot;
                         </div>
                       )}
 
@@ -294,7 +294,7 @@ const UsernameAnalysisView: React.FC<UsernameAnalysisViewProps> = ({ data, loadi
               <div className="space-y-2">
                 <div className="flex items-center space-x-2">
                   <Group className="h-4 w-4 text-blue-500" />
-                  <span className="font-medium">Noms d'utilisateur liés</span>
+                  <span className="font-medium">Noms d&apos;utilisateur liés</span>
                 </div>
                 <div className="flex flex-wrap gap-1">
                   {analysis.related_usernames.map((username, i) => (

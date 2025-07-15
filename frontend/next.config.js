@@ -2,7 +2,6 @@
 const nextConfig = {
   reactStrictMode: true,
   swcMinify: true,
-  fastRefresh: false,
   output: 'standalone',
   images: {
     domains: ['localhost'],

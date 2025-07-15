@@ -1,67 +1,70 @@
 const MosintService = require('../../../src/services/tools/mosint');
-const { PrismaClient } = require('@prisma/client');
-
-// Mock Prisma
-const mockPrisma = {
-  result: {
-    create: jest.fn(),
-    findFirst: jest.fn(),
-  },
-  indicator: {
-    createMany: jest.fn(),
-  },
-};
-
-jest.mock('child_process', () => ({
-  exec: jest.fn((command, options, callback) => callback(null, { stdout: '', stderr: '' })),
-}));
-const { exec } = require('child_process');
-
-jest.mock('fs/promises', () => ({
-  mkdir: jest.fn().mockResolvedValue(),
-  readFile: jest.fn().mockResolvedValue('{}'),
-  unlink: jest.fn().mockResolvedValue(),
-}));
-
 
 describe('MosintService', () => {
   let mosintService;
 
   beforeEach(() => {
-    mosintService = new MosintService(mockPrisma);
-    jest.clearAllMocks();
+    // La méthode `calculateEmailScore` est statique dans son utilisation,
+    // pas besoin de mocker Prisma pour ce test.
+    mosintService = new MosintService(null);
   });
 
-  it('should be defined', () => {
-    expect(mosintService).toBeDefined();
-  });
+  describe('calculateEmailScore', () => {
+    it('should return a base score of 0.1 for a successful analysis with no data', () => {
+      const analysis = {};
+      expect(mosintService.calculateEmailScore(analysis)).toBe(0.1);
+    });
 
-  describe('analyzeEmail', () => {
-    it('should call mosint command and save results', async () => {
-      const investigationId = 'test-investigation';
-      const emailIndicator = { id: 'test-indicator', value: 'test@example.com' };
-      
-      // Mock a successful execution
-      mosintService.executeMosintCommand = jest.fn().mockResolvedValue({
-        breaches: [{ name: 'TestBreach' }],
-        social_media: [{ url: 'http://test.com/profile' }],
-      });
+    it('should add 0.4 to the score if breaches are found', () => {
+      const analysis = { breaches: [{ Source: 'SomeBreach' }] };
+      expect(mosintService.calculateEmailScore(analysis)).toBe(0.5);
+    });
 
-      await mosintService.analyzeEmail(investigationId, emailIndicator);
+    it('should add 0.3 to the score if social media profiles are found', () => {
+      const analysis = { social_media: [{ url: 'http://example.com' }] };
+      expect(mosintService.calculateEmailScore(analysis)).toBe(0.4);
+    });
 
-      // Check if result was created
-      expect(mockPrisma.result.create).toHaveBeenCalled();
-      const resultCall = mockPrisma.result.create.mock.calls[0][0];
-      expect(resultCall.data.investigationId).toBe(investigationId);
-      expect(resultCall.data.indicatorId).toBe(emailIndicator.id);
-      expect(resultCall.data.toolSource).toBe('mosint');
-      expect(resultCall.data.data.breaches).toHaveLength(1);
+    it('should add 0.2 to the score if related emails are found', () => {
+      const analysis = { related_emails: ['related@example.com'] };
+      expect(mosintService.calculateEmailScore(analysis)).toBe(0.3);
+    });
 
-      // Check if new indicators were created
-      expect(mockPrisma.indicator.createMany).toHaveBeenCalled();
-      const indicatorCall = mockPrisma.indicator.createMany.mock.calls[0][0];
-      expect(indicatorCall.data).toHaveLength(1);
-      expect(indicatorCall.data[0].value).toBe('http://test.com/profile');
+    it('should sum scores for breaches and social media', () => {
+      const analysis = {
+        breaches: [{ Source: 'SomeBreach' }],
+        social_media: [{ url: 'http://example.com' }],
+      };
+      expect(mosintService.calculateEmailScore(analysis)).toBe(0.8);
+    });
+
+    it('should sum scores for all findings', () => {
+      const analysis = {
+        breaches: [{ Source: 'SomeBreach' }],
+        social_media: [{ url: 'http://example.com' }],
+        related_emails: ['related@example.com'],
+      };
+      expect(mosintService.calculateEmailScore(analysis)).toBe(1.0);
+    });
+
+    it('should cap the score at 1.0', () => {
+      // Ce cas est théorique avec la logique actuelle, mais teste la robustesse.
+      const analysis = {
+        breaches: [{ Source: 'SomeBreach' }],
+        social_media: [{ url: 'http://example.com' }],
+        related_emails: ['related@example.com'],
+      };
+      // La somme est 0.1 + 0.4 + 0.3 + 0.2 = 1.0
+      expect(mosintService.calculateEmailScore(analysis)).toBe(1.0);
+    });
+
+    it('should handle empty arrays for findings', () => {
+      const analysis = {
+        breaches: [],
+        social_media: [],
+        related_emails: [],
+      };
+      expect(mosintService.calculateEmailScore(analysis)).toBe(0.1);
     });
   });
 });

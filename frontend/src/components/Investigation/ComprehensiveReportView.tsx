@@ -167,7 +167,7 @@ const ComprehensiveReportView: React.FC<ComprehensiveReportViewProps> = ({ data,
     <div className="space-y-6">
       <div className="flex items-center space-x-2">
         <Activity className="h-5 w-5 text-blue-600" />
-        <h2 className="text-xl font-semibold">Rapport d'Investigation Complet</h2>
+        <h2 className="text-xl font-semibold">Rapport d&apos;Investigation Complet</h2>
         <Badge variant="outline">{data.length} scan(s)</Badge>
       </div>
 
@@ -279,7 +279,7 @@ const ComprehensiveReportView: React.FC<ComprehensiveReportViewProps> = ({ data,
                         <div className="mt-3 pt-3 border-t space-y-2">
                           <div className="grid grid-cols-2 gap-4 text-sm">
                             <div>
-                              <span className="font-medium">Temps d'exécution:</span>
+                              <span className="font-medium">Temps d&apos;exécution:</span>
                               <span className="ml-2 text-gray-600">{formatDuration(module.execution_time)}</span>
                             </div>
                             <div>

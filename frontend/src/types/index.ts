@@ -113,3 +113,140 @@ export interface AppState {
   searchProgress: number;
   investigationForm: InvestigationFormState;
 }
+
+export interface InvestigationInput {
+  names?: string[];
+  emails?: string[];
+  usernames?: string[];
+  phones?: string[];
+  ips?: string[];
+  domains?: string[];
+  urls?: string[];
+  maxGeneration?: number;
+  minConfidence?: number;
+}
+
+export interface Investigation {
+  id: string;
+  status: 'INITIALIZING' | 'ENRICHING' | 'SCANNING' | 'CONSOLIDATING' | 'COMPLETED' | 'FAILED' | 'CANCELLED';
+  progress: number;
+  currentPhase: 'ENRICHMENT' | 'SCANNING' | 'CONSOLIDATION' | 'FINISHED';
+  currentStep?: string;
+  inputData?: InvestigationInput;
+  finalReport?: any;
+  createdAt: string;
+  updatedAt: string;
+  caseId?: string | null;
+  results?: Result[];
+  indicators?: Indicator[];
+  error?: string;
+}
+
+export interface Case {
+    id: string;
+    name: string;
+    description: string | null;
+    createdAt: string;
+    updatedAt: string;
+    investigations: Investigation[];
+}
+
+export interface Indicator {
+  id: string;
+  investigationId: string;
+  type: 'NAME' | 'EMAIL' | 'USERNAME' | 'PHONE' | 'IP' | 'DOMAIN' | 'URL';
+  value: string;
+  source?: string;
+  confidence: number;
+  verified: boolean;
+  createdAt: string;
+}
+
+export interface Result {
+  id: string;
+  investigationId: string;
+  indicatorId?: string;
+  toolSource: string;
+  data: any;
+  score: number;
+  createdAt: string;
+  investigation?: {
+    id: string;
+    inputData: any;
+  };
+  indicator?: Indicator;
+}
+
+export interface InvestigationLog {
+  id: string;
+  investigationId: string;
+  step: string;
+  message: string;
+  level: 'INFO' | 'WARNING' | 'ERROR' | 'SUCCESS' | 'DEBUG';
+  timestamp: string;
+  metadata?: {
+    progress?: number;
+    tool?: string;
+    duration?: number;
+    count?: number;
+  };
+}
+
+export interface ToolInfo {
+  id: string;
+  name: string;
+  description: string;
+  status: 'active' | 'inactive' | 'error';
+  documentation?: string;
+}
+
+export interface ToolConfig {
+  id: string;
+  name: string;
+  description: string;
+  configurableOptions: string[];
+  documentation: string;
+}
+
+export interface ToolStatus {
+  id: string;
+  name: string;
+  status: 'active' | 'inactive' | 'error';
+  lastUpdate: string;
+  stats: {
+    totalResults: number;
+    recentResults: number;
+  };
+}
+
+export interface PaginationInfo {
+  page: number;
+  limit: number;
+  total: number;
+  totalPages: number;
+  hasNext: boolean;
+  hasPrev: boolean;
+}
+
+export interface PaginatedResponse<T> {
+  data: T[];
+  pagination: PaginationInfo;
+}
+
+export interface GlobalStats {
+  totalInvestigations: number;
+  totalResults: number;
+  resultsByTool: { toolSource: string; count: number }[];
+  indicatorsByType: { type: string; count: number }[];
+}
+
+export interface InvestigationsOverTimeData {
+  date: string;
+  count: number;
+}
+
+export interface User {
+  id: string;
+  email: string;
+  // Ajoutez d'autres champs si nécessaire
+}

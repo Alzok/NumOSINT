@@ -8,15 +8,15 @@ const HelpPage = () => {
       <div className="space-y-8">
         <Card>
           <CardHeader>
-            <CardTitle>Qu'est-ce qu'une investigation ?</CardTitle>
+            <CardTitle>Qu&apos;est-ce qu&apos;une investigation ?</CardTitle>
           </CardHeader>
           <CardContent>
             <p>
-              Une investigation dans NumOSINT est un processus de collecte et d'analyse
-              d'informations à partir de sources ouvertes (OSINT) sur une cible spécifique,
-              comme une adresse e-mail, un numéro de téléphone ou un nom d'utilisateur.
+              Une investigation dans NumOSINT est un processus de collecte et d&apos;analyse
+              d&apos;informations à partir de sources ouvertes (OSINT) sur une cible spécifique,
+              comme une adresse e-mail, un numéro de téléphone ou un nom d&apos;utilisateur.
               Chaque investigation regroupe les données trouvées par nos différents outils
-              pour vous donner une vue d'ensemble.
+              pour vous donner une vue d&apos;ensemble.
             </p>
           </CardContent>
         </Card>
@@ -27,12 +27,12 @@ const HelpPage = () => {
           </CardHeader>
           <CardContent>
             <p>
-              Le formulaire de recherche sur la page d'accueil est le point de départ de
+              Le formulaire de recherche sur la page d&apos;accueil est le point de départ de
               toute investigation.
             </p>
             <ul className="list-disc list-inside mt-2 space-y-1">
               <li>
-                <strong>Valeur :</strong> Entrez ici l'identifiant que vous souhaitez
+                <strong>Valeur :</strong> Entrez ici l&apos;identifiant que vous souhaitez
                 investiguer (ex: un email, un téléphone, un pseudo).
               </li>
               <li>
@@ -58,7 +58,7 @@ const HelpPage = () => {
             </p>
             <ul className="list-disc list-inside mt-2 space-y-1">
               <li>
-                <strong>Tableau de résultats :</strong> Il s'agit d'une liste unifiée de
+                <strong>Tableau de résultats :</strong> Il s&apos;agit d&apos;une liste unifiée de
                 toutes les informations trouvées, triées par catégorie (comptes en
                 ligne, fuites de données, etc.). Vous pouvez filtrer et trier ces
                 données pour affiner votre analyse.
@@ -67,7 +67,7 @@ const HelpPage = () => {
                 <strong>Graphe de corrélation :</strong> Le graphe visualise les liens
                 entre les différentes informations. Par exemple, il peut montrer comment
                 une adresse e-mail est liée à plusieurs comptes sur les réseaux sociaux.
-                C'est un outil puissant pour découvrir des connexions cachées.
+                C&apos;est un outil puissant pour découvrir des connexions cachées.
               </li>
             </ul>
           </CardContent>
@@ -79,10 +79,10 @@ const HelpPage = () => {
           </CardHeader>
           <CardContent>
             <p>
-              Sur la page de résultats d'une investigation, vous trouverez un bouton
-              d'export. Cette fonctionnalité vous permet de générer un rapport
-              complet de l'investigation en format PDF ou JSON. C'est utile pour
-              archiver vos découvertes ou les partager avec d'autres personnes.
+              Sur la page de résultats d&apos;une investigation, vous trouverez un bouton
+              d&apos;export. Cette fonctionnalité vous permet de générer un rapport
+              complet de l&apos;investigation en format PDF ou JSON. C&apos;est utile pour
+              archiver vos découvertes ou les partager avec d&apos;autres personnes.
             </p>
           </CardContent>
         </Card>

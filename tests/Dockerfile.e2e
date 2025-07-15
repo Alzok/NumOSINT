@@ -1,0 +1,20 @@
+# Dockerfile for the E2E tester service
+FROM mcr.microsoft.com/playwright:v1.54.1-jammy
+
+# Set working directory
+WORKDIR /app
+
+# Copy application files
+COPY . .
+
+# Install dependencies
+RUN npm install
+
+# Create a non-root user
+RUN addgroup --system app && adduser --system --ingroup app app
+RUN chown -R app:app /app
+
+# Switch to the non-root user
+USER app
+
+# The command to run tests will be specified in docker-compose.yml

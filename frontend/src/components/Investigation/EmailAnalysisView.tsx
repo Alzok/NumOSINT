@@ -102,7 +102,7 @@ const EmailAnalysisView: React.FC<EmailAnalysisViewProps> = ({ data, loading = f
       <Alert>
         <Email className="h-4 w-4" />
         <AlertDescription>
-          Aucune analyse d'email disponible pour cette investigation.
+          Aucune analyse d&apos;email disponible pour cette investigation.
         </AlertDescription>
       </Alert>
     );

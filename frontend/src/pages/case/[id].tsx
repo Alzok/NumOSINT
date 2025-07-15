@@ -8,7 +8,7 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { CaseSummaryView } from '@/components/Investigation/CaseSummaryView';
-import { investigationAPI } from '@/lib/investigation-api';
+import { api } from '@/lib/api-client';
 import { saveAs } from 'file-saver';
 
 // --- Local SVG Icon Components ---
@@ -25,11 +25,22 @@ const CaseDetailPage = () => {
   const { id } = router.query;
   const { caseDetails, isLoading, error } = useCase(id as string);
 
+import { useSession } from 'next-auth/react';
+
+// ...
+
+  const { data: session } = useSession();
+  const token = session?.accessToken;
+
   const handleExport = async (format: 'pdf' | 'csv') => {
-    if (!id) return;
+    if (!id || !token) return;
     try {
-      const blob = await investigationAPI.exportCase(id as string, format);
-      saveAs(blob, `rapport-dossier-${id}.${format}`);
+      const response = await api.exportCase(id as string, format, token);
+      if (response.data) {
+        saveAs(response.data, `rapport-dossier-${id}.${format}`);
+      } else {
+        console.error('Failed to export case', response.error);
+      }
     } catch (err) {
       console.error('Failed to export case', err);
     }
@@ -54,7 +65,7 @@ const CaseDetailPage = () => {
         <Alert variant="destructive">
           <ErrorOutlineIcon className="h-4 w-4" />
           <AlertTitle>Erreur</AlertTitle>
-          <AlertDescription>{error || "Le dossier demandé n'a pas pu être trouvé."}</AlertDescription>
+          <AlertDescription>{error instanceof Error ? error.message : error || "Le dossier demandé n'a pas pu être trouvé."}</AlertDescription>
         </Alert>
       </div>
     );

@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
-import { investigationAPI, ApiResponse } from '@/lib/investigation-api';
+import { useSession } from 'next-auth/react';
+import { api } from '@/lib/api-client';
 import { Edge, Node } from 'reactflow';
 
 interface GraphData {
@@ -8,12 +9,14 @@ interface GraphData {
 }
 
 export const useInvestigationGraph = (investigationId: string | null) => {
+  const { data: session } = useSession();
+  const token = session?.accessToken;
   const [graphData, setGraphData] = useState<GraphData>({ nodes: [], edges: [] });
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
 
   const fetchGraphData = useCallback(async () => {
-    if (!investigationId) {
+    if (!investigationId || !token) {
       setIsLoading(false);
       return;
     }
@@ -22,7 +25,7 @@ export const useInvestigationGraph = (investigationId: string | null) => {
     setError(null);
 
     try {
-      const response: ApiResponse<{ nodes: Node[], edges: Edge[] }> = await investigationAPI.getInvestigationGraph(investigationId);
+      const response = await api.getInvestigationGraph(investigationId, token);
       if (response.data) {
         // Add position to nodes if not present
         const nodesWithPositions = response.data.nodes.map((node, index) => ({
@@ -33,12 +36,12 @@ export const useInvestigationGraph = (investigationId: string | null) => {
       } else if (response.error) {
         setError(response.error);
       }
-    } catch (err) {
+    } catch (err: any) {
       setError('An unexpected error occurred while fetching graph data.');
     } finally {
       setIsLoading(false);
     }
-  }, [investigationId]);
+  }, [investigationId, token]);
 
   useEffect(() => {
     fetchGraphData();

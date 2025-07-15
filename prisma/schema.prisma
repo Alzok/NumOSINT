@@ -23,6 +23,7 @@ model Investigation {
   updatedAt   DateTime @updatedAt
   maxGeneration Int    @default(3)
   minConfidence Float  @default(0.7)
+  graphData   Json?
   
   // Relations
   indicators  Indicator[]
@@ -30,8 +31,11 @@ model Investigation {
   logs        InvestigationLog[]
   caseId      String?
   case        Case?      @relation(fields: [caseId], references: [id], onDelete: SetNull)
-  graphData   Json?
+  userId      String
+  user        User       @relation(fields: [userId], references: [id], onDelete: Cascade)
   
+  @@index([status])
+  @@index([userId])
   @@map("investigations")
 }
 
@@ -42,8 +46,12 @@ model Case {
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
   
+  // Relations
   investigations Investigation[]
-  
+  userId         String
+  user           User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
   @@map("cases")
 }
 
@@ -60,10 +68,11 @@ model Indicator {
   generation      Int           @default(0)
   createdAt       DateTime      @default(now())
 
-  investigation Investigation @relation(fields: [investigationId], references: [id], onDelete: Cascade)
+  investigation  Investigation @relation(fields: [investigationId], references: [id], onDelete: Cascade)
   results       Result[]
 
   @@index([investigationId])
+  @@index([processed, confidence, generation])
   @@unique([investigationId, type, value])
   @@map("indicators")
 }
@@ -107,6 +116,9 @@ enum InvestigationStatus {
   COMPLETED
   FAILED
   CANCELLED
+  WARNING
+  ERROR
+  DEBUG
 }
 
 enum IndicatorType {
@@ -128,13 +140,80 @@ enum LogLevel {
   ERROR
   DEBUG
 }
+
+// ==============================================================================
+// ===                              USER & AUTH                             ===
+// ==============================================================================
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String?   @unique
+  emailVerified DateTime?
+  image         String?
+  password      String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  // Relations
+  accounts      Account[]
+  sessions      Session[]
+  investigations Investigation[]
+  cases         Case[]
+  notifications Notification[]
+
+  @@map("users")
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@map("accounts")
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("sessions")
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+  @@map("verification_tokens")
+}
+
 model Notification {
   id        String   @id @default(cuid())
-  userId    String   // Pour l'instant, pas de modèle User, mais on le prévoit
+  userId    String
   message   String
   read      Boolean  @default(false)
   link      String?
   createdAt DateTime @default(now())
 
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, read])
   @@map("notifications")
 }

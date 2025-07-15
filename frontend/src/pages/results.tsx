@@ -7,7 +7,6 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { ErrorOutline, ChevronLeft, ChevronRight, FilterList } from '@mui/icons-material';
 import { Trash2, ChevronDown } from 'lucide-react';
-import { investigationAPI, PaginationInfo, ToolInfo } from '@/lib/investigation-api';
 import { UnifiedResultsTable, ProofItem } from '@/components/Results/UnifiedResultsTable';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -16,6 +15,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuCheckboxItem } from '@/components/ui/dropdown-menu';
+import { api } from '@/lib/api-client';
+import { PaginationInfo, ToolInfo } from '@/types';
 
 interface InvestigationWithSummary {
   id: string;
@@ -47,7 +48,15 @@ export default function AllResultsPage() {
     indicatorType: 'all',
   });
 
+import { useSession } from 'next-auth/react';
+
+// ...
+
+  const { data: session } = useSession();
+  const token = session?.accessToken;
+
   const fetchGroupedResults = useCallback(async (page: number, currentFilters: typeof filters) => {
+    if (!token) return;
     setLoading(true);
     setError(null);
     try {
@@ -58,7 +67,7 @@ export default function AllResultsPage() {
       if (currentFilters.startDate) params.startDate = currentFilters.startDate;
       if (currentFilters.endDate) params.endDate = currentFilters.endDate;
       
-      const response = await investigationAPI.getGroupedResults(params);
+      const response = await api.getGroupedResults(params, token);
       if (response.data) {
         setInvestigations(response.data.investigations);
         setPagination(response.data.pagination);
@@ -70,13 +79,15 @@ export default function AllResultsPage() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [token]);
 
   useEffect(() => {
-    investigationAPI.listTools().then(res => {
-      if (res.data) setTools(res.data);
-    });
-  }, []);
+    if (token) {
+      api.listTools(token).then(res => {
+        if (res.data) setTools(res.data);
+      });
+    }
+  }, [token]);
 
   useEffect(() => {
     fetchGroupedResults(currentPage, filters);
@@ -104,9 +115,9 @@ export default function AllResultsPage() {
   };
 
   const handleDeleteConfirm = async () => {
-    if (!selectedInvestigationId) return;
+    if (!selectedInvestigationId || !token) return;
     
-    const response = await investigationAPI.deleteInvestigation(selectedInvestigationId);
+    const response = await api.deleteInvestigation(selectedInvestigationId, token);
     if (response.data) {
       // Refresh data
       fetchGroupedResults(currentPage, filters);

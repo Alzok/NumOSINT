@@ -11,46 +11,31 @@ import Link from 'next/link';
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5001';
 
 export function Notifications() {
-  const { notifications, setNotifications, addNotification } = useAppStore();
+  const { appNotifications, setAppNotifications, addAppNotification, markAllAppNotificationsAsRead } = useAppStore();
   const [socket, setSocket] = useState<Socket | null>(null);
-  const unreadCount = notifications.filter(n => !n.read).length;
+  const unreadCount = appNotifications.filter(n => !n.read).length;
 
   useEffect(() => {
-    // Connexion au serveur Socket.IO
-    const newSocket = io(API_URL, {
-      transports: ['websocket'],
-    });
+    const newSocket = io(API_URL, { transports: ['websocket'] });
     setSocket(newSocket);
 
-    // Rejoindre la room de l'utilisateur
-    // TODO: Remplacer 'static_user_id' par l'ID de l'utilisateur authentifié
-    newSocket.emit('join_user', 'static_user_id');
+    // TODO: Remplacer par la logique d'authentification pour obtenir le vrai userId
+    // newSocket.emit('join_user', userId);
 
-    // Écouter les nouvelles notifications
     newSocket.on('notification:new', (notification) => {
-      addNotification(notification);
+      addAppNotification(notification);
     });
 
-    // Récupérer les notifications initiales
-    fetch(`${API_URL}/api/notifications`)
-      .then(res => res.json())
-      .then(data => setNotifications(data));
+    // TODO: Remplacer par un appel authentifié
+    // fetch(`${API_URL}/api/notifications`)
+    //   .then(res => res.json())
+    //   .then(data => setAppNotifications(data));
 
     return () => {
       newSocket.off('notification:new');
       newSocket.disconnect();
     };
-  }, [addNotification, setNotifications]);
-
-  const handleMarkAsRead = async (id: string) => {
-    await fetch(`${API_URL}/api/notifications/mark-as-read`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ids: [id] }),
-    });
-    // Mettre à jour l'état local
-    setNotifications(notifications.map(n => n.id === id ? { ...n, read: true } : n));
-  };
+  }, [addAppNotification, setAppNotifications]);
 
   return (
     <Popover>
@@ -65,7 +50,7 @@ export function Notifications() {
           )}
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-80">
+      <PopoverContent className="w-96">
         <div className="grid gap-4">
           <div className="space-y-2">
             <h4 className="font-medium leading-none">Notifications</h4>
@@ -74,65 +59,40 @@ export function Notifications() {
             </p>
           </div>
           <div className="grid gap-2">
-            {notifications.slice(0, 5).map((notification) => (
+            {appNotifications.slice(0, 5).map((notification) => (
               <div
                 key={notification.id}
-                className="grid grid-cols-[25px_1fr] items-start pb-4 last:mb-0 last:pb-0"
+                className="grid grid-cols-[15px_1fr] items-start pb-4 last:mb-0 last:pb-0"
               >
                 <span className={`flex h-2 w-2 translate-y-1 rounded-full ${!notification.read ? 'bg-sky-500' : ''}`} />
                 <div className="space-y-1">
                   <p className="text-sm font-medium leading-none">
                     {notification.message}
                   </p>
-                  <p className="text-sm text-muted-foreground">
+                  <p className="text-xs text-muted-foreground mt-1">
                     {new Date(notification.createdAt).toLocaleString()}
                   </p>
                   {notification.link && (
-                    <Link href={notification.link} className="text-sm text-blue-500 hover:underline">
+                    <Link href={notification.link} className="text-sm text-blue-500 hover:underline mt-1 inline-block">
                       Voir les détails
                     </Link>
                   )}
                 </div>
-                <div className="flex-shrink-0 mt-0.5">
-                  {getIcon(notification.type)}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium">
-                    {notification.title}
-                  </p>
-                  {notification.message && (
-                    <p className="text-sm opacity-90 mt-1">
-                      {notification.message}
-                    </p>
-                  )}
-                  {notification.actions && notification.actions.length > 0 && (
-                    <div className="mt-3 flex gap-2">
-                      {notification.actions.map((action, index) => (
-                        <NotificationActionButton
-                          key={index}
-                          action={action}
-                          onActionClick={() => {
-                            if (action.onClick) {
-                                action.onClick();
-                            }
-                            removeNotification(notification.id);
-                          }}
-                        />
-                      ))}
-                    </div>
-                  )}
-                </div>
-                <button
-                  onClick={() => removeNotification(notification.id)}
-                  className="flex-shrink-0 ml-2 p-1 rounded-full opacity-60 hover:opacity-100 hover:bg-black/10 dark:hover:bg-white/10 transition-all"
-                >
-                  <Close className="h-4 w-4" />
-                </button>
               </div>
-            </div>
-          </motion.div>
-        ))}
-      </AnimatePresence>
-    </div>
+            ))}
+          </div>
+          {unreadCount > 0 && (
+            <Button
+              onClick={() => markAllAppNotificationsAsRead()}
+              variant="outline"
+              size="sm"
+              className="mt-2"
+            >
+              Tout marquer comme lu
+            </Button>
+          )}
+        </div>
+      </PopoverContent>
+    </Popover>
   );
 }

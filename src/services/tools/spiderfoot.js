@@ -2,100 +2,64 @@ const axios = require('axios');
 const logger = require('../../utils/logger');
 const { IndicatorType } = require('@prisma/client');
 const eventBus = require('../../utils/eventBus');
+const BaseToolService = require('./BaseToolService');
 
-const spiderfootServiceUrl = process.env.SPIDERFOOT_SERVICE_URL;
-
-class SpiderFootService {
+class SpiderFootService extends BaseToolService {
   constructor(prisma) {
-    this.prisma = prisma;
-    this.name = 'spiderfoot';
+    super(prisma, 'spiderfoot');
+    this.serviceUrl = process.env.SPIDERFOOT_SERVICE_URL;
+    if (!this.serviceUrl) {
+      throw new Error("La variable d'environnement SPIDERFOOT_SERVICE_URL est requise.");
+    }
+    this.axios = axios.create({
+      baseURL: this.serviceUrl,
+      timeout: 15 * 60 * 1000, // 15 minutes
+    });
   }
 
-  /**
-   * Démarre un scan SpiderFoot pour une liste d'indicateurs via le microservice.
-   * Le scan est lancé en arrière-plan et un événement est émis à la fin.
-   */
   async startScan(investigationId, indicators) {
-    if (!spiderfootServiceUrl) {
-      logger.error('🕷️ SpiderFoot: URL du service non définie. Vérifiez SPIDERFOOT_SERVICE_URL.');
-      eventBus.emit('tool:scan_completed', { investigationId, tool: this.name, success: false, error: 'Service non configuré.' });
-      return;
-    }
-
     if (!indicators || indicators.length === 0) {
-      logger.warn('🕷️ SpiderFoot: Aucun indicateur fourni pour le scan.');
-      eventBus.emit('tool:scan_completed', { investigationId, tool: this.name, success: true, message: 'Aucun indicateur à scanner.' });
+      logger.warn(`[${this.toolName}] Aucun indicateur fourni pour le scan.`);
+      eventBus.emit('tool:scan_completed', { investigationId, tool: this.toolName, success: true, message: 'Aucun indicateur à scanner.' });
       return;
     }
 
     const targets = indicators.map(ind => ind.value).join(',');
-    logger.info(`🕷️ SpiderFoot: Démarrage du scan pour ${indicators.length} indicateurs (investigation ${investigationId})`);
+    logger.info(`[${this.toolName}] Démarrage du scan pour ${indicators.length} indicateurs.`);
 
     try {
-      // L'appel est asynchrone, mais le service SpiderFoot lui-même prendra du temps.
-      // Nous ne bloquons pas ici, mais nous attendons la réponse initiale du service.
-      const response = await axios.post(`${spiderfootServiceUrl}/scan`, { targets }, { timeout: 15 * 60 * 1000 /* 15 minutes */ });
-      
+      const response = await this.axios.post('/scan', { targets });
       const scanData = response.data;
       
-      logger.info(`🕷️ SpiderFoot: Scan terminé avec succès pour l'investigation ${investigationId}.`);
+      logger.info(`[${this.toolName}] Scan terminé avec succès.`);
       
-      await this.processAndSaveResults(investigationId, null, scanData);
-      await this.extractAndSaveNewIndicators(investigationId, scanData);
+      await this._processAndSaveResults(investigationId, scanData);
       
-      const graphData = this.generateGraphData(scanData);
-      await this.prisma.investigation.update({
-        where: { id: investigationId },
-        data: { graphData },
-      });
-
-      eventBus.emit('tool:scan_completed', { investigationId, tool: this.name, success: true });
+      eventBus.emit('tool:scan_completed', { investigationId, tool: this.toolName, success: true });
 
     } catch (error) {
-      const errorMessage = error.response ? JSON.stringify(error.response.data) : error.message;
-      logger.error(`🕷️ SpiderFoot: Erreur lors du scan pour ${investigationId}: ${errorMessage}`);
-      eventBus.emit('tool:scan_completed', { investigationId, tool: this.name, success: false, error: errorMessage });
+      this._handleApiError(error, `scanner les cibles pour l'investigation ${investigationId}`);
+      eventBus.emit('tool:scan_completed', { investigationId, tool: this.toolName, success: false, error: error.message });
     }
   }
 
-  /**
-   * Traite et sauvegarde le résultat principal du scan.
-   */
-  async processAndSaveResults(investigationId, indicatorId, scanData) {
+  async _processAndSaveResults(investigationId, scanData) {
     const summary = {
       totalItems: scanData.length,
       typesFound: [...new Set(scanData.map(item => item.type))],
     };
 
-    const existingResult = await this.prisma.result.findFirst({
-        where: {
-            investigationId,
-            indicatorId,
-            toolSource: this.name,
-        }
-    });
+    await this._saveResult(investigationId, null, summary, scanData);
+    await this._extractAndSaveNewIndicators(investigationId, scanData);
 
-    if (!existingResult) {
-        return this.prisma.result.create({
-          data: {
-            investigationId,
-            indicatorId,
-            toolSource: this.name,
-            data: summary,
-            score: this.calculateScore(scanData),
-          },
-        });
-    } else {
-        logger.info(`🕷️ SpiderFoot: Résultat déjà existant pour l'indicateur ${indicatorId}. Pas de nouvelle sauvegarde.`);
-        return existingResult;
-    }
+    const graphData = this._generateGraphData(scanData);
+    await this.prisma.investigation.update({
+      where: { id: investigationId },
+      data: { graphData },
+    });
   }
 
-  /**
-   * Extrait et sauvegarde les nouveaux indicateurs trouvés dans le scan.
-   */
-  async extractAndSaveNewIndicators(investigationId, scanData) {
-    const indicatorsToCreate = [];
+  async _extractAndSaveNewIndicators(investigationId, scanData) {
     const typeMapping = {
       'IP_ADDRESS': IndicatorType.IP,
       'DOMAIN_NAME': IndicatorType.DOMAIN,
@@ -109,40 +73,23 @@ class SpiderFootService {
       'URL_GENERAL': IndicatorType.URL,
     };
 
-    for (const item of scanData) {
+    const newIndicators = scanData.map(item => {
       const indicatorType = typeMapping[item.type];
-      if (indicatorType) {
-        let value = item.data;
-        if (item.type === 'SOCIAL_MEDIA' && item.data.includes('(')) {
-          value = item.data.substring(0, item.data.indexOf('(')).trim();
-        }
-        
-        indicatorsToCreate.push({
-          investigationId,
-          type: indicatorType,
-          value,
-          source: this.name,
-          confidence: 0.75,
-          verified: false,
-          processed: false,
-        });
+      if (!indicatorType) return null;
+
+      let value = item.data;
+      if (item.type === 'SOCIAL_MEDIA' && item.data.includes('(')) {
+        value = item.data.substring(0, item.data.indexOf('(')).trim();
       }
-    }
+      
+      return { type: indicatorType, value, confidence: 75 };
+    }).filter(Boolean);
 
-    if (indicatorsToCreate.length === 0) return 0;
-
-    const result = await this.prisma.indicator.createMany({
-      data: indicatorsToCreate,
-      skipDuplicates: true,
-    });
-
-    return result.count;
+    // Pour Spiderfoot, il n'y a pas de "parent" clair, on passe null.
+    await this._saveIndicators(investigationId, null, newIndicators);
   }
 
-  /**
-   * Génère les données du graphe à partir des résultats du scan.
-   */
-  generateGraphData(scanData) {
+  _generateGraphData(scanData) {
     const nodes = [];
     const edges = [];
     const nodeIds = new Set();
@@ -174,28 +121,6 @@ class SpiderFootService {
     });
 
     return { nodes, edges };
-  }
-
-  calculateScore(scanData) {
-    if (!scanData || scanData.length === 0) return 0;
-    return Math.min(scanData.length / 200, 1.0);
-  }
-
-  async testConfiguration() {
-    try {
-      const { stdout } = await execAsync(`${this.spiderfootPath} -v`);
-      if (stdout.includes('SpiderFoot')) {
-        return { status: 'success', message: `SpiderFoot est accessible. Version: ${stdout.trim()}` };
-      }
-      return { status: 'error', message: 'La commande spiderfoot a retourné une sortie inattendue.' };
-    } catch (error) {
-      logger.error('Erreur lors du test de configuration SpiderFoot:', error);
-      return {
-        status: 'error',
-        message: 'Impossible d\'exécuter la commande spiderfoot.',
-        error: error.message,
-      };
-    }
   }
 }
 

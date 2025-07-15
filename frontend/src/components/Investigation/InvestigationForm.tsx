@@ -3,9 +3,9 @@
 import { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { z } from 'zod';
-import { InvestigationInput } from '@/lib/investigation-api';
+import { InvestigationInput } from '@/types';
 import { useAppStore } from '@/lib/store';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -17,6 +17,8 @@ import FingerprintIcon from '@mui/icons-material/Fingerprint';
 import TuneIcon from '@mui/icons-material/Tune';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Slider } from "@/components/ui/slider"
+import React from 'react';
+import { RocketLaunch } from '@mui/icons-material';
 
 // Local SVG Icon Components
 const SearchIcon = (props: React.SVGProps<SVGSVGElement>) => (
@@ -95,13 +97,14 @@ const CircularProgress = (props: { size?: number, color?: string, className?: st
     </svg>
 );
 
-const HelpIcon = (props: React.SVGProps<SVGSVGElement>) => (
-    <svg {...props} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+const HelpIcon = React.forwardRef<SVGSVGElement, React.SVGProps<SVGSVGElement>>((props, ref) => (
+    <svg ref={ref} {...props} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <circle cx="12" cy="12" r="10" />
         <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
         <line x1="12" y1="17" x2="12.01" y2="17" />
     </svg>
-);
+));
+HelpIcon.displayName = 'HelpIcon';
 
 const SaveIcon = (props: React.SVGProps<SVGSVGElement>) => (
     <svg {...props} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -344,7 +347,7 @@ export default function InvestigationForm({ onSubmit, isLoading: isSubmitting = 
           <Tooltip>
             <TooltipTrigger asChild>
               <Label className="text-sm font-semibold flex items-center gap-2 cursor-help">
-                <IconComponent className={`h-5 w-5 transition-colors duration-300 ${activeSection === type ? 'text-[#e5ee10]' : 'text-muted-foreground'} group-hover:text-[#e5ee10]`} />
+                <IconComponent aria-hidden="true" className={`h-5 w-5 transition-colors duration-300 ${activeSection === type ? 'text-[#e5ee10]' : 'text-muted-foreground'} group-hover:text-[#e5ee10]`} />
                 {label}
                 {activeFields.length > 0 && (
                   <Badge variant="secondary" className="ml-auto">
@@ -383,8 +386,9 @@ export default function InvestigationForm({ onSubmit, isLoading: isSubmitting = 
                       size="icon"
                       variant="ghost"
                       className="h-8 w-8 hover:bg-red-100 hover:text-red-600"
+                      aria-label={`Supprimer le champ ${label}`}
                     >
-                      <CloseIcon className="h-4 w-4" />
+                      <CloseIcon className="h-4 w-4" aria-hidden="true" />
                     </Button>
                   )}
                   {index === sectionFields.length - 1 && (
@@ -395,8 +399,9 @@ export default function InvestigationForm({ onSubmit, isLoading: isSubmitting = 
                       size="icon"
                       variant="ghost"
                       className="h-8 w-8 hover:bg-green-100 hover:text-green-600"
+                      aria-label={`Ajouter un champ ${label}`}
                     >
-                      <AddIcon className="h-4 w-4" />
+                      <AddIcon className="h-4 w-4" aria-hidden="true" />
                     </Button>
                   )}
                 </div>
@@ -421,6 +426,7 @@ export default function InvestigationForm({ onSubmit, isLoading: isSubmitting = 
   };
 
   const totalIndicators = Object.values(fields).flat().filter(f => f.value.trim() !== '').length;
+  const isValid = totalIndicators > 0;
 
   return (
     <div className="w-full">
@@ -435,7 +441,7 @@ export default function InvestigationForm({ onSubmit, isLoading: isSubmitting = 
                     <Tooltip>
                         <TooltipTrigger asChild>
                             <div className="flex items-center gap-3 cursor-help">
-                                <TrackChangesIcon className="h-6 w-6" style={{ color: '#e5ee10' }} />
+                                <TrackChangesIcon aria-hidden="true" className="h-6 w-6" style={{ color: '#e5ee10' }} />
                                 <span>Nouvelle Investigation OSINT</span>
                             </div>
                         </TooltipTrigger>
@@ -444,12 +450,18 @@ export default function InvestigationForm({ onSubmit, isLoading: isSubmitting = 
                         </TooltipContent>
                     </Tooltip>
                 </TooltipProvider>
-                <div onClick={() => setIsExpanded(!isExpanded)} className="cursor-pointer p-2">
-                  {isExpanded ? <ExpandLessIcon className="h-6 w-6" /> : <ExpandMoreIcon className="h-6 w-6" />}
-                </div>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => setIsExpanded(!isExpanded)}
+                  aria-label={isExpanded ? "Réduire le formulaire" : "Étendre le formulaire"}
+                >
+                  {isExpanded ? <ExpandLessIcon aria-hidden="true" className="h-6 w-6" /> : <ExpandMoreIcon aria-hidden="true" className="h-6 w-6" />}
+                </Button>
               </CardTitle>
               <p className="text-sm text-muted-foreground pt-2">
-                Tous les champs sont optionnels. Plus vous fournissez d'informations, plus les chances de trouver des résultats pertinents sont élevées.
+                Tous les champs sont optionnels. Plus vous fournissez d&apos;informations, plus les chances de trouver des résultats pertinents sont élevées.
               </p>
               {!isExpanded && totalIndicators > 0 && (
                  <p className="text-muted-foreground">
@@ -472,7 +484,7 @@ export default function InvestigationForm({ onSubmit, isLoading: isSubmitting = 
                 <form onSubmit={handleSubmit} className="space-y-8">
                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                     {renderIndicatorSection('names', 'Noms complets', 'ex: Jean Dupont', FingerprintIcon, "Noms et prénoms de la personne ciblée.")}
-                    {renderIndicatorSection('usernames', 'Noms d\'utilisateur', 'ex: jdupont123', Person4Icon, "Pseudos ou noms d'utilisateur utilisés sur les plateformes en ligne.")}
+                    {renderIndicatorSection('usernames', "Noms d'utilisateur", 'ex: jdupont123', Person4Icon, "Pseudos ou noms d'utilisateur utilisés sur les plateformes en ligne.")}
                     {renderIndicatorSection('emails', 'Adresses email', 'ex: jean.dupont@email.com', EmailIcon, "Adresses e-mail personnelles ou professionnelles.")}
                     {renderIndicatorSection('phones', 'Numéros de téléphone', 'ex: +33 6 12 34 56 78', PhoneIcon, "Numéros de téléphone, y compris l'indicatif du pays.")}
                     {renderIndicatorSection('ips', 'Adresses IP', 'ex: 192.168.1.1', DnsIcon, "Adresses IP (IPv4) associées à la cible.")}
@@ -485,7 +497,7 @@ export default function InvestigationForm({ onSubmit, isLoading: isSubmitting = 
 
                   <div className="border-t pt-6 space-y-6">
                       <Label className="text-base font-semibold flex items-center gap-2">
-                          <TuneIcon className="h-5 w-5 text-muted-foreground" />
+                          <TuneIcon aria-hidden="true" className="h-5 w-5 text-muted-foreground" />
                           Options Avancées
                       </Label>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -495,10 +507,10 @@ export default function InvestigationForm({ onSubmit, isLoading: isSubmitting = 
                                 <TooltipProvider delayDuration={200}>
                                     <Tooltip>
                                         <TooltipTrigger asChild>
-                                            <HelpIcon className="h-4 w-4 text-muted-foreground cursor-help" />
+                                            <HelpIcon aria-hidden="true" className="h-4 w-4 text-muted-foreground cursor-help" />
                                         </TooltipTrigger>
                                         <TooltipContent>
-                                            <p>Définit le nombre maximum d'itérations pour l'enrichissement.<br/>Une valeur plus élevée peut donner plus de résultats mais prend plus de temps.</p>
+                                            <p>Définit le nombre maximum d&apos;itérations pour l&apos;enrichissement.<br/>Une valeur plus élevée peut donner plus de résultats mais prend plus de temps.</p>
                                         </TooltipContent>
                                     </Tooltip>
                                 </TooltipProvider>
@@ -519,10 +531,10 @@ export default function InvestigationForm({ onSubmit, isLoading: isSubmitting = 
                                 <TooltipProvider delayDuration={200}>
                                     <Tooltip>
                                         <TooltipTrigger asChild>
-                                            <HelpIcon className="h-4 w-4 text-muted-foreground cursor-help" />
+                                            <HelpIcon aria-hidden="true" className="h-4 w-4 text-muted-foreground cursor-help" />
                                         </TooltipTrigger>
                                         <TooltipContent>
-                                            <p>Définit la confiance minimale pour qu'un indicateur soit utilisé.<br/>Bas = Recherche large, Haut = Recherche précise.</p>
+                                            <p>Le seuil de confiance minimum pour qu&apos;un indicateur soit utilisé.<br/>Abaisser ce seuil peut augmenter le bruit.</p>
                                         </TooltipContent>
                                     </Tooltip>
                                 </TooltipProvider>
@@ -543,7 +555,7 @@ export default function InvestigationForm({ onSubmit, isLoading: isSubmitting = 
                   <div className="flex items-center justify-between pt-4 border-t">
                       <div className="flex gap-2">
                           <Button type="button" variant="outline" onClick={saveTemplate}>
-                              <SaveIcon className="h-4 w-4 mr-2" />
+                              <SaveIcon aria-hidden="true" className="h-4 w-4 mr-2" />
                               Sauvegarder comme modèle
                           </Button>
                           <Select onValueChange={loadTemplate} value="">
@@ -561,24 +573,16 @@ export default function InvestigationForm({ onSubmit, isLoading: isSubmitting = 
                       </div>
                   </div>
 
-                  <Button
-                    type="submit"
-                    disabled={isLoading || totalIndicators === 0}
-                    className="w-full h-12 text-lg font-semibold"
-                    size="lg"
-                  >
-                    {isLoading ? (
-                      <>
-                        <CircularProgress size={20} color="inherit" className="mr-2" />
-                        Investigation en cours...
-                      </>
-                    ) : (
-                      <>
-                        <SearchIcon className="w-5 h-5 mr-2" />
-                        Lancer l'investigation ({totalIndicators} indicateur{totalIndicators > 1 ? 's' : ''})
-                      </>
-                    )}
-                  </Button>
+                  <CardFooter className="flex justify-end gap-2 bg-slate-900/50 p-4 border-t">
+                    <Button type="submit" disabled={isSubmitting || !isValid} className="gap-2">
+                      {isSubmitting ? (
+                        <CircularProgress size={20} color="inherit" />
+                      ) : (
+                        <RocketLaunch className="h-5 w-5" />
+                      )}
+                      <span>{isSubmitting ? 'Lancement...' : "Lancer l'investigation"}</span>
+                    </Button>
+                  </CardFooter>
                 </form>
               </CardContent>
             </motion.div>

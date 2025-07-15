@@ -17,22 +17,27 @@ import {
   Timeline
 } from '@mui/icons-material';
 import { CircularProgress } from '@mui/material';
-import { useInvestigation } from '@/hooks/useInvestigation';
+import { useInvestigationsList } from '@/hooks/useInvestigationsList';
+import { useInvestigationActions } from '@/hooks/useInvestigationActions';
 import { useAppStore } from '@/lib/store';
-import { Investigation } from '@/lib/investigation-api';
+import { Investigation } from '@/types';
 
 export default function ActiveInvestigations() {
   const { 
     investigations, 
-    isLoading,
-    loadInvestigations,
+    isLoading: isListLoading,
+    refreshInvestigations: loadInvestigations 
+  } = useInvestigationsList();
+  
+  const {
     startInvestigation,
     stopInvestigation,
-    deleteInvestigation
-  } = useInvestigation();
-  
-  const { addNotification } = useAppStore();
+    deleteInvestigation,
+    isLoading: isActionLoading
+  } = useInvestigationActions();
 
+  const { addToastNotification } = useAppStore();
+ 
   useEffect(() => {
     loadInvestigations();
   }, [loadInvestigations]);
@@ -46,7 +51,7 @@ export default function ActiveInvestigations() {
   const handleStartInvestigation = async (id: string) => {
     const success = await startInvestigation(id);
     if (success) {
-      addNotification({
+      addToastNotification({
         type: 'success',
         title: 'Investigation démarrée',
         message: `L'investigation ${id} a été démarrée avec succès`
@@ -57,7 +62,7 @@ export default function ActiveInvestigations() {
   const handleStopInvestigation = async (id: string) => {
     const success = await stopInvestigation(id);
     if (success) {
-      addNotification({
+      addToastNotification({
         type: 'success',
         title: 'Investigation arrêtée',
         message: `L'investigation ${id} a été arrêtée avec succès`
@@ -68,7 +73,7 @@ export default function ActiveInvestigations() {
   const handleDeleteInvestigation = async (id: string) => {
     const success = await deleteInvestigation(id);
     if (success) {
-      addNotification({
+      addToastNotification({
         type: 'success',
         title: 'Investigation supprimée',
         message: `L'investigation ${id} a été supprimée avec succès`
@@ -125,7 +130,7 @@ export default function ActiveInvestigations() {
             <p className="text-muted-foreground mb-4">
               Aucune investigation active
             </p>
-            <Button onClick={() => loadInvestigations()} disabled={isLoading}>
+            <Button onClick={() => loadInvestigations()} disabled={isListLoading || isActionLoading}>
               <Refresh className="h-4 w-4 mr-2" />
               Actualiser
             </Button>
@@ -143,7 +148,7 @@ export default function ActiveInvestigations() {
             <Timeline className="h-5 w-5" />
             Investigations actives ({activeInvestigations.length})
           </div>
-          <Button onClick={() => loadInvestigations()} disabled={isLoading} size="sm">
+          <Button onClick={() => loadInvestigations()} disabled={isListLoading || isActionLoading} size="sm">
             <Refresh className="h-4 w-4 mr-2" />
             Actualiser
           </Button>
@@ -195,7 +200,7 @@ export default function ActiveInvestigations() {
                     <Button
                       size="sm"
                       onClick={() => handleStartInvestigation(investigation.id)}
-                      disabled={isLoading}
+                      disabled={isActionLoading}
                     >
                       <PlayArrow className="h-4 w-4 mr-1" />
                       Démarrer
@@ -207,7 +212,7 @@ export default function ActiveInvestigations() {
                       size="sm"
                       onClick={() => handleStopInvestigation(investigation.id)}
                       variant="destructive"
-                      disabled={isLoading}
+                      disabled={isActionLoading}
                     >
                       <Stop className="h-4 w-4 mr-1" />
                       Arrêter

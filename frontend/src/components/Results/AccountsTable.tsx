@@ -11,7 +11,7 @@ import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import React from 'react';
 import { PersonResult, EmailResult, Account } from "@/types"
-import { useEmailFilter, useCategoryFilter, usePlatformFilter, useAppActions, useAllResults } from '@/lib/store';
+import { useEmailFilter, useCategoryFilter, usePlatformFilter, useAppActions, useAllResults } from '@/lib/stores/searchSlice';
 import ActiveFilters from './ActiveFilters';
 import EmailFilter from './EmailFilter';
 import CategoryFilter from './CategoryFilter';

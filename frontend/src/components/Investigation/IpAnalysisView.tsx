@@ -19,7 +19,7 @@ interface IpAnalysisViewProps {
 
 const IpAnalysisView: React.FC<IpAnalysisViewProps> = ({ data }) => {
   if (!data || data.length === 0) {
-    return <p>Aucune analyse d'IP disponible.</p>;
+    return <p>Aucune analyse d&apos;IP disponible.</p>;
   }
 
   return (

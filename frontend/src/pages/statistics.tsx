@@ -1,23 +1,28 @@
 "use client";
 
 import { useEffect, useState } from 'react';
+import { useSession } from 'next-auth/react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { ErrorOutline } from '@mui/icons-material';
-import { investigationAPI, GlobalStats } from '@/lib/investigation-api';
+import { api } from '@/lib/api-client';
+import { GlobalStats } from '@/types';
 
 export default function StatisticsPage() {
+  const { data: session } = useSession();
+  const token = session?.accessToken;
   const [stats, setStats] = useState<GlobalStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchStats = async () => {
+      if (!token) return;
       setLoading(true);
       setError(null);
       try {
-        const response = await investigationAPI.getGlobalStats();
+        const response = await api.getGlobalStats(token);
         if (response.data) {
           setStats(response.data);
         } else {
@@ -31,7 +36,7 @@ export default function StatisticsPage() {
     };
 
     fetchStats();
-  }, []);
+  }, [token]);
 
   return (
         <div className="p-4 sm:p-6 lg:p-8">
