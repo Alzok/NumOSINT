@@ -44,8 +44,11 @@ router.get('/', protect, catchAsync(async (req, res) => {
   const limit = parseInt(req.query.limit, 10) || 10;
   const skip = (page - 1) * limit;
 
+  const where = { userId: req.user.id };
+
   const [cases, total] = await prisma.$transaction([
     prisma.case.findMany({
+      where,
       skip,
       take: limit,
       include: {
@@ -55,7 +58,7 @@ router.get('/', protect, catchAsync(async (req, res) => {
         createdAt: 'desc',
       }
     }),
-    prisma.case.count(),
+    prisma.case.count({ where }),
   ]);
 
   res.json({
@@ -101,10 +104,23 @@ router.get('/', protect, catchAsync(async (req, res) => {
 router.post('/', protect, validate(caseValidation.createCase), catchAsync(async (req, res) => {
   const { name, description, investigationIds } = req.body;
 
+  if (investigationIds && investigationIds.length > 0) {
+    const investigationsCount = await prisma.investigation.count({
+      where: {
+        id: { in: investigationIds },
+        userId: req.user.id,
+      },
+    });
+    if (investigationsCount !== investigationIds.length) {
+      throw new ApiError('Forbidden', 403, true, 'One or more investigations do not belong to the user.');
+    }
+  }
+
   const newCase = await prisma.case.create({
     data: {
       name,
       description,
+      userId: req.user.id,
       investigations: {
         connect: investigationIds?.map((id) => ({ id })) || [],
       },
@@ -144,8 +160,11 @@ router.post('/', protect, validate(caseValidation.createCase), catchAsync(async 
  */
 router.get('/:id', protect, validate(caseValidation.getCase), catchAsync(async (req, res) => {
     const { id } = req.params;
-    const caseDetails = await prisma.case.findUnique({
-        where: { id },
+    const caseDetails = await prisma.case.findFirst({
+        where: { 
+          id,
+          userId: req.user.id
+        },
         include: {
             investigations: {
                 include: {
@@ -202,6 +221,10 @@ router.put('/:id', protect, validate(caseValidation.updateCase), catchAsync(asyn
     const { id } = req.params;
     const { name, description } = req.body;
 
+    await prisma.case.findFirstOrThrow({
+      where: { id, userId: req.user.id }
+    });
+
     const updatedCase = await prisma.case.update({
         where: { id },
         data: {
@@ -236,6 +259,11 @@ router.put('/:id', protect, validate(caseValidation.updateCase), catchAsync(asyn
  */
 router.delete('/:id', protect, validate(caseValidation.deleteCase), catchAsync(async (req, res) => {
     const { id } = req.params;
+    
+    await prisma.case.findFirstOrThrow({
+      where: { id, userId: req.user.id }
+    });
+
     await prisma.case.delete({
         where: { id },
     });
@@ -291,6 +319,23 @@ router.delete('/:id', protect, validate(caseValidation.deleteCase), catchAsync(a
 router.put('/:id/investigations', protect, validate(caseValidation.manageCaseInvestigations), catchAsync(async (req, res) => {
     const { id } = req.params;
     const { investigationIdsToConnect, investigationIdsToDisconnect } = req.body;
+
+    await prisma.case.findFirstOrThrow({
+      where: { id, userId: req.user.id }
+    });
+    
+    const allInvestigationIds = [...(investigationIdsToConnect || []), ...(investigationIdsToDisconnect || [])];
+    if (allInvestigationIds.length > 0) {
+      const investigationsCount = await prisma.investigation.count({
+        where: {
+          id: { in: allInvestigationIds },
+          userId: req.user.id,
+        },
+      });
+      if (investigationsCount !== allInvestigationIds.length) {
+        throw new ApiError('Forbidden', 403, true, 'One or more investigations do not belong to the user.');
+      }
+    }
 
     const updatedCase = await prisma.case.update({
         where: { id },

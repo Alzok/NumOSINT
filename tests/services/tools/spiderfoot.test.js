@@ -1,13 +1,16 @@
 const SpiderFootService = require('../../../src/services/tools/spiderfoot');
-const { PrismaClient } = require('@prisma/client');
 
-// Mock Prisma
+// Mock Prisma complet
 const mockPrisma = {
   result: {
-    create: jest.fn(),
-    findFirst: jest.fn(),
+    create: jest.fn().mockResolvedValue({}),
+  },
+  investigation: {
+    update: jest.fn().mockResolvedValue({})
   },
   indicator: {
+    findFirst: jest.fn().mockResolvedValue(null),
+    create: jest.fn().mockResolvedValue({}),
     createMany: jest.fn().mockResolvedValue({ count: 2 }),
   },
 };
@@ -25,28 +28,37 @@ describe('SpiderFootService', () => {
   });
 
   describe('startScan', () => {
-    it('should call spiderfoot command and save results', async () => {
+    it('should call the spiderfoot service and save results', async () => {
       const investigationId = 'test-investigation';
-      const indicator = { id: 'test-indicator', value: 'example.com' };
+      const indicators = [{ id: 'test-indicator', value: 'example.com' }];
       
       const mockScanData = [
         { type: 'IP_ADDRESS', data: '1.2.3.4' },
         { type: 'EMAILADDR', data: 'test@example.com' },
       ];
-      spiderfootService.executeScanCommand = jest.fn().mockResolvedValue();
-      spiderfootService.parseScanResults = jest.fn().mockResolvedValue(mockScanData);
+      
+      // Mocker l'appel axios
+      const axiosPostSpy = jest.spyOn(spiderfootService.axios, 'post').mockResolvedValue({ data: mockScanData });
 
-      await spiderfootService.startScan(investigationId, indicator);
+      await spiderfootService.startScan(investigationId, indicators);
 
-      // Check if result was created
+      // Vérifier que axios.post a été appelé
+      expect(axiosPostSpy).toHaveBeenCalledWith('/scan', { targets: 'example.com' });
+
+      // Vérifier que le résultat a été sauvegardé
       expect(mockPrisma.result.create).toHaveBeenCalled();
       const resultCall = mockPrisma.result.create.mock.calls[0][0];
       expect(resultCall.data.data.totalItems).toBe(2);
 
-      // Check if new indicators were created
-      expect(mockPrisma.indicator.createMany).toHaveBeenCalled();
-      const indicatorCall = mockPrisma.indicator.createMany.mock.calls[0][0];
-      expect(indicatorCall.data).toHaveLength(2);
+      // Vérifier que les nouveaux indicateurs ont été créés
+      expect(mockPrisma.indicator.create).toHaveBeenCalledTimes(2);
+      const firstIndicatorCall = mockPrisma.indicator.create.mock.calls[0][0];
+      expect(firstIndicatorCall.data.value).toBe('1.2.3.4');
+      const secondIndicatorCall = mockPrisma.indicator.create.mock.calls[1][0];
+      expect(secondIndicatorCall.data.value).toBe('test@example.com');
+
+      // Nettoyer le spy
+      axiosPostSpy.mockRestore();
     });
   });
 });

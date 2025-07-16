@@ -11,6 +11,9 @@ import {
   SidebarFooter,
   useSidebar,
 } from "@/components/ui/sidebar"
+import { UserNav } from "@/components/layout/UserNav";
+import { useSession } from "next-auth/react";
+import { CreditDisplay } from "@/components/common/CreditDisplay";
 
 import { useAppStore } from "@/lib/store";
 import { Badge } from "@/components/ui/badge";
@@ -54,6 +57,7 @@ HelpIcon.displayName = 'HelpIcon';
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const { setOpenMobile, isMobile } = useSidebar();
+  const { data: session, status } = useSession();
   
   const navItems = [
     { href: '/', icon: <SearchIcon className="h-5 w-5" />, label: 'Accueil' },
@@ -103,6 +107,9 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         </SidebarMenu>
       </SidebarContent>
       <SidebarFooter>
+        <div className="flex justify-center p-2">
+            <CreditDisplay credits={session?.user?.credits} isLoading={status === 'loading'} />
+        </div>
         <SidebarMenu>
           {secondaryNav.map((item) => (
             <SidebarMenuItem key={item.label}>
@@ -116,10 +123,8 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
               </SidebarMenuButton>
             </SidebarMenuItem>
           ))}
-          <SidebarMenuItem>
-            <NotificationBell />
-          </SidebarMenuItem>
         </SidebarMenu>
+        <UserNav />
       </SidebarFooter>
     </Sidebar>
   );

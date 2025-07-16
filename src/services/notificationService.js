@@ -109,6 +109,32 @@ class NotificationService {
       throw error;
     }
   }
+
+  /**
+   * Supprime une notification.
+   * @param {string} userId - L'ID de l'utilisateur.
+   * @param {string} notificationId - L'ID de la notification à supprimer.
+   */
+  async deleteNotification(userId, notificationId) {
+    try {
+      const result = await this.prisma.notification.deleteMany({
+        where: {
+          id: notificationId,
+          userId: userId, // Sécurité
+        },
+      });
+
+      if (result.count > 0) {
+        logger.info(`Notification ${notificationId} supprimée pour l'utilisateur ${userId}.`);
+      } else {
+        logger.warn(`Tentative de suppression de la notification ${notificationId} pour l'utilisateur ${userId} a échoué (non trouvée ou permission refusée).`);
+      }
+      return result;
+    } catch (error) {
+      logger.error(`Erreur lors de la suppression de la notification ${notificationId} pour l'utilisateur ${userId}:`, error);
+      throw error;
+    }
+  }
 }
 
 module.exports = NotificationService;

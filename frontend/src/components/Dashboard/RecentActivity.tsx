@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useSession } from 'next-auth/react';
 import { api } from '@/lib/api-client';
+import { useAppStore } from '@/lib/store';
 import { Investigation } from '@/types';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -17,6 +18,8 @@ const RecentActivity = () => {
   const [investigations, setInvestigations] = useState<Investigation[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const { dashboardFilters } = useAppStore();
+  const { date: selectedDate } = dashboardFilters;
 
   useEffect(() => {
     const fetchRecentInvestigations = async () => {
@@ -26,7 +29,12 @@ const RecentActivity = () => {
       };
       try {
         setLoading(true);
-        const response = await api.getInvestigations({ limit: 5, sortBy: 'updatedAt', sortOrder: 'desc' }, token);
+        const params: any = { limit: 5, sortBy: 'updatedAt', sortOrder: 'desc' };
+        if (selectedDate) {
+          params.date = selectedDate;
+          params.sortBy = 'createdAt'; // Sort by creation when a date is selected
+        }
+        const response = await api.getInvestigations(params, token);
         if (response.data) {
           setInvestigations(response.data);
         } else {
@@ -40,7 +48,7 @@ const RecentActivity = () => {
     };
 
     fetchRecentInvestigations();
-  }, [token]);
+  }, [token, selectedDate]);
 
   const getPrimaryTarget = (investigation: Investigation): string => {
     const inputData = investigation?.inputData;
@@ -79,7 +87,11 @@ const RecentActivity = () => {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Activité Récente</CardTitle>
+        <CardTitle>
+          {selectedDate
+            ? `Activité du ${new Date(selectedDate).toLocaleDateString('fr-FR')}`
+            : 'Activité Récente'}
+        </CardTitle>
       </CardHeader>
       <CardContent>
         <ul className="space-y-4">

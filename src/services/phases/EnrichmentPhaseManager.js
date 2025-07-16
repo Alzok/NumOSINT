@@ -113,15 +113,44 @@ class EnrichmentPhaseManager {
       }
 
       if (shouldRun) {
+        const activeInvestigation = this.orchestrator.activeInvestigations.get(investigationId);
+        if(activeInvestigation) activeInvestigation.enrichmentTasks++;
+
         // La méthode à appeler est déduite par convention (ex: 'analyzeEmail' pour 'mosintService')
         // C'est une simplification. Une meilleure approche serait de le spécifier dans le JSON.
         const methodName = this._getToolMethodForIndicator(toolName, type);
         if (toolService[methodName]) {
-          await this.orchestrator._runToolWithRetry(toolService[methodName].bind(toolService), investigationId, indicator);
+          // Ne pas attendre (await) ici pour lancer les outils en parallèle
+          this.orchestrator._runToolWithRetry(toolService[methodName].bind(toolService), investigationId, indicator);
         } else {
           logger.warn(`Méthode '${methodName}' non trouvée sur le service '${toolName}'.`);
+          if(activeInvestigation) activeInvestigation.enrichmentTasks--; // Décrémenter si l'outil n'est pas trouvé
         }
       }
+    }
+  }
+
+  /**
+   * Gère la complétion d'un outil d'enrichissement.
+   */
+  async handleToolCompletion(investigationId) {
+    const activeInvestigation = this.orchestrator.activeInvestigations.get(investigationId);
+    if (activeInvestigation) {
+      activeInvestigation.enrichmentTasks--;
+      this.checkPhaseCompletion(investigationId);
+    }
+  }
+
+  /**
+   * Vérifie si la phase d'enrichissement est terminée.
+   */
+  async checkPhaseCompletion(investigationId) {
+    const activeInvestigation = this.orchestrator.activeInvestigations.get(investigationId);
+    // La phase est terminée si la boucle de recherche d'indicateurs est finie ET que toutes les tâches lancées sont terminées.
+    if (activeInvestigation && !activeInvestigation.isEnrichmentLoopRunning && activeInvestigation.enrichmentTasks <= 0) {
+      logger.info(`Phase d'enrichissement terminée pour ${investigationId}. Passage au scanning.`);
+      await this.orchestrator.updateInvestigationPhase(investigationId, 'SCANNING');
+      this.orchestrator.runInvestigationFlow(investigationId);
     }
   }
 
@@ -131,7 +160,10 @@ class EnrichmentPhaseManager {
       case 'mosintService': return 'analyzeEmail';
       case 'maigretService': return 'searchProfiles';
       case 'phoneinfogaService': return 'analyzePhone';
-      case 'busterService': return 'generateEmails';
+      case 'busterService':
+        if (indicatorType === 'EMAIL') return 'reverseWhois';
+        if (indicatorType === 'NAME') return 'generateEmails';
+        return null;
       case 'pdlService':
         if (indicatorType === 'EMAIL') return 'enrichEmail';
         if (indicatorType === 'PHONE') return 'enrichPhone';

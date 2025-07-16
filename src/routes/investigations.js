@@ -22,9 +22,10 @@ const router = express.Router();
 router.get('/', protect, catchAsync(async (req, res) => {
   const { 
     page = 1, 
-    limit = 10, 
-    status, 
+    limit = 10,
+    status,
     search,
+    date,
     sortBy = 'createdAt',
     sortOrder = 'desc'
   } = req.query;
@@ -32,9 +33,20 @@ router.get('/', protect, catchAsync(async (req, res) => {
   const skip = (parseInt(page) - 1) * parseInt(limit);
   const take = parseInt(limit);
 
-  const where = {};
+  const where = {
+    userId: req.user.id,
+  };
   if (status) {
     where.status = status;
+  }
+  if (date) {
+    const startDate = new Date(date);
+    const endDate = new Date(date);
+    endDate.setDate(endDate.getDate() + 1);
+    where.createdAt = {
+      gte: startDate,
+      lt: endDate,
+    };
   }
   if (search) {
     where.OR = [
@@ -81,8 +93,11 @@ router.get('/', protect, catchAsync(async (req, res) => {
 // GET /api/investigations/:id - Obtenir une investigation
 router.get('/:id', protect, validate(investigationValidation.getInvestigation), catchAsync(async (req, res) => {
   const { id } = req.params;
-  const investigation = await prisma.investigation.findUnique({
-    where: { id },
+  const investigation = await prisma.investigation.findFirst({
+    where: { 
+      id,
+      userId: req.user.id
+    },
     include: {
       indicators: { orderBy: { createdAt: 'desc' } },
       results: { include: { indicator: true }, orderBy: { createdAt: 'desc' } },
@@ -98,16 +113,49 @@ router.get('/:id', protect, validate(investigationValidation.getInvestigation), 
   res.json({ investigation });
 }));
 
+// POST /api/investigations/cost - Calculer le coût d'une investigation
+router.post('/cost', protect, validate(investigationValidation.startInvestigation), catchAsync(async (req, res) => {
+  const { indicators } = req.body;
+  const { orchestrator } = req.app.locals;
+  const user = await prisma.user.findUnique({ where: { id: req.user.id } });
+
+  if (!orchestrator) {
+    throw new ApiError('Orchestrateur non disponible', 500);
+  }
+
+  const cost = orchestrator.calculateInvestigationCost(indicators);
+  
+  res.json({
+    cost,
+    hasEnoughCredits: user.credits >= cost,
+    userCredits: user.credits
+  });
+}));
+
 // POST /api/investigations - Créer une investigation
 router.post('/', protect, validate(investigationValidation.startInvestigation), catchAsync(async (req, res) => {
   const { indicators, caseId, options } = req.body;
+  const { orchestrator } = req.app.locals;
+  const user = await prisma.user.findUnique({ where: { id: req.user.id } });
 
+  if (!orchestrator) {
+    throw new ApiError('Orchestrateur non disponible', 500);
+  }
+
+  const cost = orchestrator.calculateInvestigationCost(indicators);
+
+  if (user.credits < cost) {
+    throw new ApiError('Crédits insuffisants pour lancer cette investigation.', 402);
+  }
+
+  // La déduction des crédits est maintenant gérée par l'orchestrateur à la fin.
   const investigation = await prisma.investigation.create({
     data: {
+      userId: req.user.id,
       status: InvestigationStatus.INITIALIZING,
       progress: 0,
       currentStep: 'initialization',
-      inputData: { indicators, options },
+      inputData: { indicators, options, cost }, // On enregistre le coût pour plus tard
       maxGeneration: options?.maxGeneration,
       minConfidence: options?.minConfidence,
       caseId: caseId,
@@ -126,7 +174,7 @@ router.post('/', protect, validate(investigationValidation.startInvestigation), 
     },
   });
 
-  logger.investigation(investigation.id, 'Nouvelle investigation créée', { inputData: req.body });
+  logger.investigation(investigation.id, 'Nouvelle investigation créée', { userId: req.user.id, inputData: req.body, cost });
 
   res.status(201).json({
     message: 'Investigation créée avec succès',
@@ -138,10 +186,13 @@ router.post('/', protect, validate(investigationValidation.startInvestigation), 
 router.delete('/:id', protect, validate(investigationValidation.deleteInvestigation), catchAsync(async (req, res) => {
   const { id } = req.params;
   
-  await prisma.investigation.findUniqueOrThrow({ where: { id } });
+  await prisma.investigation.findFirstOrThrow({ 
+    where: { id, userId: req.user.id } 
+  });
+
   await prisma.investigation.delete({ where: { id } });
 
-  logger.investigation(id, 'Investigation supprimée');
+  logger.investigation(id, 'Investigation supprimée', { userId: req.user.id });
   res.status(204).send();
 }));
 
@@ -150,7 +201,9 @@ router.post('/:id/start', protect, validate(investigationValidation.getInvestiga
   const { id } = req.params;
   const { orchestrator } = req.app.locals;
 
-  const investigation = await prisma.investigation.findUniqueOrThrow({ where: { id } });
+  const investigation = await prisma.investigation.findFirstOrThrow({ 
+    where: { id, userId: req.user.id } 
+  });
 
   const runningStatuses = [
     InvestigationStatus.ENRICHING,
@@ -168,7 +221,7 @@ router.post('/:id/start', protect, validate(investigationValidation.getInvestiga
 
   orchestrator.runInvestigationFlow(id, req.user.id);
 
-  logger.investigation(id, 'Investigation démarrée');
+  logger.investigation(id, 'Investigation démarrée', { userId: req.user.id });
   res.status(202).json({ message: 'Investigation démarrée avec succès' });
 }));
 
@@ -176,13 +229,17 @@ router.post('/:id/start', protect, validate(investigationValidation.getInvestiga
 router.post('/:id/stop', protect, validate(investigationValidation.stopInvestigation), catchAsync(async (req, res) => {
   const { id } = req.params;
   const { orchestrator } = req.app.locals;
+  
+  await prisma.investigation.findFirstOrThrow({ 
+    where: { id, userId: req.user.id } 
+  });
 
   if (!orchestrator) {
     throw new ApiError('Orchestrateur non disponible', 500);
   }
 
   const result = await orchestrator.stopInvestigation(id);
-  logger.investigation(id, 'Demande d\'arrêt de l\'investigation');
+  logger.investigation(id, 'Demande d\'arrêt de l\'investigation', { userId: req.user.id });
   res.status(202).json(result);
 }));
 
@@ -190,6 +247,10 @@ router.post('/:id/stop', protect, validate(investigationValidation.stopInvestiga
 router.get('/:id/results', protect, validate(investigationValidation.getInvestigation), catchAsync(async (req, res) => {
   const { id } = req.params;
   const { tool, type, limit = 100 } = req.query;
+
+  await prisma.investigation.findFirstOrThrow({ 
+    where: { id, userId: req.user.id } 
+  });
 
   const where = { investigationId: id };
   if (tool) where.toolSource = tool;
@@ -214,6 +275,10 @@ router.get('/:id/logs', protect, validate(investigationValidation.getInvestigati
   const { id } = req.params;
   const { step, level, limit = 100 } = req.query;
 
+  await prisma.investigation.findFirstOrThrow({ 
+    where: { id, userId: req.user.id } 
+  });
+
   const where = { investigationId: id };
   if (step) where.step = step;
   if (level) where.level = level;
@@ -235,6 +300,10 @@ router.get('/:id/logs', protect, validate(investigationValidation.getInvestigati
 router.get('/:id/summary', protect, validate(investigationValidation.getInvestigation), catchAsync(async (req, res) => {
   const { id } = req.params;
 
+  await prisma.investigation.findFirstOrThrow({ 
+    where: { id, userId: req.user.id } 
+  });
+
   const results = await prisma.result.findMany({
     where: { investigationId: id },
     orderBy: { createdAt: 'desc' },
@@ -242,6 +311,42 @@ router.get('/:id/summary', protect, validate(investigationValidation.getInvestig
 
   const summary = ResultTransformer.transform(results);
   res.json({ summary });
+}));
+
+// GET /api/investigations/:id/graph - Obtenir les données du graphe
+router.get('/:id/graph', protect, validate(investigationValidation.getInvestigation), catchAsync(async (req, res) => {
+  const { id } = req.params;
+  const investigation = await prisma.investigation.findFirstOrThrow({
+    where: { id, userId: req.user.id },
+    include: { indicators: true }
+  });
+
+  const nodes = investigation.indicators.map((indicator, index) => ({
+    id: indicator.id,
+    type: indicator.type, // Utiliser le type de l'indicateur comme type de noeud
+    data: { label: indicator.value, type: indicator.type },
+    position: { x: Math.random() * 400, y: Math.random() * 400 },
+  }));
+
+  // Logique de création des liens
+  const edges = [];
+  const initialIndicators = investigation.indicators.filter(i => i.generation === 0);
+
+  if (initialIndicators.length > 0) {
+    const initialIndicatorId = initialIndicators[0].id; // On prend le premier comme source principale
+    investigation.indicators.forEach(indicator => {
+      if (indicator.id !== initialIndicatorId) {
+        edges.push({
+          id: `e-${initialIndicatorId}-${indicator.id}`,
+          source: initialIndicatorId,
+          target: indicator.id,
+          animated: true,
+        });
+      }
+    });
+  }
+
+  res.json({ nodes, edges });
 }));
 
 module.exports = router;

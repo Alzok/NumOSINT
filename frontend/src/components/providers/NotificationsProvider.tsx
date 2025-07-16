@@ -66,7 +66,7 @@ export function NotificationsProvider({ children }: { children: React.ReactNode 
         socket.disconnect();
       }
     };
-  }, [setAppNotifications, addAppNotification, addToastNotification]);
+  }, [token, setAppNotifications, addAppNotification, addToastNotification]);
 
   return <>{children}</>;
 }

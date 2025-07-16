@@ -65,9 +65,13 @@ router.post('/login', validate(loginSchema), catchAsync(async (req, res, next) =
     expiresIn: process.env.JWT_EXPIRES_IN,
   });
 
+  // Ne pas renvoyer le mot de passe
+  user.password = undefined;
+
   res.status(200).json({
     status: 'success',
     token,
+    user,
   });
 }));
 

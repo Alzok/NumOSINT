@@ -44,12 +44,17 @@ export const api = {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(data),
   }),
-  getInvestigations: (params: { limit?: number; sortBy?: string; sortOrder?: string; status?: string } = {}, token?: string | null) => {
+  getInvestigationCost: (indicators: { type: string, value: string }[]) => fetcher<{ cost: number; hasEnoughCredits: boolean; userCredits: number }>('/api/investigations/cost', {
+    method: 'POST',
+    body: JSON.stringify({ indicators }),
+  }),
+  getInvestigations: (params: { limit?: number; sortBy?: string; sortOrder?: string; status?: string; date?: string } = {}, token?: string | null) => {
     const query = new URLSearchParams();
     if (params.limit) query.append('limit', params.limit.toString());
     if (params.sortBy) query.append('sortBy', params.sortBy);
     if (params.sortOrder) query.append('sortOrder', params.sortOrder);
     if (params.status) query.append('status', params.status);
+    if (params.date) query.append('date', params.date);
     return fetcher<Investigation[]>(`/api/investigations?${query.toString()}`, {}, token);
   },
   getInvestigation: (id: string, token?: string | null) => fetcher<Investigation>(`/api/investigations/${id}`, {}, token),
@@ -60,13 +65,50 @@ export const api = {
   getGroupedResults: (params: any, token?: string | null) => fetcher<any>(`/api/results/grouped?${new URLSearchParams(params)}`, {}, token),
   getLogs: (id: string, token?: string | null) => fetcher<{ logs: InvestigationLog[] }>(`/api/investigations/${id}/logs`, {}, token),
   getInvestigationGraph: (id: string, token?: string | null) => fetcher<{ nodes: any[], edges: any[] }>(`/api/investigations/${id}/graph`, {}, token),
+  exportInvestigation: async (id: string, format: 'pdf' | 'csv', token?: string | null): Promise<{ blob: Blob | null, error: string | null }> => {
+    try {
+      const authToken = token || localStorage.getItem('token');
+      const headers = new Headers();
+      if (authToken) {
+        headers.append('Authorization', `Bearer ${authToken}`);
+      }
+      const res = await fetch(`${API_URL}/api/reports/investigation/${id}/export?format=${format}`, { headers });
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({ message: 'An unknown error occurred' }));
+        return { blob: null, error: errorData.message || res.statusText };
+      }
+      const blob = await res.blob();
+      return { blob, error: null };
+    } catch (error: any) {
+      return { blob: null, error: error.message || 'Network error' };
+    }
+  },
 
   // Tools
-  listTools: () => fetcher<any[]>('/api/tools'),
+  listTools: (token?: string | null) => fetcher<any[]>('/api/tools', {}, token),
+
+  // Templates
+  getTemplates: (token?: string | null) => fetcher<any[]>('/api/templates', {}, token),
+  createTemplate: (data: { name: string, inputData: any }, token?: string | null) => fetcher<any>('/api/templates', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  }, token),
+  deleteTemplate: (id: string, token?: string | null) => fetcher<null>(`/api/templates/${id}`, {
+    method: 'DELETE',
+  }, token),
 
   // Statistics
-  getInvestigationsOverTime: (token?: string | null) => fetcher<any>('/api/statistics/investigations-over-time', {}, token),
-  getGlobalStats: (token?: string | null) => fetcher<any>('/api/statistics/global', {}, token),
+  getInvestigationsOverTime: (params: { period?: string }, token?: string | null) => {
+    const query = new URLSearchParams(params as any).toString();
+    return fetcher<any>(`/api/statistics/investigations-over-time?${query}`, {}, token);
+  },
+  getGlobalStats: (params: { period?: string, date?: string }, token?: string | null) => {
+    const query = new URLSearchParams(params as any).toString();
+    return fetcher<any>(`/api/statistics/dashboard?${query}`, {}, token);
+  },
+
+  // Billing
+  getBillingHistory: (token?: string | null) => fetcher<any[]>('/api/billing/history', {}, token),
 
   // Cases
   getCases: (token?: string | null) => fetcher<Case[]>('/api/cases', {}, token),
@@ -91,5 +133,8 @@ export const api = {
   }, token),
   markAllNotificationsAsRead: (token?: string | null) => fetcher<{ count: number }>('/api/notifications/mark-all-as-read', {
     method: 'POST',
+  }, token),
+  deleteNotification: (id: string, token?: string | null) => fetcher<null>(`/api/notifications/${id}`, {
+    method: 'DELETE',
   }, token),
 };

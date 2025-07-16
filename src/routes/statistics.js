@@ -25,11 +25,46 @@ const router = express.Router();
  *       500:
  *         description: Erreur serveur
  */
-router.get('/', protect, cache.route(), catchAsync(async (req, res) => {
-  const totalInvestigations = await prisma.investigation.count();
-  const totalResults = await prisma.result.count();
+router.get('/dashboard', protect, catchAsync(async (req, res) => {
+  const { period, date } = req.query;
+  const userId = req.user.id;
+
+  const where = { userId };
+
+  if (date) {
+    const startDate = new Date(date);
+    const endDate = new Date(date);
+    endDate.setDate(endDate.getDate() + 1);
+    where.createdAt = { gte: startDate, lt: endDate };
+  } else if (period) {
+    const startDate = new Date();
+    switch (period) {
+      case '7d':
+        startDate.setDate(startDate.getDate() - 7);
+        break;
+      case '90d':
+        startDate.setDate(startDate.getDate() - 90);
+        break;
+      case '30d':
+      default:
+        startDate.setDate(startDate.getDate() - 30);
+        break;
+    }
+    where.createdAt = { gte: startDate };
+  }
+
+  const totalInvestigations = await prisma.investigation.count({ where });
+  const completedInvestigations = await prisma.investigation.count({ where: { ...where, status: 'COMPLETED' } });
+  const runningInvestigations = await prisma.investigation.count({ where: { ...where, status: { in: ['SCANNING', 'ENRICHING', 'CONSOLIDATING'] } } });
+  
+  const resultsAggregation = await prisma.result.aggregate({
+    where: { investigation: where },
+    _count: { _all: true },
+  });
+  const totalResults = resultsAggregation._count._all;
 
   const resultsByTool = await prisma.result.groupBy({
+    where: { investigation: where },
     by: ['toolSource'],
     _count: {
       toolSource: true,
@@ -42,6 +77,7 @@ router.get('/', protect, cache.route(), catchAsync(async (req, res) => {
   });
 
   const indicatorsByType = await prisma.indicator.groupBy({
+    where: { investigation: where },
     by: ['type'],
     _count: {
       type: true,
@@ -55,6 +91,8 @@ router.get('/', protect, cache.route(), catchAsync(async (req, res) => {
 
   res.json({
     totalInvestigations,
+    completedInvestigations,
+    runningInvestigations,
     totalResults,
     resultsByTool: resultsByTool.map(item => ({ toolSource: item.toolSource, count: item._count.toolSource })),
     indicatorsByType: indicatorsByType.map(item => ({ type: item.type, count: item._count.type })),
@@ -74,9 +112,27 @@ router.get('/', protect, cache.route(), catchAsync(async (req, res) => {
  *         description: Erreur serveur
  */
 router.get('/investigations-over-time', protect, catchAsync(async (req, res) => {
+  const { period = '30d' } = req.query;
+  const userId = req.user.id;
+
+  let startDate = new Date();
+  switch (period) {
+    case '7d':
+      startDate.setDate(startDate.getDate() - 7);
+      break;
+    case '90d':
+      startDate.setDate(startDate.getDate() - 90);
+      break;
+    case '30d':
+    default:
+      startDate.setDate(startDate.getDate() - 30);
+      break;
+  }
+
   const result = await prisma.$queryRaw`
     SELECT DATE_TRUNC('day', "createdAt")::DATE as date, COUNT(*)::int as count
     FROM "investigations"
+    WHERE "createdAt" >= ${startDate} AND "userId" = ${userId}
     GROUP BY date
     ORDER BY date ASC
   `;

@@ -4,8 +4,9 @@ import { createNotificationSlice, NotificationSlice } from './stores/notificatio
 import { createSearchSlice, SearchSlice } from './stores/searchSlice';
 import { createUiSlice, UiSlice } from './stores/uiSlice';
 import { createFormSlice, FormSlice } from './stores/formSlice';
+import { createDashboardSlice, DashboardSlice } from './stores/dashboardSlice';
 
-export interface AppStore extends NotificationSlice, SearchSlice, UiSlice, FormSlice {}
+export interface AppStore extends NotificationSlice, SearchSlice, UiSlice, FormSlice, DashboardSlice {}
 
 export const useAppStore = create<AppStore>()(
   persist(
@@ -14,6 +15,7 @@ export const useAppStore = create<AppStore>()(
       ...createSearchSlice(set, get, api),
       ...createUiSlice(set, get, api),
       ...createFormSlice(set, get, api),
+      ...createDashboardSlice(set, get, api),
     }),
     {
       name: 'turbolehe-store',

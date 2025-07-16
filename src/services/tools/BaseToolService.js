@@ -74,9 +74,9 @@ class BaseToolService {
                         type: item.type,
                         value: item.value,
                         confidence: item.confidence || 75, // Confiance par défaut
-                        generation: parentIndicator.generation + 1,
+                        generation: parentIndicator ? parentIndicator.generation + 1 : 1,
                         sourceTool: this.toolName,
-                        parentId: parentIndicator.id,
+                        parentId: parentIndicator ? parentIndicator.id : null,
                     },
                 });
                 createdIndicators.push(newIndicator);
@@ -90,7 +90,8 @@ class BaseToolService {
     }
     
     if (createdIndicators.length > 0) {
-        logger.info(`[${this.toolName}] ${createdIndicators.length} nouvel(s) indicateur(s) créé(s) à partir de ${parentIndicator.value}.`);
+      const sourceText = parentIndicator ? `à partir de ${parentIndicator.value}` : 'depuis un scan initial';
+      logger.info(`[${this.toolName}] ${createdIndicators.length} nouvel(s) indicateur(s) créé(s) ${sourceText}.`);
     }
   }
 

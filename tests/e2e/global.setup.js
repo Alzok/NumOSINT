@@ -13,6 +13,9 @@ module.exports = async (config) => {
 
   await page.goto(`${baseURL}/login`);
 
+  // Attendre que le formulaire soit prêt
+  await page.waitForSelector('input[name="email"]');
+
   // Try to log in directly
   await page.fill('input[name="email"]', email);
   await page.fill('input[name="password"]', password);

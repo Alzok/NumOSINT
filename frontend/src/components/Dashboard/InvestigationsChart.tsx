@@ -4,7 +4,9 @@ import { useEffect, useState } from 'react';
 import { useSession } from 'next-auth/react';
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { api } from '@/lib/api-client';
+import { useAppStore } from '@/lib/store';
 import { InvestigationsOverTimeData } from '@/types';
 import { Skeleton } from '@/components/ui/skeleton';
 
@@ -14,6 +16,8 @@ export default function InvestigationsChart() {
   const [data, setData] = useState<InvestigationsOverTimeData[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const { dashboardFilters, setDashboardDateFilter, setDashboardPeriodFilter } = useAppStore();
+  const { period, date: selectedDate } = dashboardFilters;
 
   useEffect(() => {
     const fetchData = async () => {
@@ -22,7 +26,7 @@ export default function InvestigationsChart() {
         return;
       };
       setLoading(true);
-      const response = await api.getInvestigationsOverTime(token);
+      const response = await api.getInvestigationsOverTime({ period }, token);
       if (response.data) {
         setData(response.data);
         setError(null);
@@ -33,7 +37,15 @@ export default function InvestigationsChart() {
     };
 
     fetchData();
-  }, [token]);
+  }, [token, period]);
+
+  const handleBarClick = (payload: any) => {
+    if (payload && payload.activePayload && payload.activePayload.length > 0) {
+      const date = payload.activePayload[0].payload.date;
+      // Toggle functionality: if clicking the same date, clear the filter
+      setDashboardDateFilter(selectedDate === date ? null : date);
+    }
+  };
 
   if (error) {
     return (
@@ -50,8 +62,18 @@ export default function InvestigationsChart() {
 
   return (
     <Card>
-      <CardHeader>
+      <CardHeader className="flex flex-row items-center justify-between">
         <CardTitle>Investigations Créées par Jour</CardTitle>
+        <Select value={period} onValueChange={(p) => setDashboardPeriodFilter(p as '7d' | '30d' | '90d')}>
+          <SelectTrigger className="w-[180px]">
+            <SelectValue placeholder="Période" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="7d">7 derniers jours</SelectItem>
+            <SelectItem value="30d">30 derniers jours</SelectItem>
+            <SelectItem value="90d">90 derniers jours</SelectItem>
+          </SelectContent>
+        </Select>
       </CardHeader>
       <CardContent>
         {loading ? (
@@ -59,7 +81,7 @@ export default function InvestigationsChart() {
         ) : (
           <div className="h-[300px]">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={data}>
+              <BarChart data={data} onClick={handleBarClick}>
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis dataKey="date" />
                 <YAxis allowDecimals={false} />
@@ -69,7 +91,7 @@ export default function InvestigationsChart() {
                     border: "1px solid hsl(var(--border))",
                   }}
                 />
-                <Bar dataKey="count" fill="hsl(var(--primary))" name="Investigations" />
+                <Bar dataKey="count" fill="hsl(var(--primary))" name="Investigations" style={{ cursor: 'pointer' }} />
               </BarChart>
             </ResponsiveContainer>
           </div>

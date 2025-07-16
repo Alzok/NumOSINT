@@ -3,15 +3,17 @@
 import { useEffect, useState } from 'react';
 import dynamic from 'next/dynamic';
 import Link from 'next/link';
+import { useSession } from 'next-auth/react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useInvestigationActions } from '@/hooks/useInvestigationActions';
 import { useInvestigationsList } from '@/hooks/useInvestigationsList';
-import { InvestigationLog } from '@/types';
+import { InvestigationLog, DashboardStats } from '@/types';
 import { api } from '@/lib/api-client';
 import { useAppStore } from '@/lib/store';
 import AnimationOutlinedIcon from '@mui/icons-material/AnimationOutlined';
+import { Coins } from 'lucide-react';
 import Silk from '@/components/ui/Backgrounds/Silk/Silk';
-
+import { CreditDisplay } from '@/components/common/CreditDisplay';
 import InvestigationForm from '@/components/Investigation/InvestigationForm';
 import ActiveInvestigations from '@/components/Investigation/ActiveInvestigations';
 import RecentActivity from '@/components/Dashboard/RecentActivity';
@@ -21,9 +23,11 @@ const InvestigationsChart = dynamic(() => import('@/components/Dashboard/Investi
   loading: () => <p>Chargement du graphique...</p>,
   ssr: false
 });
-import { mapStatusToPhase } from '@/lib/utils';
 
 export default function DashboardPage() {
+  const { data: session, status } = useSession();
+  const token = session?.accessToken;
+
   const {
     createInvestigation,
     startInvestigation,
@@ -32,59 +36,68 @@ export default function DashboardPage() {
   } = useInvestigationActions();
   const isLoading = isCreating || isStarting;
   const { investigations, refreshInvestigations: loadInvestigations } = useInvestigationsList();
+  const { dashboardFilters } = useAppStore();
+  const { period, date } = dashboardFilters;
   
-  const { addToastNotification } = useAppStore();
+  const [stats, setStats] = useState<DashboardStats>({
+    totalInvestigations: 0,
+    completedInvestigations: 0,
+    runningInvestigations: 0,
+    totalResults: 0,
+  });
+  const [statsLoading, setStatsLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchStats = async () => {
+      if (!token) return;
+      setStatsLoading(true);
+      const params: { period?: string; date?: string } = {};
+      if (date) {
+        params.date = date;
+      } else {
+        params.period = period;
+      }
+      const response = await api.getGlobalStats(params, token);
+      if (response.data) {
+        setStats(response.data);
+      }
+      setStatsLoading(false);
+    };
+    fetchStats();
+  }, [token, period, date]);
+
+  // La logique de la timeline reste la même pour l'instant
   const [timelineLogs, setTimelineLogs] = useState<InvestigationLog[]>([]);
   const [timelineLoading, setTimelineLoading] = useState<boolean>(false);
-
+  
   useEffect(() => {
     loadInvestigations();
   }, [loadInvestigations]);
 
-  // Calculer les statistiques à partir des investigations
-  const totalInvestigations = investigations.length;
-  const completedInvestigationsList = investigations.filter(inv => inv.status === 'COMPLETED');
-  const completedInvestigations = completedInvestigationsList.length;
   const runningInvestigationsList = investigations.filter(inv => ['SCANNING', 'ENRICHING', 'CONSOLIDATING'].includes(inv.status));
-  const runningInvestigations = runningInvestigationsList.length;
+  const completedInvestigationsList = investigations.filter(inv => inv.status === 'COMPLETED');
   
-  // Déterminer quelle investigation afficher dans la timeline
   let investigationForTimeline = null;
-  if (runningInvestigations > 0) {
-    // Priorité à l'investigation en cours la plus récente
+  if (runningInvestigationsList.length > 0) {
     investigationForTimeline = runningInvestigationsList.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0];
-  } else if (completedInvestigations > 0) {
-    // Sinon, montrer la dernière investigation terminée
+  } else if (completedInvestigationsList.length > 0) {
     investigationForTimeline = completedInvestigationsList.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0];
   }
-  
-import { useSession } from 'next-auth/react';
 
-// ...
-
-export default function DashboardPage() {
-  const { data: session } = useSession();
-  const token = session?.accessToken;
-  // ...
   useEffect(() => {
     if (investigationForTimeline && token) {
-      console.log("Investigation for timeline:", investigationForTimeline.id);
       setTimelineLoading(true);
       api.getLogs(investigationForTimeline.id, token)
         .then((response: { data: { logs: InvestigationLog[] } | null, error: string | null }) => {
-          console.log("Logs response:", response);
           if (response.data && response.data.logs) {
             setTimelineLogs(response.data.logs);
           }
         })
         .finally(() => setTimelineLoading(false));
     } else {
-      console.log("No investigation for timeline.");
       setTimelineLogs([]);
     }
-  }, [investigationForTimeline]);
-
-  const totalResults = investigations.reduce((acc, inv) => acc + (inv.results?.length || 0), 0);
+  }, [investigationForTimeline, token]);
 
   return (
         <main className="flex flex-col gap-4 py-4 md:gap-6 md:py-6">
@@ -108,7 +121,7 @@ export default function DashboardPage() {
                         rotation={0}
                       />
                     </div>
-                    <p className="relative z-10 text-xl font-bold text-[#e5ee10]">Plateforme d&apos;investigation numérique unifiée</p>
+                    <p className="relative z-10 text-xl font-bold text-[#e5ee10]">Plateforme d'investigation numérique unifiée</p>
                   </CardContent>
                 </Card>
             </header>
@@ -131,7 +144,7 @@ export default function DashboardPage() {
                   <Card>
                       <CardHeader>
                           <CardTitle>
-                              {investigationForTimeline ? (runningInvestigations > 0 ? "Progression de l'investigation en cours" : "Dernière investigation terminée") : "Progression de l'investigation"}
+                              {investigationForTimeline ? (runningInvestigationsList.length > 0 ? "Progression de l'investigation en cours" : "Dernière investigation terminée") : "Progression de l'investigation"}
                           </CardTitle>
                       </CardHeader>
                       <CardContent>
@@ -160,13 +173,27 @@ export default function DashboardPage() {
             </section>
 
             <section aria-label="Statistiques générales" className="grid gap-4 px-4 md:grid-cols-2 md:gap-8 lg:grid-cols-4 lg:px-6">
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">Crédits restants</CardTitle>
+                  <Coins className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold">
+                    <CreditDisplay credits={session?.user?.credits} isLoading={status === 'loading'} />
+                  </div>
+                   <p className="text-xs text-muted-foreground">
+                      Utilisés pour lancer des investigations
+                    </p>
+                </CardContent>
+              </Card>
               <Link href="/investigations?status=active">
                 <Card className="hover:bg-muted/50 transition-colors">
                   <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                     <CardTitle className="text-sm font-medium">Investigations en cours</CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <div className="text-2xl font-bold">{runningInvestigations}</div>
+                    <div className="text-2xl font-bold">{statsLoading ? '...' : stats.runningInvestigations}</div>
                     <p className="text-xs text-muted-foreground">
                       Cliquez pour voir les détails
                     </p>
@@ -179,9 +206,9 @@ export default function DashboardPage() {
                     <CardTitle className="text-sm font-medium">Investigations terminées</CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <div className="text-2xl font-bold">{completedInvestigations}</div>
+                    <div className="text-2xl font-bold">{statsLoading ? '...' : stats.completedInvestigations}</div>
                     <p className="text-xs text-muted-foreground">
-                      {totalInvestigations > 0 ? `${Math.round((completedInvestigations / totalInvestigations) * 100)}% du total` : '0% du total'}
+                      {stats.totalInvestigations > 0 ? `${Math.round((stats.completedInvestigations / stats.totalInvestigations) * 100)}% du total` : '0% du total'}
                     </p>
                   </CardContent>
                 </Card>
@@ -192,9 +219,9 @@ export default function DashboardPage() {
                     <CardTitle className="text-sm font-medium">Toutes les investigations</CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <div className="text-2xl font-bold">{totalInvestigations}</div>
+                    <div className="text-2xl font-bold">{statsLoading ? '...' : stats.totalInvestigations}</div>
                     <p className="text-xs text-muted-foreground">
-                      Voir l&apos;historique complet
+                      Filtré par la sélection
                     </p>
                   </CardContent>
                 </Card>
@@ -205,7 +232,7 @@ export default function DashboardPage() {
                     <CardTitle className="text-sm font-medium">Total des résultats</CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <div className="text-2xl font-bold">{totalResults}</div>
+                    <div className="text-2xl font-bold">{statsLoading ? '...' : stats.totalResults}</div>
                     <p className="text-xs text-muted-foreground">
                       Tous types confondus
                     </p>

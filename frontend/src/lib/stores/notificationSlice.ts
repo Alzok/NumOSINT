@@ -11,6 +11,7 @@ export interface NotificationSlice {
   clearToastNotifications: () => void;
   setAppNotifications: (notifications: AppNotification[]) => void;
   addAppNotification: (notification: AppNotification) => void;
+  removeAppNotification: (id: string) => void;
   markAppNotificationsAsRead: (ids: string[]) => void;
   markAllAppNotificationsAsRead: () => void;
 }
@@ -39,6 +40,9 @@ export const createNotificationSlice: StateCreator<
   setAppNotifications: (notifications) => set({ appNotifications: notifications }),
   addAppNotification: (notification) => set((state) => ({
     appNotifications: [notification, ...state.appNotifications]
+  })),
+  removeAppNotification: (id) => set((state) => ({
+    appNotifications: state.appNotifications.filter((n) => n.id !== id),
   })),
   markAppNotificationsAsRead: (ids) => set((state) => ({
     appNotifications: state.appNotifications.map((n) =>

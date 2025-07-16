@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
+import { useSession } from 'next-auth/react';
 import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
@@ -15,6 +16,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuCheckboxItem } from '@/components/ui/dropdown-menu';
+import { Slider } from "@/components/ui/slider";
 import { api } from '@/lib/api-client';
 import { PaginationInfo, ToolInfo } from '@/types';
 
@@ -34,6 +36,8 @@ export default function AllResultsPage() {
   const [pagination, setPagination] = useState<PaginationInfo | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [loading, setLoading] = useState(true);
+  const [hasMore, setHasMore] = useState(true);
+  const observer = useRef<IntersectionObserver | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [selectedInvestigationId, setSelectedInvestigationId] = useState<string | null>(null);
@@ -41,38 +45,43 @@ export default function AllResultsPage() {
 
   // State for filters
   const [filters, setFilters] = useState({
+    name: '',
     status: 'all',
     tools: [] as string[],
     startDate: '',
     endDate: '',
     indicatorType: 'all',
+    confidence: [0, 100],
   });
-
-import { useSession } from 'next-auth/react';
-
-// ...
 
   const { data: session } = useSession();
   const token = session?.accessToken;
 
-  const fetchGroupedResults = useCallback(async (page: number, currentFilters: typeof filters) => {
+  const fetchGroupedResults = useCallback(async (page: number, currentFilters: typeof filters, append = false) => {
     if (!token) return;
     setLoading(true);
     setError(null);
     try {
       const params: any = { page, limit: 10 };
+      if (currentFilters.name) params.name = currentFilters.name;
       if (currentFilters.status && currentFilters.status !== 'all') params.status = currentFilters.status;
       if (currentFilters.tools.length > 0) params.tools = currentFilters.tools.join(',');
       if (currentFilters.indicatorType && currentFilters.indicatorType !== 'all') params.indicatorType = currentFilters.indicatorType;
       if (currentFilters.startDate) params.startDate = currentFilters.startDate;
       if (currentFilters.endDate) params.endDate = currentFilters.endDate;
+      if (currentFilters.confidence) {
+        params.minConfidence = currentFilters.confidence[0];
+        params.maxConfidence = currentFilters.confidence[1];
+      }
       
       const response = await api.getGroupedResults(params, token);
       if (response.data) {
-        setInvestigations(response.data.investigations);
+        setInvestigations(prev => append ? [...prev, ...response.data.investigations] : response.data.investigations);
         setPagination(response.data.pagination);
+        setHasMore(response.data.pagination.hasNext);
       } else {
         setError(response.error || 'Une erreur est survenue lors de la récupération des résultats.');
+        setHasMore(false);
       }
     } catch (err) {
       setError('Impossible de charger les résultats.');
@@ -90,12 +99,31 @@ import { useSession } from 'next-auth/react';
   }, [token]);
 
   useEffect(() => {
-    fetchGroupedResults(currentPage, filters);
+    setInvestigations([]);
+    setCurrentPage(1);
+    setHasMore(true);
+    fetchGroupedResults(1, filters, false);
+  }, [filters, fetchGroupedResults]);
+
+  useEffect(() => {
+    if (currentPage > 1) {
+      fetchGroupedResults(currentPage, filters, true);
+    }
   }, [currentPage, filters, fetchGroupedResults]);
 
-  const handleFilterChange = (key: keyof typeof filters, value: string | string[]) => {
+  const lastInvestigationElementRef = useCallback((node: HTMLElement | null) => {
+    if (loading) return;
+    if (observer.current) observer.current.disconnect();
+    observer.current = new IntersectionObserver(entries => {
+      if (entries[0].isIntersecting && hasMore) {
+        setCurrentPage(prevPage => prevPage + 1);
+      }
+    });
+    if (node) observer.current.observe(node);
+  }, [loading, hasMore]);
+
+  const handleFilterChange = (key: keyof typeof filters, value: string | string[] | number[]) => {
     setFilters(prev => ({ ...prev, [key]: value }));
-    setCurrentPage(1); // Reset to first page on filter change
   };
 
   const handleToolToggle = (toolName: string) => {
@@ -144,6 +172,10 @@ import { useSession } from 'next-auth/react';
           </CardTitle>
         </CardHeader>
         <CardContent className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+          <div className="space-y-2">
+            <Label htmlFor="name">Nom de l'investigation</Label>
+            <Input id="name" placeholder="Rechercher par nom..." value={filters.name} onChange={(e) => handleFilterChange('name', e.target.value)} />
+          </div>
           <div className="space-y-2">
             <Label htmlFor="status">Statut</Label>
             <Select value={filters.status} onValueChange={(value) => handleFilterChange('status', value)}>
@@ -207,6 +239,23 @@ import { useSession } from 'next-auth/react';
             <Label htmlFor="endDate">Date de fin</Label>
             <Input id="endDate" type="date" value={filters.endDate} onChange={(e) => handleFilterChange('endDate', e.target.value)} />
           </div>
+          <div className="space-y-2 col-span-1 sm:col-span-2 md:col-span-2">
+            <Label htmlFor="confidence">Score de confiance</Label>
+            <div className="flex items-center gap-4">
+              <Slider
+                id="confidence"
+                min={0}
+                max={100}
+                step={1}
+                value={filters.confidence}
+                onValueChange={(value) => handleFilterChange('confidence', value)}
+                className="w-full"
+              />
+              <span className="text-sm text-muted-foreground w-28 text-center">
+                {filters.confidence[0]}% - {filters.confidence[1]}%
+              </span>
+            </div>
+          </div>
         </CardContent>
       </Card>
 
@@ -228,56 +277,68 @@ import { useSession } from 'next-auth/react';
       )}
       {!loading && !error && (
         <Accordion type="single" collapsible className="w-full">
-          {investigations.map((inv) => (
-            <AccordionItem value={inv.id} key={inv.id}>
-              <AccordionTrigger>
-                <div className="flex justify-between w-full pr-4 items-center">
-                  <div className="flex flex-col items-start">
-                    <span className="font-bold text-lg">{inv.name}</span>
-                    <Badge>{inv.status}</Badge>
-                  </div>
-                  <div className="flex items-center gap-4">
-                    <Badge variant="outline">Résultats: {inv._count.results}</Badge>
-                    <Badge variant="secondary">{formatDate(inv.createdAt)}</Badge>
-                    <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); handleDeleteClick(inv.id); }}>
-                      <Trash2 className="h-4 w-4 text-red-500" />
-                    </Button>
-                  </div>
+          {investigations.map((inv, index) => {
+            if (investigations.length === index + 1) {
+              return (
+                <div ref={lastInvestigationElementRef} key={inv.id}>
+                  <AccordionItem value={inv.id}>
+                    <AccordionTrigger>
+                      <div className="flex justify-between w-full pr-4 items-center">
+                        <div className="flex flex-col items-start">
+                          <span className="font-bold text-lg">{inv.name}</span>
+                          <Badge>{inv.status}</Badge>
+                        </div>
+                        <div className="flex items-center gap-4">
+                          <Badge variant="outline">Résultats: {inv._count.results}</Badge>
+                          <Badge variant="secondary">{formatDate(inv.createdAt)}</Badge>
+                          <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); handleDeleteClick(inv.id); }}>
+                            <Trash2 className="h-4 w-4 text-red-500" />
+                          </Button>
+                        </div>
+                      </div>
+                    </AccordionTrigger>
+                    <AccordionContent>
+                      <div className="p-4 bg-muted/40 rounded-md">
+                        <UnifiedResultsTable items={inv.summary} />
+                      </div>
+                    </AccordionContent>
+                  </AccordionItem>
                 </div>
-              </AccordionTrigger>
-              <AccordionContent>
-                <div className="p-4 bg-muted/40 rounded-md">
-                  <UnifiedResultsTable items={inv.summary} />
-                </div>
-              </AccordionContent>
-            </AccordionItem>
-          ))}
+              )
+            } else {
+              return (
+                <AccordionItem value={inv.id} key={inv.id}>
+                  <AccordionTrigger>
+                    <div className="flex justify-between w-full pr-4 items-center">
+                      <div className="flex flex-col items-start">
+                        <span className="font-bold text-lg">{inv.name}</span>
+                        <Badge>{inv.status}</Badge>
+                      </div>
+                      <div className="flex items-center gap-4">
+                        <Badge variant="outline">Résultats: {inv._count.results}</Badge>
+                        <Badge variant="secondary">{formatDate(inv.createdAt)}</Badge>
+                        <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); handleDeleteClick(inv.id); }}>
+                          <Trash2 className="h-4 w-4 text-red-500" />
+                        </Button>
+                      </div>
+                    </div>
+                  </AccordionTrigger>
+                  <AccordionContent>
+                    <div className="p-4 bg-muted/40 rounded-md">
+                      <UnifiedResultsTable items={inv.summary} />
+                    </div>
+                  </AccordionContent>
+                </AccordionItem>
+              )
+            }
+          })}
         </Accordion>
      )}
-     {!loading && !error && pagination && pagination.totalPages > 1 && (
-       <div className="flex items-center justify-end space-x-2 py-4">
-         <Button
-           variant="outline"
-           size="sm"
-           onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
-           disabled={!pagination.hasPrev}
-         >
-           <ChevronLeft className="h-4 w-4" />
-           Précédent
-         </Button>
-         <span className="text-sm">
-           Page {pagination.page} sur {pagination.totalPages}
-         </span>
-         <Button
-           variant="outline"
-           size="sm"
-           onClick={() => setCurrentPage(prev => Math.min(prev + 1, pagination.totalPages))}
-           disabled={!pagination.hasNext}
-         >
-           Suivant
-           <ChevronRight className="h-4 w-4" />
-         </Button>
-       </div>
+     {loading && (
+        <div className="space-y-4 mt-4">
+            <Skeleton className="h-12 w-full" />
+            <Skeleton className="h-12 w-full" />
+        </div>
      )}
 
      <ConfirmDialog

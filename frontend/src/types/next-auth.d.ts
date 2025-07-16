@@ -13,6 +13,7 @@ declare module 'next-auth' {
     id: string;
     email: string;
     accessToken?: string;
+    credits?: number;
   }
 }
 
@@ -21,5 +22,6 @@ declare module 'next-auth/jwt' {
   interface JWT {
     /** OpenID ID Token */
     accessToken?: string;
+    credits?: number;
   }
 }

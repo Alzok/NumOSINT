@@ -61,6 +61,32 @@ class BusterService extends BaseToolService {
     });
     return [...new Set(domainIndicators.map(d => d.value))];
   }
+
+  async reverseWhois(investigationId, emailIndicator) {
+    const email = emailIndicator.value;
+    try {
+      logger.info(`[${this.toolName}] Lancement du reverse whois pour: ${email}`);
+      const response = await this.axios.post('/reverse-whois', { email });
+      const result = response.data;
+
+      if (result.domains && result.domains.length > 0) {
+        await this._saveResult(investigationId, emailIndicator.id, { reverse_whois: result.domains });
+        
+        const newIndicators = result.domains.map(domain => ({
+          type: IndicatorType.DOMAIN,
+          value: domain,
+          confidence: 85,
+        }));
+
+        await this._saveIndicators(investigationId, emailIndicator, newIndicators);
+        logger.info(`[${this.toolName}] ${result.domains.length} domaine(s) trouvé(s) pour ${email}.`);
+      } else {
+        logger.info(`[${this.toolName}] Aucun domaine trouvé pour ${email}.`);
+      }
+    } catch (error) {
+      this._handleApiError(error, `effectuer un reverse whois pour ${email}`);
+    }
+  }
 }
 
 module.exports = BusterService;

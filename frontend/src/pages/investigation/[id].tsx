@@ -1,7 +1,9 @@
 'use client';
 
 import { useEffect, useState, useMemo } from 'react';
+import dynamic from 'next/dynamic';
 import { useRouter } from 'next/router';
+import { useSession } from 'next-auth/react';
 import { AppSidebar } from "@/components/app-sidebar";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -45,24 +47,27 @@ import { useInvestigationDetail } from '@/hooks/useInvestigationDetail';
 import { useAppStore } from '@/lib/store';
 import { api } from '../../lib/api-client';
 import { Investigation, Result, InvestigationLog, Indicator } from '@/types';
-import EmailAnalysisView from '@/components/Investigation/EmailAnalysisView';
 import { saveAs } from 'file-saver';
-import UsernameAnalysisView from '@/components/Investigation/UsernameAnalysisView';
-import PhoneAnalysisView from '@/components/Investigation/PhoneAnalysisView';
-import ComprehensiveReportView from '@/components/Investigation/ComprehensiveReportView';
-import RealTimeNotifications from '@/components/Investigation/RealTimeNotifications';
-import InvestigationReportView from '@/components/Investigation/InvestigationReportView';
-import ModernInvestigationTimeline from '@/components/Investigation/ModernInvestigationTimeline';
-import WaybackResults from '@/components/Investigation/WaybackResults';
-import { SocialProfiles } from '@/components/Investigation/Buster/SocialProfiles';
-import { ReverseWhoisResults } from '@/components/Investigation/Buster/ReverseWhoisResults';
-import { EmailSummary } from '@/components/Investigation/Email/EmailSummary';
-import ProfilesGrid from '@/components/Investigation/Maigret/ProfilesGrid';
-import DarkWebResults from '@/components/Investigation/DarkWebResults';
-import CorrelationGraph from '@/components/Investigation/CorrelationGraph';
-import IpAnalysisView from '@/components/Investigation/IpAnalysisView';
-import PersonProfileView from '@/components/Investigation/PersonProfileView';
 import { UnifiedResultsTable, ProofItem } from '@/components/Results/UnifiedResultsTable';
+
+// Lazy load all analysis components
+const EmailAnalysisView = dynamic(() => import('@/components/Investigation/EmailAnalysisView'));
+const UsernameAnalysisView = dynamic(() => import('@/components/Investigation/UsernameAnalysisView'));
+const PhoneAnalysisView = dynamic(() => import('@/components/Investigation/PhoneAnalysisView'));
+const ComprehensiveReportView = dynamic(() => import('@/components/Investigation/ComprehensiveReportView'));
+const RealTimeNotifications = dynamic(() => import('@/components/Investigation/RealTimeNotifications'));
+const InvestigationReportView = dynamic(() => import('@/components/Investigation/InvestigationReportView'));
+const ModernInvestigationTimeline = dynamic(() => import('@/components/Investigation/ModernInvestigationTimeline'));
+const WaybackResults = dynamic(() => import('@/components/Investigation/WaybackResults'));
+const SocialProfiles = dynamic(() => import('@/components/Investigation/Buster/SocialProfiles').then(mod => mod.SocialProfiles));
+const ReverseWhoisResults = dynamic(() => import('@/components/Investigation/Buster/ReverseWhoisResults').then(mod => mod.ReverseWhoisResults));
+const EmailSummary = dynamic(() => import('@/components/Investigation/Email/EmailSummary').then(mod => mod.EmailSummary));
+const ProfilesGrid = dynamic(() => import('@/components/Investigation/Maigret/ProfilesGrid'));
+const DarkWebResults = dynamic(() => import('@/components/Investigation/DarkWebResults'));
+const CorrelationGraph = dynamic(() => import('@/components/Investigation/CorrelationGraph'), { ssr: false });
+const IpAnalysisView = dynamic(() => import('@/components/Investigation/IpAnalysisView'));
+const PersonProfileView = dynamic(() => import('@/components/Investigation/PersonProfileView'));
+
 
 interface Profile {
   siteName: string;
@@ -77,6 +82,8 @@ export default function InvestigationDetailPage() {
   const router = useRouter();
   const { id } = router.query;
   const investigationId = typeof id === 'string' ? id : undefined;
+  const { data: session } = useSession();
+  const token = session?.accessToken;
 
   const {
     startInvestigation,
@@ -117,13 +124,19 @@ export default function InvestigationDetailPage() {
     fetchSummary();
   }, [investigationId]);
 
-  const handleExport = async (format: 'pdf' | 'csv' | 'json') => {
-    if (!investigationId) return;
+  const handleExport = async (format: 'pdf' | 'csv') => {
+    if (!investigationId || !token) return;
+    addToastNotification({ type: 'info', title: 'Export en cours', message: `Votre rapport ${format.toUpperCase()} est en cours de génération...` });
     try {
-      // const blob = await api.exportInvestigation(investigationId, format);
-      const blob = new Blob();
-      saveAs(blob, `rapport-investigation-${investigationId}.${format}`);
-    } catch (err) {
+      const { blob, error } = await api.exportInvestigation(investigationId, format, token);
+      if (blob) {
+        saveAs(blob, `rapport-investigation-${investigationId}.${format}`);
+        addToastNotification({ type: 'success', title: 'Export réussi', message: `Le rapport a été téléchargé.` });
+      } else {
+        throw new Error(error || 'Erreur inconnue');
+      }
+    } catch (err: any) {
+      addToastNotification({ type: 'error', title: 'Échec de l\'export', message: err.message });
       console.error('Failed to export investigation', err);
     }
   };

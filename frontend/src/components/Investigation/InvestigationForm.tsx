@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { z } from 'zod';
-import { InvestigationInput } from '@/types';
+import { InvestigationInput, InvestigationTemplate } from '@/types';
 import { useAppStore } from '@/lib/store';
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -18,7 +18,11 @@ import TuneIcon from '@mui/icons-material/Tune';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Slider } from "@/components/ui/slider"
 import React from 'react';
-import { RocketLaunch } from '@mui/icons-material';
+import { RocketLaunch, CreditScore } from '@mui/icons-material';
+import { SaveTemplateModal } from './SaveTemplateModal';
+import { api } from '@/lib/api-client';
+import { useSession } from 'next-auth/react';
+import { Trash2 } from 'lucide-react';
 
 // Local SVG Icon Components
 const SearchIcon = (props: React.SVGProps<SVGSVGElement>) => (
@@ -157,11 +161,16 @@ type FormErrors = {
 export default function InvestigationForm({ onSubmit, isLoading: isSubmitting = false }: InvestigationFormProps) {
   const [isExpanded, setIsExpanded] = useState(true);
   const [isLoading, setIsLoading] = useState(isSubmitting);
+  const [isSaveModalOpen, setIsSaveModalOpen] = useState(false);
   const [activeSection, setActiveSection] = useState<keyof FormState | null>(null);
+  const [cost, setCost] = useState<{ cost: number; hasEnoughCredits: boolean } | null>(null);
+  const [isCostLoading, setIsCostLoading] = useState(false);
+  const { data: session } = useSession();
+
   const [formErrors, setFormErrors] = useState<FormErrors>({
       names: [], emails: [], usernames: [], phones: [], ips: [], domains: [], urls: []
   });
-  const [templates, setTemplates] = useState<string[]>([]);
+  const [templates, setTemplates] = useState<InvestigationTemplate[]>([]);
 
   const {
     investigationForm,
@@ -305,31 +314,77 @@ export default function InvestigationForm({ onSubmit, isLoading: isSubmitting = 
   };
 
   const saveTemplate = () => {
-      const templateName = prompt("Entrez un nom pour ce modèle :");
-      if (templateName) {
-          localStorage.setItem(`investigation_template_${templateName}`, JSON.stringify(investigationForm));
-          addToastNotification({ title: "Modèle sauvegardé", message: `Le modèle "${templateName}" a été sauvegardé.`, type: 'success' });
-          loadTemplates();
-      }
+    setIsSaveModalOpen(true);
   };
 
-  const loadTemplates = useCallback(() => {
-      const keys = Object.keys(localStorage).filter(k => k.startsWith('investigation_template_'));
-      setTemplates(keys.map(k => k.replace('investigation_template_', '')));
-  }, []);
+  const handleSaveTemplate = async (templateName: string) => {
+    if (!session?.accessToken) return;
+    const { error } = await api.createTemplate({ name: templateName, inputData: investigationForm }, session.accessToken);
+    if (error) {
+      addToastNotification({ title: "Erreur", message: "Impossible de sauvegarder le modèle.", type: 'error' });
+    } else {
+      addToastNotification({ title: "Modèle sauvegardé", message: `Le modèle "${templateName}" a été sauvegardé.`, type: 'success' });
+      loadTemplates();
+    }
+  };
 
-  const loadTemplate = (name: string) => {
-      if (!name) return;
-      const templateData = localStorage.getItem(`investigation_template_${name}`);
-      if (templateData) {
-          setInvestigationForm(JSON.parse(templateData));
-          addToastNotification({ title: "Modèle chargé", message: `Le modèle "${name}" a été chargé.`, type: 'info' });
-      }
+  const loadTemplates = useCallback(async () => {
+    if (!session?.accessToken) return;
+    const { data } = await api.getTemplates(session.accessToken);
+    if (data) {
+      setTemplates(data);
+    }
+  }, [session]);
+
+  const loadTemplate = (templateId: string) => {
+    const template = templates.find(t => t.id === templateId);
+    if (template) {
+        setInvestigationForm(template.inputData);
+        addToastNotification({ title: "Modèle chargé", message: `Le modèle "${template.name}" a été chargé.`, type: 'info' });
+    }
+  };
+
+  const deleteTemplate = async (templateId: string) => {
+    if (!session?.accessToken) return;
+    const { error } = await api.deleteTemplate(templateId, session.accessToken);
+    if (error) {
+      addToastNotification({ title: "Erreur", message: "Impossible de supprimer le modèle.", type: 'error' });
+    } else {
+      addToastNotification({ title: "Modèle supprimé", message: "Le modèle a été supprimé.", type: 'success' });
+      loadTemplates();
+    }
   };
 
   useEffect(() => {
       loadTemplates();
   }, [loadTemplates]);
+
+  // Debounced effect for cost calculation
+  useEffect(() => {
+    const currentIndicators = (Object.keys(fields) as Array<keyof typeof fields>)
+      .flatMap(key => fields[key].map(field => ({ type: key.slice(0, -1).toUpperCase(), value: field.value })))
+      .filter(ind => ind.value.trim() !== '');
+
+    const handler = setTimeout(() => {
+      if (currentIndicators.length > 0) {
+        setIsCostLoading(true);
+        api.getInvestigationCost(currentIndicators)
+          .then(response => {
+            if (response.data) {
+              setCost(response.data);
+            }
+          })
+          .finally(() => setIsCostLoading(false));
+      } else {
+        setCost(null);
+      }
+    }, 500); // 500ms debounce delay
+
+    return () => {
+      clearTimeout(handler);
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [JSON.stringify(fields)]);
 
   const renderIndicatorSection = (
     type: keyof FormState,
@@ -430,6 +485,11 @@ export default function InvestigationForm({ onSubmit, isLoading: isSubmitting = 
 
   return (
     <div className="w-full">
+      <SaveTemplateModal
+        isOpen={isSaveModalOpen}
+        onClose={() => setIsSaveModalOpen(false)}
+        onSave={handleSaveTemplate}
+      />
       <Card className="shadow-lg border-2 hover:shadow-xl transition-all duration-300 overflow-hidden">
         <div className="relative">
           <div className="relative z-10 bg-transparent">
@@ -564,8 +624,13 @@ export default function InvestigationForm({ onSubmit, isLoading: isSubmitting = 
                               </SelectTrigger>
                               <SelectContent>
                                   {templates.map(template => (
-                                      <SelectItem key={template} value={template}>
-                                          {template}
+                                      <SelectItem key={template.id} value={template.id}>
+                                        <div className="flex justify-between w-full items-center">
+                                          <span>{template.name}</span>
+                                          <Button variant="ghost" size="icon" className="h-6 w-6" onClick={(e) => { e.stopPropagation(); deleteTemplate(template.id); }}>
+                                            <Trash2 className="h-4 w-4 text-red-500" />
+                                          </Button>
+                                        </div>
                                       </SelectItem>
                                   ))}
                               </SelectContent>
@@ -573,8 +638,18 @@ export default function InvestigationForm({ onSubmit, isLoading: isSubmitting = 
                       </div>
                   </div>
 
-                  <CardFooter className="flex justify-end gap-2 bg-slate-900/50 p-4 border-t">
-                    <Button type="submit" disabled={isSubmitting || !isValid} className="gap-2">
+                  <CardFooter className="flex justify-between items-center gap-2 bg-slate-900/50 p-4 border-t">
+                    <div>
+                      {isCostLoading && <p className="text-sm text-muted-foreground">Calcul du coût...</p>}
+                      {cost && !isCostLoading && (
+                        <div className={`flex items-center gap-2 text-sm font-semibold ${cost.hasEnoughCredits ? 'text-green-400' : 'text-red-500'}`}>
+                          <CreditScore />
+                          <span>Coût estimé : {cost.cost} crédit(s).</span>
+                          {!cost.hasEnoughCredits && <span>(Crédits insuffisants)</span>}
+                        </div>
+                      )}
+                    </div>
+                    <Button type="submit" disabled={isSubmitting || !isValid || !cost?.hasEnoughCredits} className="gap-2">
                       {isSubmitting ? (
                         <CircularProgress size={20} color="inherit" />
                       ) : (

@@ -189,7 +189,10 @@ router.get('/grouped', protect, async (req, res) => {
       startDate,
       endDate,
       tools,
-      indicatorType
+      indicatorType,
+      minConfidence,
+      maxConfidence,
+      name,
     } = req.query;
     const skip = (parseInt(page) - 1) * parseInt(limit);
     const take = parseInt(limit);
@@ -201,6 +204,12 @@ router.get('/grouped', protect, async (req, res) => {
     };
 
     // Ajout des filtres à la clause `where`
+    if (name) {
+      where.name = {
+        contains: name,
+        mode: 'insensitive',
+      };
+    }
     if (status) {
       where.status = status;
     }
@@ -215,6 +224,15 @@ router.get('/grouped', protect, async (req, res) => {
     }
     if (indicatorType) {
       where.results.some.indicator = { type: indicatorType };
+    }
+    if (minConfidence !== undefined && maxConfidence !== undefined) {
+      where.results.some.indicator = {
+        ...where.results.some.indicator,
+        confidence: {
+          gte: parseFloat(minConfidence) / 100,
+          lte: parseFloat(maxConfidence) / 100,
+        }
+      };
     }
 
     const [investigations, total] = await Promise.all([

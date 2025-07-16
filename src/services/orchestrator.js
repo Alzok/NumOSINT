@@ -14,6 +14,7 @@ const WauService = require('./tools/wau');
 const WaybulkService = require('./tools/waybulk');
 const NotificationService = require('./notificationService');
 const EnrichmentPhaseManager = require('./phases/EnrichmentPhaseManager');
+const workflowConfig = require('../config/workflow.json');
 
 class OrchestratorService {
   constructor(prisma, io) {
@@ -43,6 +44,34 @@ class OrchestratorService {
     // Écoute des événements globaux de l'application
     eventBus.on('tool:scan_completed', this.handleToolCompletion.bind(this));
     eventBus.on('tool:pulse', this.handleToolPulse.bind(this));
+  }
+
+  /**
+   * Calcule le coût d'une investigation en fonction des indicateurs fournis.
+   * @param {Array<{type: string, value: string}>} indicators - Les indicateurs initiaux.
+   * @returns {number} Le coût calculé en crédits.
+   */
+  calculateInvestigationCost(indicators) {
+    const uniqueToolsWithCost = new Map();
+    const indicatorTypes = new Set(indicators.map(i => i.type));
+
+    indicatorTypes.forEach(type => {
+      const strategy = workflowConfig.strategies[type] || workflowConfig.strategies.DEFAULT;
+      const allToolsInStrategy = [...strategy.phases.enrichment, ...strategy.phases.scanning];
+      
+      allToolsInStrategy.forEach(toolInfo => {
+        if (!uniqueToolsWithCost.has(toolInfo.tool)) {
+          uniqueToolsWithCost.set(toolInfo.tool, toolInfo.cost || 0);
+        }
+      });
+    });
+
+    if (uniqueToolsWithCost.size === 0) return 0;
+
+    // Somme des coûts de tous les outils uniques qui seront utilisés.
+    const totalCost = Array.from(uniqueToolsWithCost.values()).reduce((sum, cost) => sum + cost, 0);
+    
+    return totalCost;
   }
 
   /**
@@ -178,8 +207,13 @@ class OrchestratorService {
       // Pour l'instant, on continue le flux.
     }
 
-    // Pour l'instant, seul SpiderFoot est géré. On pourrait ajouter une logique plus complexe ici.
-    if (tool === 'spiderfoot') {
+    // Déléguer la gestion de la complétion à la phase appropriée
+    const investigation = await this.prisma.investigation.findUnique({ where: { id: investigationId }, select: { currentPhase: true } });
+    if (!investigation) return;
+
+    if (investigation.currentPhase === 'ENRICHMENT') {
+      this.enrichmentManager.handleToolCompletion(investigationId);
+    } else if (investigation.currentPhase === 'SCANNING' && tool === 'spiderfoot') {
       await this.updateInvestigationPhase(investigationId, 'CONSOLIDATION');
       this.runInvestigationFlow(investigationId);
     }
@@ -389,24 +423,48 @@ class OrchestratorService {
   async finalizeInvestigation(investigationId) {
     try {
       logger.info(`✅ Finalisation de l'investigation ${investigationId}`);
+      
+      const investigation = await this.prisma.investigation.findUnique({ where: { id: investigationId } });
+      if (!investigation) {
+        logger.error(`[Finalize] Investigation ${investigationId} non trouvée.`);
+        return;
+      }
+
+      const cost = investigation.inputData?.cost || 0;
+
+      // Déduire les crédits et finaliser l'investigation dans une transaction
+      if (cost > 0) {
+        await this.prisma.user.update({
+          where: { id: investigation.userId },
+          data: { credits: { decrement: cost } },
+        });
+
+        await this.prisma.creditTransaction.create({
+          data: {
+            amount: -cost,
+            type: 'INVESTIGATION_COST',
+            userId: investigation.userId,
+            investigationId: investigation.id,
+          }
+        });
+      }
+      
+      // Utiliser la méthode centralisée pour mettre à jour le statut et notifier le client
       await this.updateInvestigationStatus(investigationId, InvestigationStatus.COMPLETED, 100, 'completed');
+      
       this.activeInvestigations.delete(investigationId);
-      await this.logStep(investigationId, 'finalization', 'Investigation terminée avec succès');
+      await this.logStep(investigationId, 'finalization', `Investigation terminée avec succès. Coût: ${cost} crédit(s).`);
       
       // Envoyer une notification
-      const activeInvestigation = this.activeInvestigations.get(investigationId);
-      if (activeInvestigation && activeInvestigation.userId) {
-        await this.notificationService.createNotification(
-          activeInvestigation.userId,
-          `L'investigation #${investigationId.substring(0, 8)} est terminée.`,
-          `/investigation/${investigationId}`
-        );
-      } else {
-        logger.warn(`Impossible d'envoyer la notification de fin pour l'investigation ${investigationId}, userId non trouvé.`);
-      }
+      await this.notificationService.createNotification(
+        investigation.userId,
+        `L'investigation #${investigationId.substring(0, 8)} est terminée.`,
+        `/investigation/${investigationId}`
+      );
+
     } catch (error) {
       logger.error(`❌ Erreur lors de la finalisation de ${investigationId}:`, error);
-      throw error;
+      await this.handleInvestigationError(investigationId, error);
     }
   }
 

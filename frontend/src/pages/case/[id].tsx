@@ -2,6 +2,7 @@
 
 import { useRouter } from 'next/router';
 import { useCase } from '@/hooks/useCase';
+import { useSession } from 'next-auth/react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -24,10 +25,6 @@ const CaseDetailPage = () => {
   const router = useRouter();
   const { id } = router.query;
   const { caseDetails, isLoading, error } = useCase(id as string);
-
-import { useSession } from 'next-auth/react';
-
-// ...
 
   const { data: session } = useSession();
   const token = session?.accessToken;

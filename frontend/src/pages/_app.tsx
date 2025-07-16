@@ -7,37 +7,13 @@ import { NotificationsProvider } from '@/components/providers/NotificationsProvi
 import { SocketProvider } from '@/components/providers/SocketProvider';
 import { AppSidebar } from "@/components/app-sidebar";
 import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar";
-import { SessionProvider, useSession } from "next-auth/react";
-import { useRouter } from 'next/router';
-import { useEffect } from 'react';
+import { SessionProvider } from "next-auth/react";
 import '@/styles/globals.css';
 
 const queryClient = new QueryClient();
 
-const publicPages = ['/login'];
-
-function Auth({ children }: { children: React.ReactNode }) {
-  const { status } = useSession();
-  const router = useRouter();
-  const isPublicPage = publicPages.includes(router.pathname);
-
-  useEffect(() => {
-    if (status === 'unauthenticated' && !isPublicPage) {
-      router.push('/login');
-    }
-  }, [status, isPublicPage, router]);
-
-  if (status === 'loading') {
-    return <div>Chargement...</div>;
-  }
-
-  return <>{children}</>;
-}
-
 export default function App({ Component, pageProps: { session, ...pageProps } }: AppProps) {
-  const router = useRouter();
-  const isPublicPage = publicPages.includes(router.pathname);
-
+  // Le middleware gère maintenant la redirection, donc plus de logique ici.
   return (
     <ThemeProvider
       attribute="class"
@@ -49,20 +25,14 @@ export default function App({ Component, pageProps: { session, ...pageProps } }:
         <QueryClientProvider client={queryClient}>
           <SocketProvider>
             <NotificationsProvider>
-              {isPublicPage ? (
-                <Component {...pageProps} />
-              ) : (
-                <Auth>
-                  <SidebarProvider
-                    style={{ "--sidebar-width": "18rem" } as React.CSSProperties}
-                  >
-                    <AppSidebar variant="sidebar" collapsible="icon" />
-                    <SidebarInset>
-                      <Component {...pageProps} />
-                    </SidebarInset>
-                  </SidebarProvider>
-                </Auth>
-              )}
+              <SidebarProvider
+                style={{ "--sidebar-width": "18rem" } as React.CSSProperties}
+              >
+                <AppSidebar variant="sidebar" collapsible="icon" />
+                <SidebarInset>
+                  <Component {...pageProps} />
+                </SidebarInset>
+              </SidebarProvider>
               <Notifications />
             </NotificationsProvider>
           </SocketProvider>

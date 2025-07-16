@@ -41,7 +41,8 @@ export function useInvestigationActions() {
     addSearchLog(`[${new Date().toLocaleTimeString()}] Création de l'investigation...`);
 
     try {
-      const response = await api.createInvestigation(input, token);
+      // Le token est géré par le fetcher, pas besoin de le passer ici
+      const response = await api.createInvestigation(input);
       
       if (response.error) {
         addNotification({ type: 'error', title: 'Erreur', message: response.error });
@@ -66,7 +67,7 @@ export function useInvestigationActions() {
     }
 
     return null;
-  }, [addNotification, setLoading, clearSearchLogs, setSearchProgress, addSearchLog, token]);
+  }, [addNotification, setLoading, clearSearchLogs, setSearchProgress, addSearchLog]);
 
   const startInvestigation = useCallback(async (id: string) => {
     setIsLoading(true);
@@ -76,7 +77,7 @@ export function useInvestigationActions() {
     addSearchLog(`[${new Date().toLocaleTimeString()}] Démarrage de l'investigation ${id}...`);
 
     try {
-      const response = await api.startInvestigation(id, token);
+      const response = await api.startInvestigation(id);
       
       if (response.error) {
         addNotification({ type: 'error', title: 'Erreur', message: response.error });
@@ -102,11 +103,11 @@ export function useInvestigationActions() {
     }
 
     return false;
-  }, [addNotification, setLoading, setSearchProgress, addSearchLog, refreshInvestigation, token]);
+  }, [addNotification, setLoading, setSearchProgress, addSearchLog, refreshInvestigation]);
 
   const stopInvestigation = useCallback(async (id: string) => {
     try {
-      const response = await api.stopInvestigation(id, token);
+      const response = await api.stopInvestigation(id);
       
       if (response.error) {
         addNotification({ type: 'error', title: 'Erreur', message: response.error });
@@ -127,7 +128,7 @@ export function useInvestigationActions() {
     }
 
     return false;
-  }, [addNotification, addSearchLog, refreshInvestigation, token]);
+  }, [addNotification, addSearchLog, refreshInvestigation]);
 
   const deleteInvestigation = useCallback(async (id: string) => {
     try {

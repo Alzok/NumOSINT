@@ -115,6 +115,41 @@ function createNotificationRoutes(prisma, io) {
     }
   });
 
+  /**
+   * @swagger
+   * /api/notifications/{id}:
+   *   delete:
+   *     summary: Supprime une notification spécifique.
+   *     tags: [Notifications]
+   *     parameters:
+   *       - in: path
+   *         name: id
+   *         required: true
+   *         schema:
+   *           type: string
+   *         description: L'ID de la notification à supprimer.
+   *     responses:
+   *       204:
+   *         description: Notification supprimée avec succès.
+   *       404:
+   *         description: Notification non trouvée ou non autorisée.
+   *       500:
+   *         description: Erreur serveur.
+   */
+  router.delete('/:id', async (req, res) => {
+    const { id } = req.params;
+    try {
+      const result = await notificationService.deleteNotification(req.user.id, id);
+      if (result.count === 0) {
+        return res.status(404).json({ error: "Notification non trouvée ou vous n'avez pas la permission de la supprimer." });
+      }
+      res.status(204).send();
+    } catch (error) {
+      logger.error(`Erreur API - DELETE /notifications/${id}:`, error);
+      res.status(500).json({ error: "Impossible de supprimer la notification." });
+    }
+  });
+
   return router;
 }
 

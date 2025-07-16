@@ -17,6 +17,7 @@ import { CreateCaseModal } from '@/components/Investigation/CreateCaseModal';
 import { AssignCaseModal } from '@/components/Investigation/AssignCaseModal';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { Trash2 } from 'lucide-react';
+import { useSession } from 'next-auth/react';
 
 // --- Local SVG Icon Components ---
 const RefreshIcon = (props: React.SVGProps<SVGSVGElement>) => (
@@ -33,6 +34,9 @@ const CheckCircleOutlineIcon = (props: React.SVGProps<SVGSVGElement>) => (
 );
 const CancelIcon = (props: React.SVGProps<SVGSVGElement>) => (
     <svg {...props} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
+);
+const CreditCardIcon = (props: React.SVGProps<SVGSVGElement>) => (
+    <svg {...props} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="7" width="20" height="14" rx="2" ry="2" /><path d="M2 11h20" /></svg>
 );
 const ScheduleIcon = (props: React.SVGProps<SVGSVGElement>) => (
     <svg {...props} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
@@ -145,6 +149,12 @@ const InvestigationCard = ({ investigation, onAssignClick, onStopClick, onDelete
                         <ScheduleIcon className="h-4 w-4" />
                         <span>{formatDate(investigation.createdAt)}</span>
                     </div>
+                    {investigation.inputData?.cost && (
+                        <div className="flex items-center gap-2 mt-2">
+                            <CreditCardIcon className="h-4 w-4" />
+                            <span>Coût: {investigation.inputData.cost} crédit(s)</span>
+                        </div>
+                    )}
                 </div>
                 {(investigation.status === 'SCANNING' || investigation.status === 'ENRICHING' || investigation.status === 'CONSOLIDATING') && (
                     <div className="mt-4">

@@ -124,6 +124,7 @@ export interface InvestigationInput {
   urls?: string[];
   maxGeneration?: number;
   minConfidence?: number;
+  cost?: number;
 }
 
 export interface Investigation {
@@ -245,8 +246,34 @@ export interface InvestigationsOverTimeData {
   count: number;
 }
 
+export interface DashboardStats {
+  totalInvestigations: number;
+  completedInvestigations: number;
+  runningInvestigations: number;
+  totalResults: number;
+}
+
+export interface CreditTransaction {
+  id: string;
+  amount: number;
+  type: 'INITIAL_GRANT' | 'INVESTIGATION_COST' | 'PURCHASE';
+  createdAt: string;
+  investigation?: {
+    id: string;
+    name: string;
+  };
+}
+
 export interface User {
   id: string;
   email: string;
   // Ajoutez d'autres champs si nécessaire
+}
+
+export interface InvestigationTemplate {
+  id: string;
+  name: string;
+  inputData: any;
+  createdAt: string;
+  userId: string;
 }

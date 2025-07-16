@@ -6,13 +6,13 @@ import { useAppStore } from '@/lib/store';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import Link from 'next/link';
-import { BellIcon, CheckCheck } from 'lucide-react';
+import { BellIcon, CheckCheck, Trash2 } from 'lucide-react';
 import { api } from '@/lib/api-client';
 
 export default function NotificationsPage() {
   const { data: session } = useSession();
   const token = session?.accessToken;
-  const { appNotifications, markAppNotificationsAsRead, markAllAppNotificationsAsRead, addToastNotification } = useAppStore();
+  const { appNotifications, removeAppNotification, markAppNotificationsAsRead, markAllAppNotificationsAsRead, addToastNotification } = useAppStore();
   const [loading, setLoading] = useState(false);
 
   const handleMarkAsRead = async (id: string) => {
@@ -43,6 +43,20 @@ export default function NotificationsPage() {
        // TODO: Revert state on error
     }
     setLoading(false);
+  };
+
+  const handleDelete = async (id: string) => {
+    // Optimistic UI update
+    removeAppNotification(id);
+    const { error } = await api.deleteNotification(id, token);
+    if (error) {
+      addToastNotification({
+        type: 'error',
+        title: 'Erreur',
+        message: "Impossible de supprimer la notification.",
+      });
+      // TODO: Revert state on error
+    }
   };
 
   return (
@@ -85,6 +99,10 @@ export default function NotificationsPage() {
                          Marquer comme lu
                        </Button>
                     )}
+                     <Button variant="link" className="p-0 h-auto text-xs text-red-500 hover:text-red-600" onClick={() => handleDelete(notification.id)}>
+                       <Trash2 className="h-3 w-3 mr-1" />
+                       Supprimer
+                     </Button>
                   </div>
                 </div>
               </CardContent>

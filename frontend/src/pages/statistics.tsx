@@ -22,7 +22,7 @@ export default function StatisticsPage() {
       setLoading(true);
       setError(null);
       try {
-        const response = await api.getGlobalStats(token);
+        const response = await api.getGlobalStats({}, token);
         if (response.data) {
           setStats(response.data);
         } else {

@@ -4,12 +4,13 @@
       "description": "Workflow optimisé pour un email comme point de départ.",
       "phases": {
         "enrichment": [
-          { "tool": "wauService", "condition": "indicator.unverified" },
-          { "tool": "mosintService" },
-          { "tool": "pdlService", "condition": "strategy.primary" }
+          { "tool": "wauService", "condition": "indicator.unverified", "cost": 0.2 },
+          { "tool": "mosintService", "cost": 1.5 },
+          { "tool": "pdlService", "condition": "strategy.primary", "cost": 2.5 },
+          { "tool": "busterService", "cost": 1 }
         ],
         "scanning": [
-          { "tool": "spiderfootService" }
+          { "tool": "spiderfootService", "cost": 3 }
         ]
       }
     },
@@ -17,8 +18,8 @@
       "description": "Workflow optimisé pour un numéro de téléphone.",
       "phases": {
         "enrichment": [
-          { "tool": "phoneinfogaService" },
-          { "tool": "pdlService", "condition": "strategy.primary" }
+          { "tool": "phoneinfogaService", "cost": 1 },
+          { "tool": "pdlService", "condition": "strategy.primary", "cost": 2 }
         ],
         "scanning": []
       }
@@ -27,7 +28,7 @@
       "description": "Workflow pour un nom d'utilisateur.",
       "phases": {
         "enrichment": [
-          { "tool": "maigretService" }
+          { "tool": "maigretService", "cost": 1.5 }
         ],
         "scanning": []
       }
@@ -36,10 +37,10 @@
         "description": "Workflow pour un nom de domaine.",
         "phases": {
             "enrichment": [
-                { "tool": "waybulkService" }
+                { "tool": "waybulkService", "cost": 0.5 }
             ],
             "scanning": [
-                { "tool": "spiderfootService" }
+                { "tool": "spiderfootService", "cost": 3 }
             ]
         }
     },
@@ -47,7 +48,7 @@
         "description": "Workflow pour un nom de personne.",
         "phases": {
             "enrichment": [
-                { "tool": "busterService" }
+                { "tool": "busterService", "cost": 1 }
             ],
             "scanning": []
         }
@@ -56,7 +57,7 @@
         "description": "Workflow pour une adresse IP.",
         "phases": {
             "enrichment": [
-                { "tool": "asnService" }
+                { "tool": "asnService", "cost": 0.5 }
             ],
             "scanning": []
         }
@@ -66,7 +67,7 @@
       "phases": {
         "enrichment": [],
         "scanning": [
-          { "tool": "spiderfootService" }
+          { "tool": "spiderfootService", "cost": 3 }
         ]
       }
     }
