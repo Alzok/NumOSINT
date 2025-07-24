@@ -1,9 +1,9 @@
+console.log('[DEBUG] Fichier src/index.js en cours d\'exécution...');
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
 const compression = require('compression');
 const morgan = require('morgan');
-const rateLimit = require('express-rate-limit');
 const { createServer } = require('http');
 const { Server } = require('socket.io');
 const swaggerJSDoc = require('swagger-jsdoc');
@@ -16,6 +16,7 @@ const { setupSocketIO } = require('./utils/socket');
 const { setupOrchestrator } = require('./services/orchestrator');
 const errorHandler = require('./middlewares/errorHandler');
 const protect = require('./middlewares/auth');
+const rateLimiter = require('./middlewares/rateLimiter');
 
 // Import des routes
 const investigationRoutes = require('./routes/investigations');
@@ -55,16 +56,6 @@ app.use(helmet({
   },
 }));
 
-// Rate limiting
-const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100, // limite chaque IP à 100 requêtes par fenêtre
-  message: 'Trop de requêtes depuis cette IP, veuillez réessayer plus tard.',
-  standardHeaders: true,
-  legacyHeaders: false,
-});
-app.use('/api/', limiter);
-
 // Middleware de base
 app.use(compression());
 app.use(cors({
@@ -83,15 +74,15 @@ app.use('/api/auth', authRoutes);
 app.use('/api/health', healthRoutes);
 
 // Protected Routes
-app.use('/api/investigations', protect, investigationRoutes);
-app.use('/api/tools', protect, toolRoutes);
-app.use('/api/results', protect, resultsRoutes);
-app.use('/api/statistics', protect, statisticsRoutes);
-app.use('/api/cases', protect, casesRoutes);
-app.use('/api/reports', protect, reportRoutes);
-app.use('/api/notifications', protect, notificationRoutes(prisma, io));
-app.use('/api/billing', protect, billingRoutes);
-app.use('/api/templates', protect, templateRoutes);
+app.use('/api/investigations', protect, rateLimiter, investigationRoutes);
+app.use('/api/tools', protect, rateLimiter, toolRoutes);
+app.use('/api/results', protect, rateLimiter, resultsRoutes);
+app.use('/api/statistics', protect, rateLimiter, statisticsRoutes);
+app.use('/api/cases', protect, rateLimiter, casesRoutes);
+app.use('/api/reports', protect, rateLimiter, reportRoutes);
+app.use('/api/notifications', protect, rateLimiter, notificationRoutes(prisma, io));
+app.use('/api/billing', protect, rateLimiter, billingRoutes);
+app.use('/api/templates', protect, rateLimiter, templateRoutes);
 
 // Configuration Swagger
 const swaggerOptions = {

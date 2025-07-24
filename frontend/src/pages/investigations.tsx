@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { useRouter } from 'next/router';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -18,6 +18,7 @@ import { AssignCaseModal } from '@/components/Investigation/AssignCaseModal';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { Trash2 } from 'lucide-react';
 import { useSession } from 'next-auth/react';
+import Link from 'next/link';
 
 // --- Local SVG Icon Components ---
 const RefreshIcon = (props: React.SVGProps<SVGSVGElement>) => (
@@ -152,7 +153,7 @@ const InvestigationCard = ({ investigation, onAssignClick, onStopClick, onDelete
                     {investigation.inputData?.cost && (
                         <div className="flex items-center gap-2 mt-2">
                             <CreditCardIcon className="h-4 w-4" />
-                            <span>Coût: {investigation.inputData.cost} crédit(s)</span>
+                            <span>Coût: {investigation.inputData.cost} jeton(s)</span>
                         </div>
                     )}
                 </div>
@@ -246,31 +247,30 @@ export default function InvestigationsPage() {
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [deletingItemId, setDeletingItemId] = useState<string | null>(null);
   const [deleteType, setDeleteType] = useState<'investigation' | 'case' | null>(null);
-  const [filteredInvestigations, setFilteredInvestigations] = useState<Investigation[]>([]);
 
   useEffect(() => {
     loadInvestigations();
     refetchCases();
-  }, [loadInvestigations, refetchCases]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-  useEffect(() => {
+  const filteredInvestigations = useMemo(() => {
     const statusFilter = router.query.status as string;
-    if (statusFilter) {
-      let filtered: Investigation[] = [];
-      if (statusFilter === 'active') {
-        filtered = investigations.filter(inv => ['SCANNING', 'ENRICHING', 'CONSOLIDATING'].includes(inv.status));
-      } else if (statusFilter === 'completed') {
-        filtered = investigations.filter(inv => inv.status === 'COMPLETED');
-      } else {
-        filtered = investigations;
-      }
-      setFilteredInvestigations(filtered);
-    } else {
-      setFilteredInvestigations(investigations);
+    if (!statusFilter) return investigations;
+
+    if (statusFilter === 'active') {
+      return investigations.filter(inv => ['SCANNING', 'ENRICHING', 'CONSOLIDATING'].includes(inv.status));
     }
+    if (statusFilter === 'completed') {
+      return investigations.filter(inv => inv.status === 'COMPLETED');
+    }
+    return investigations;
   }, [router.query.status, investigations]);
 
-  const unclassifiedInvestigations = filteredInvestigations.filter(inv => !inv.caseId);
+  const unclassifiedInvestigations = useMemo(() =>
+    filteredInvestigations.filter(inv => !inv.caseId),
+    [filteredInvestigations]
+  );
   const isLoading = isLoadingInvestigations || isLoadingCases;
 
   const handleAssignClick = (investigation: Investigation) => {
@@ -336,6 +336,24 @@ export default function InvestigationsPage() {
     }
   };
 
+  if (isLoading) {
+    return <div className="container mx-auto py-10"><p>Chargement...</p></div>;
+  }
+
+  if (investigations.length === 0) {
+    return (
+      <div className="container mx-auto py-10 text-center">
+        <h2 className="text-2xl font-semibold mb-4">Aucune investigation trouvée</h2>
+        <p className="text-muted-foreground mb-6">
+          Commencez par lancer votre première investigation depuis la page d'accueil.
+        </p>
+        <Button asChild>
+          <Link href="/">Lancer une première investigation</Link>
+        </Button>
+      </div>
+    );
+  }
+
   return (
     <TooltipProvider>
       <div className="flex flex-col gap-4 py-4 md:gap-6 md:py-6">
@@ -366,7 +384,7 @@ export default function InvestigationsPage() {
             <div>
                 <h2 className="text-2xl font-semibold mb-4">Dossiers</h2>
                 <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-                    {cases.map(caseItem => (
+                    {Array.isArray(cases) && cases.map(caseItem => (
                         <CaseCard key={caseItem.id} caseItem={caseItem} onDeleteClick={(id) => handleDeleteClick(id, 'case')} />
                     ))}
                     <CreateCaseCard onClick={() => setCreateIsModalOpen(true)} />

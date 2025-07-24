@@ -50,7 +50,8 @@ export const authOptions: AuthOptions = {
         token.id = user.id;
         token.email = user.email;
         token.name = user.name;
-        token.credits = user.credits; // Ajouter les crédits au token
+        token.credits = user.credits ?? 0;
+        token.role = user.role; // Ajouter le rôle au token
       }
       return token;
     },
@@ -60,7 +61,8 @@ export const authOptions: AuthOptions = {
       session.user.id = token.id;
       session.user.email = token.email;
       session.user.name = token.name;
-      session.user.credits = token.credits; // Exposer les crédits à la session
+      session.user.credits = token.credits;
+      session.user.role = token.role; // Exposer le rôle à la session
       return session;
     }
   },

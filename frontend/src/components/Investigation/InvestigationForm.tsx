@@ -18,11 +18,11 @@ import TuneIcon from '@mui/icons-material/Tune';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Slider } from "@/components/ui/slider"
 import React from 'react';
-import { RocketLaunch, CreditScore } from '@mui/icons-material';
+import { RocketLaunch, CreditScore, Info } from '@mui/icons-material';
 import { SaveTemplateModal } from './SaveTemplateModal';
 import { api } from '@/lib/api-client';
 import { useSession } from 'next-auth/react';
-import { Trash2 } from 'lucide-react';
+import { Trash2, Ghost, Mail, Fingerprint, Phone, Bug, Database, Waypoints, UserSearch, Coins } from 'lucide-react';
 
 // Local SVG Icon Components
 const SearchIcon = (props: React.SVGProps<SVGSVGElement>) => (
@@ -110,6 +110,19 @@ const HelpIcon = React.forwardRef<SVGSVGElement, React.SVGProps<SVGSVGElement>>(
 ));
 HelpIcon.displayName = 'HelpIcon';
 
+const toolIcons: { [key: string]: React.ElementType } = {
+  busterService: Ghost,
+  mosintService: Mail,
+  maigretService: Fingerprint,
+  phoneinfogaService: Phone,
+  spiderfootService: Bug,
+  pdlService: Database,
+  wauService: Waypoints,
+  waybulkService: Waypoints,
+  asnService: UserSearch,
+  default: HelpIcon,
+};
+
 const SaveIcon = (props: React.SVGProps<SVGSVGElement>) => (
     <svg {...props} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
@@ -163,7 +176,8 @@ export default function InvestigationForm({ onSubmit, isLoading: isSubmitting = 
   const [isLoading, setIsLoading] = useState(isSubmitting);
   const [isSaveModalOpen, setIsSaveModalOpen] = useState(false);
   const [activeSection, setActiveSection] = useState<keyof FormState | null>(null);
-  const [cost, setCost] = useState<{ cost: number; hasEnoughCredits: boolean } | null>(null);
+  const [cost, setCost] = useState<{ cost: number; details: any; hasEnoughCredits: boolean } | null>(null);
+  const [isCostDetailsOpen, setIsCostDetailsOpen] = useState(true);
   const [isCostLoading, setIsCostLoading] = useState(false);
   const { data: session } = useSession();
 
@@ -239,6 +253,22 @@ export default function InvestigationForm({ onSubmit, isLoading: isSubmitting = 
         ...prev,
         [type]: prev[type].filter(e => e.id !== id)
     }));
+  };
+
+  const { triggerTokenAnimation } = useAppStore();
+
+  const handleLancerClick = (e: React.MouseEvent<HTMLButtonElement>) => {
+    console.log('[Debug] handleLancerClick triggered. Cost object:', cost);
+    if (!cost?.hasEnoughCredits) {
+      console.log('[Debug] Insufficient credits. Preventing submission.');
+      e.preventDefault();
+      triggerTokenAnimation();
+      addToastNotification({
+        title: "Jetons insuffisants",
+        message: "Vous n'avez pas assez de jetons pour lancer cette investigation.",
+        type: 'error'
+      });
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -365,11 +395,14 @@ export default function InvestigationForm({ onSubmit, isLoading: isSubmitting = 
       .flatMap(key => fields[key].map(field => ({ type: key.slice(0, -1).toUpperCase(), value: field.value })))
       .filter(ind => ind.value.trim() !== '');
 
+    const options = { maxGeneration, minConfidence };
+
     const handler = setTimeout(() => {
-      if (currentIndicators.length > 0) {
+      if (currentIndicators.length > 0 && session?.accessToken && session?.user?.id) {
         setIsCostLoading(true);
-        api.getInvestigationCost(currentIndicators)
+        api.getInvestigationCost(currentIndicators, options, session.user.id, session.accessToken)
           .then(response => {
+            console.log('[Debug] Cost API response:', response);
             if (response.data) {
               setCost(response.data);
             }
@@ -384,7 +417,7 @@ export default function InvestigationForm({ onSubmit, isLoading: isSubmitting = 
       clearTimeout(handler);
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [JSON.stringify(fields)]);
+  }, [JSON.stringify(fields), maxGeneration, minConfidence, session?.accessToken]);
 
   const renderIndicatorSection = (
     type: keyof FormState,
@@ -638,25 +671,115 @@ export default function InvestigationForm({ onSubmit, isLoading: isSubmitting = 
                       </div>
                   </div>
 
-                  <CardFooter className="flex justify-between items-center gap-2 bg-slate-900/50 p-4 border-t">
-                    <div>
-                      {isCostLoading && <p className="text-sm text-muted-foreground">Calcul du coût...</p>}
-                      {cost && !isCostLoading && (
-                        <div className={`flex items-center gap-2 text-sm font-semibold ${cost.hasEnoughCredits ? 'text-green-400' : 'text-red-500'}`}>
-                          <CreditScore />
-                          <span>Coût estimé : {cost.cost} crédit(s).</span>
-                          {!cost.hasEnoughCredits && <span>(Crédits insuffisants)</span>}
+                  <CardFooter className="flex flex-col gap-4 bg-slate-900/50 p-4 border-t">
+                    {/* Ligne Supérieure: Détails & Action */}
+                    <div className="flex justify-between items-center w-full">
+                      {/* Détails Chiffrés */}
+                        <div className="flex-grow">
+                            <div className="flex items-center gap-2 mb-2">
+                                <h4 className="font-semibold text-white">Détails de l'estimation</h4>
+                                <TooltipProvider>
+                                    <Tooltip>
+                                        <TooltipTrigger asChild>
+                                            <span className="cursor-help">
+                                                <HelpIcon className="h-4 w-4 text-muted-foreground" />
+                                            </span>
+                                        </TooltipTrigger>
+                                        <TooltipContent>
+                                            <p className="text-xs">Le coût est calculé comme suit :<br />
+                                                <span className="font-mono text-white">(Indicateurs × Outils) × Profondeur</span>
+                                            </p>
+                                        </TooltipContent>
+                                    </Tooltip>
+                                </TooltipProvider>
+                            </div>
+                            <div className="flex flex-wrap justify-start items-start gap-x-4 text-xs text-muted-foreground">
+                                {cost && !isCostLoading && (
+                                    <>
+                                        <div className="text-center">
+                                            <span className="font-bold text-sm text-white">{cost.details.indicatorCount}</span>
+                                            <p>Indicateurs</p>
+                                            <div className="flex items-center justify-center text-yellow-400">
+                                                <span>{cost.details.baseCost.toFixed(1)}</span>
+                                                <Coins className="h-3 w-3 ml-1" />
+                                            </div>
+                                        </div>
+                                        <div className="text-center pl-4 border-l border-gray-700">
+                                            <span className="font-bold text-sm text-white">{cost.details.tools.length}</span>
+                                            <p>Outils</p>
+                                            <div className="flex items-center justify-center text-yellow-400">
+                                                <span>{(cost.details.baseCost / cost.details.indicatorCount).toFixed(1)}</span>
+                                                <Coins className="h-3 w-3 ml-1" />
+                                            </div>
+                                        </div>
+                                        <div className="text-center pl-4 border-l border-gray-700">
+                                            <span className="font-bold text-sm text-white">x{cost.details.maxGeneration}</span>
+                                            <p>Profondeur</p>
+                                            <div className="flex items-center justify-center text-yellow-400">
+                                                <span>{cost.cost.toFixed(1)}</span>
+                                                <Coins className="h-3 w-3 ml-1" />
+                                            </div>
+                                        </div>
+                                    </>
+                                )}
+                            </div>
                         </div>
-                      )}
+                      {/* Action & Coût Total */}
+                      <div className="flex items-center gap-4">
+                        {isCostLoading && <p className="text-sm text-muted-foreground animate-pulse">Calcul du coût...</p>}
+                        {cost && !isCostLoading && (
+                            <div className="flex items-center gap-6">
+                                <div className="text-center">
+                                    <p className="text-xs text-muted-foreground font-semibold">COÛT</p>
+                                    <div className="flex items-center justify-center text-2xl font-bold">
+                                        <p className={`${session?.user?.role === 'ADMIN' ? 'text-white' : (cost.hasEnoughCredits ? 'text-green-400' : 'text-red-500')}`}>{cost.cost}</p>
+                                        <Coins className={`h-5 w-5 ml-1 ${session?.user?.role === 'ADMIN' ? 'text-white' : (cost.hasEnoughCredits ? 'text-green-400' : 'text-red-500')}`} />
+                                    </div>
+                                </div>
+                                <div className="text-center border-l border-gray-700 pl-6">
+                                    <p className="text-xs text-muted-foreground font-semibold">DISPONIBLE</p>
+                                    <div className="flex items-center justify-center text-2xl font-bold text-white">
+                                        <p>{session?.user?.credits ?? 0}</p>
+                                        <Coins className="h-5 w-5 ml-1 text-white" />
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+                        <Button type="submit" onClick={handleLancerClick} disabled={isSubmitting || !isValid} className="gap-2 px-6 py-6 text-base">
+                          {isSubmitting ? <CircularProgress size={24} /> : <RocketLaunch className="h-6 w-6" />}
+                          <span>{isSubmitting ? 'Lancement...' : "Lancer"}</span>
+                        </Button>
+                      </div>
                     </div>
-                    <Button type="submit" disabled={isSubmitting || !isValid || !cost?.hasEnoughCredits} className="gap-2">
-                      {isSubmitting ? (
-                        <CircularProgress size={20} color="inherit" />
-                      ) : (
-                        <RocketLaunch className="h-5 w-5" />
+                    {/* Ligne Inférieure: Outils */}
+                    <AnimatePresence>
+                      {cost && !isCostLoading && cost.details.tools.length > 0 && (
+                        <motion.div
+                          initial={{ opacity: 0, y: -10 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          exit={{ opacity: 0, y: 10 }}
+                          className="w-full pt-3 border-t border-gray-800"
+                        >
+                          <p className="text-xs font-semibold text-muted-foreground mb-2">Outils qui seront utilisés :</p>
+                          <motion.div className="flex flex-wrap gap-3" transition={{ staggerChildren: 0.05 }}>
+                            {cost.details.tools.map((tool: any) => {
+                              const Icon = toolIcons[tool.name] || toolIcons.default;
+                              return (
+                                <motion.div
+                                  key={tool.name}
+                                  initial={{ opacity: 0, scale: 0.5 }}
+                                  animate={{ opacity: 1, scale: 1 }}
+                                  className="flex items-center gap-2 p-2 rounded-md bg-background/30 text-xs"
+                                >
+                                  <Icon className="h-4 w-4 text-[#e5ee10]" />
+                                  <span>{tool.name.replace('Service', '')}</span>
+                                </motion.div>
+                              );
+                            })}
+                          </motion.div>
+                        </motion.div>
                       )}
-                      <span>{isSubmitting ? 'Lancement...' : "Lancer l'investigation"}</span>
-                    </Button>
+                    </AnimatePresence>
                   </CardFooter>
                 </form>
               </CardContent>

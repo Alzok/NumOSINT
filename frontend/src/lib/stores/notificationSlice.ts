@@ -1,4 +1,5 @@
 import { StateCreator } from 'zustand';
+import { toast } from 'sonner';
 import { ToastNotification, AppNotification } from '@/types';
 import { generateId } from '../utils';
 import { AppStore } from '../store';
@@ -28,15 +29,33 @@ export const createNotificationSlice: StateCreator<
     const id = generateId();
     const newNotification = { ...notification, id };
     set((state) => ({ toastNotifications: [newNotification, ...state.toastNotifications] }));
-    if (notification.duration && notification.duration > 0) {
-      setTimeout(() => get().removeToastNotification(id), notification.duration);
+
+    switch (notification.type) {
+      case 'success':
+        toast.success(notification.title, { description: notification.message, id });
+        break;
+      case 'error':
+        toast.error(notification.title, { description: notification.message, id });
+        break;
+      case 'warning':
+        toast.warning(notification.title, { description: notification.message, id });
+        break;
+      case 'info':
+        toast.info(notification.title, { description: notification.message, id });
+        break;
+      default:
+        toast(notification.title, { description: notification.message, id });
+        break;
     }
   },
   removeToastNotification: (id) =>
     set((state) => ({
       toastNotifications: state.toastNotifications.filter((n) => n.id !== id),
     })),
-  clearToastNotifications: () => set({ toastNotifications: [] }),
+  clearToastNotifications: () => {
+    toast.dismiss();
+    set({ toastNotifications: [] });
+  },
   setAppNotifications: (notifications) => set({ appNotifications: notifications }),
   addAppNotification: (notification) => set((state) => ({
     appNotifications: [notification, ...state.appNotifications]

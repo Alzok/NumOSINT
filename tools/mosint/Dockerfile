@@ -9,7 +9,7 @@ RUN go build -o /mosint-service server.go
 FROM golang:1.21-alpine AS tool_builder
 
 WORKDIR /app
-RUN apk add --no-cache git
+RUN apk update && apk add --no-cache git
 RUN go install -v github.com/alpkeskin/mosint/v3/cmd/mosint@latest
 
 # Étape 3: Image finale

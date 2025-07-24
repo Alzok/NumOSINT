@@ -168,25 +168,24 @@ export default function DashboardPage() {
               <RecentActivity />
             </section>
 
-            <section aria-label="Graphique des investigations" className="px-4 lg:px-6">
-                <InvestigationsChart />
-            </section>
 
             <section aria-label="Statistiques générales" className="grid gap-4 px-4 md:grid-cols-2 md:gap-8 lg:grid-cols-4 lg:px-6">
-              <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">Crédits restants</CardTitle>
-                  <Coins className="h-4 w-4 text-muted-foreground" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold">
-                    <CreditDisplay credits={session?.user?.credits} isLoading={status === 'loading'} />
-                  </div>
-                   <p className="text-xs text-muted-foreground">
-                      Utilisés pour lancer des investigations
-                    </p>
-                </CardContent>
-              </Card>
+              <Link href="/billing">
+                <Card className="hover:bg-muted/50 transition-colors">
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium">Jetons restants</CardTitle>
+                    <Coins className="h-4 w-4 text-muted-foreground" />
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold">
+                      <CreditDisplay credits={session?.user?.credits} isLoading={status === 'loading'} />
+                    </div>
+                     <p className="text-xs text-muted-foreground">
+                        Utilisés pour lancer des investigations
+                      </p>
+                  </CardContent>
+                </Card>
+              </Link>
               <Link href="/investigations?status=active">
                 <Card className="hover:bg-muted/50 transition-colors">
                   <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">

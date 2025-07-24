@@ -49,29 +49,58 @@ class OrchestratorService {
   /**
    * Calcule le coût d'une investigation en fonction des indicateurs fournis.
    * @param {Array<{type: string, value: string}>} indicators - Les indicateurs initiaux.
-   * @returns {number} Le coût calculé en crédits.
+   * @param {object} options - Les options d'investigation (ex: { maxGeneration }).
+   * @returns {object} Le coût calculé avec son détail.
    */
-  calculateInvestigationCost(indicators) {
-    const uniqueToolsWithCost = new Map();
-    const indicatorTypes = new Set(indicators.map(i => i.type));
+  async calculateInvestigationCost(indicators, options = {}, userId) {
+    const { maxGeneration = 1 } = options;
+    const costPerIndicator = 0.25;
+    const costPerTool = 0.25;
+    const costPerGeneration = 0.5;
 
-    indicatorTypes.forEach(type => {
-      const strategy = workflowConfig.strategies[type] || workflowConfig.strategies.DEFAULT;
-      const allToolsInStrategy = [...strategy.phases.enrichment, ...strategy.phases.scanning];
+    let toolCount = 0;
+    const toolDetails = new Map();
+
+    indicators.forEach(indicator => {
+      const strategy = workflowConfig.strategies[indicator.type] || workflowConfig.strategies.DEFAULT;
+      if (!strategy || !strategy.phases) {
+        logger.error(`No strategy or phases found for indicator type: ${indicator.type}`);
+        return;
+      }
+      const enrichmentTools = strategy.phases.enrichment || [];
+      const scanningTools = strategy.phases.scanning || [];
+      const allToolsInStrategy = [...enrichmentTools, ...scanningTools];
       
       allToolsInStrategy.forEach(toolInfo => {
-        if (!uniqueToolsWithCost.has(toolInfo.tool)) {
-          uniqueToolsWithCost.set(toolInfo.tool, toolInfo.cost || 0);
+        toolCount++;
+        if (toolDetails.has(toolInfo.tool)) {
+          toolDetails.get(toolInfo.tool).count += 1;
+        } else {
+          toolDetails.set(toolInfo.tool, { count: 1 });
         }
       });
     });
 
-    if (uniqueToolsWithCost.size === 0) return 0;
+    const baseCost = (indicators.length * costPerIndicator) + (toolCount * costPerTool);
+    const finalCost = baseCost + (baseCost * (maxGeneration - 1) * costPerGeneration);
 
-    // Somme des coûts de tous les outils uniques qui seront utilisés.
-    const totalCost = Array.from(uniqueToolsWithCost.values()).reduce((sum, cost) => sum + cost, 0);
-    
-    return totalCost;
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    logger.info(`[Cost Calculation] User credits from DB: ${user.credits} (type: ${typeof user.credits})`);
+    logger.info(`[Cost Calculation] Final cost: ${finalCost} (type: ${typeof finalCost})`);
+    const hasEnoughCredits = user.credits >= finalCost;
+
+    logger.info(`[Cost Calculation] userId: ${userId}, userCredits: ${user.credits}, finalCost: ${finalCost}, hasEnoughCredits: ${hasEnoughCredits}`);
+
+    return {
+      cost: finalCost,
+      hasEnoughCredits,
+      details: {
+        indicatorCount: indicators.length,
+        maxGeneration,
+        baseCost: baseCost,
+        tools: Array.from(toolDetails.entries()).map(([name, data]) => ({ name, ...data })),
+      },
+    };
   }
 
   /**
@@ -424,16 +453,20 @@ class OrchestratorService {
     try {
       logger.info(`✅ Finalisation de l'investigation ${investigationId}`);
       
-      const investigation = await this.prisma.investigation.findUnique({ where: { id: investigationId } });
+      const investigation = await this.prisma.investigation.findUnique({
+        where: { id: investigationId },
+        include: { user: true }
+      });
       if (!investigation) {
         logger.error(`[Finalize] Investigation ${investigationId} non trouvée.`);
         return;
       }
 
       const cost = investigation.inputData?.cost || 0;
+      const user = investigation.user;
 
-      // Déduire les crédits et finaliser l'investigation dans une transaction
-      if (cost > 0) {
+      // Déduire les jetons et finaliser l'investigation dans une transaction, sauf pour les admins
+      if (cost > 0 && user.role !== 'ADMIN') {
         await this.prisma.user.update({
           where: { id: investigation.userId },
           data: { credits: { decrement: cost } },
@@ -453,7 +486,7 @@ class OrchestratorService {
       await this.updateInvestigationStatus(investigationId, InvestigationStatus.COMPLETED, 100, 'completed');
       
       this.activeInvestigations.delete(investigationId);
-      await this.logStep(investigationId, 'finalization', `Investigation terminée avec succès. Coût: ${cost} crédit(s).`);
+      await this.logStep(investigationId, 'finalization', `Investigation terminée avec succès. Coût: ${cost} jeton(s).`);
       
       // Envoyer une notification
       await this.notificationService.createNotification(

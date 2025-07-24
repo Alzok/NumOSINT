@@ -17,10 +17,14 @@ error_exit() {
 
 # Attendre que Postgres soit prêt
 log "⏳ Attente de PostgreSQL..."
-while ! nc -z postgres 5432; do
+# Utilisation de pg_isready pour une vérification plus fiable
+# La variable d'environnement PGPASSWORD est utilisée par pg_isready
+export PGPASSWORD=${POSTGRES_PASSWORD:-numosint_password}
+while ! pg_isready -h postgres -p 5432 -U ${POSTGRES_USER:-numosint} -d ${POSTGRES_DB:-numosint} -q; do
   log "Postgres est indisponible - en attente..."
-  sleep 1
+  sleep 2
 done
+unset PGPASSWORD
 log "✅ PostgreSQL est prêt."
 
 # Vérifier que les variables d'environnement sont définies
@@ -44,8 +48,11 @@ log "✅ Migrations appliquées !"
 log "🔧 Génération du client Prisma..."
 npx prisma generate || error_exit "Échec de la génération du client Prisma"
 
+log "🌱 Exécution du seed de la base de données..."
+npx prisma db seed || error_exit "Échec de l'exécution du seed"
+
 # Les répertoires sont maintenant créés dans le Dockerfile
 
 # Démarrer le serveur principal
 log "🚀 Démarrage du serveur Node.js..."
-exec node src/index.js
+exec npm start

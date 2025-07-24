@@ -32,13 +32,13 @@ const BillingPage = () => {
       
       <Card>
           <CardHeader>
-              <CardTitle>Acheter des crédits</CardTitle>
+              <CardTitle>Acheter des jetons</CardTitle>
           </CardHeader>
           <CardContent className="flex flex-col items-center justify-center text-center p-12">
               <Coins className="w-16 h-16 mb-4 text-muted-foreground" />
               <h3 className="text-xl font-semibold mb-2">Bientôt disponible</h3>
               <p className="text-muted-foreground">
-                  La possibilité d'acheter des crédits sera bientôt disponible.
+                  La possibilité d'acheter des jetons sera bientôt disponible.
               </p>
           </CardContent>
       </Card>

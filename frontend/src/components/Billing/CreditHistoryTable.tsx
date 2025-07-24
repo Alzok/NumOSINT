@@ -23,9 +23,9 @@ interface CreditHistoryTableProps {
 }
 
 const transactionTypeMapping = {
-  INITIAL_GRANT: 'Crédits initiaux',
+  INITIAL_GRANT: 'Jetons initiaux',
   INVESTIGATION_COST: 'Coût d\'investigation',
-  PURCHASE: 'Achat de crédits',
+  PURCHASE: 'Achat de jetons',
 };
 
 export const CreditHistoryTable = ({ transactions }: CreditHistoryTableProps) => {

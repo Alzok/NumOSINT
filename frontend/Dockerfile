@@ -29,13 +29,13 @@ ENV NEXT_TELEMETRY_DISABLED 1
 RUN addgroup -S app && adduser -S -G app app
 
 # Copier les fichiers de build depuis l'étape builder
-COPY --from=builder /app/public ./public
+COPY --from=builder --chown=app:app /app/public ./public
 COPY --from=builder --chown=app:app /app/.next ./.next
-COPY --from=builder /app/node_modules ./node_modules
-COPY --from=builder /app/package.json ./package.json
+COPY --from=builder --chown=app:app /app/node_modules ./node_modules
+COPY --from=builder --chown=app:app /app/package.json ./package.json
 
-# Changer le propriétaire du répertoire de travail
-RUN chown -R app:app /app
+# Le propriétaire est déjà défini avec --chown, plus besoin de cette commande lente
+# RUN chown -R app:app /app
 
 # Passer à l'utilisateur non-privilégié
 USER app

@@ -11,11 +11,11 @@ router.use(protect);
  * @swagger
  * /api/billing/history:
  *   get:
- *     summary: Récupère l'historique des transactions de crédits pour l'utilisateur authentifié.
+ *     summary: Récupère l'historique des transactions de jetons pour l'utilisateur authentifié.
  *     tags: [Billing]
  *     responses:
  *       200:
- *         description: Une liste de transactions de crédits.
+ *         description: Une liste de transactions de jetons.
  *       500:
  *         description: Erreur serveur.
  */

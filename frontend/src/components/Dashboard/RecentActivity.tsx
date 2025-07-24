@@ -36,7 +36,7 @@ const RecentActivity = () => {
         }
         const response = await api.getInvestigations(params, token);
         if (response.data) {
-          setInvestigations(response.data);
+          setInvestigations(response.data.data);
         } else {
           setError(response.error || 'Une erreur est survenue.');
         }

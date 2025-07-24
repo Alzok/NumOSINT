@@ -2,6 +2,11 @@
 @tailwind components;
 @tailwind utilities;
 
+[data-sonner-toaster][data-x-position="right"] {
+  right: 24px !important;
+}
+
+
 @layer base {
   :root {
     --background: 0 0% 100%;

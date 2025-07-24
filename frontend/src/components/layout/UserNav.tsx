@@ -126,12 +126,6 @@ export function UserNav() {
                         <span>Paramètres</span>
                     </DropdownMenuItem>
                 </Link>
-                 <Link href="/notifications">
-                    <DropdownMenuItem>
-                        <Bell className="mr-2 h-4 w-4" />
-                        <span>Notifications</span>
-                    </DropdownMenuItem>
-                </Link>
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={() => signOut({ callbackUrl: '/login' })}>

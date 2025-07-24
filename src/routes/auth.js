@@ -30,6 +30,7 @@ router.post('/register', validate(registerSchema), catchAsync(async (req, res, n
     data: {
       email,
       password: hashedPassword,
+      credits: 100, // Crédits par défaut pour les nouveaux utilisateurs
     },
   });
 
@@ -61,7 +62,7 @@ router.post('/login', validate(loginSchema), catchAsync(async (req, res, next) =
     return next(new ApiError('Incorrect email or password', 401));
   }
 
-  const token = jwt.sign({ id: user.id }, process.env.JWT_SECRET, {
+  const token = jwt.sign({ id: user.id, role: user.role }, process.env.JWT_SECRET, {
     expiresIn: process.env.JWT_EXPIRES_IN,
   });
 

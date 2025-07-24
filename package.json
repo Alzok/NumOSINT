@@ -5,11 +5,11 @@
   "main": "src/index.js",
   "scripts": {
     "dev": "nodemon src/index.js",
-    "start": "node src/index.js",
+    "start": "nodemon src/index.js",
     "build": "prisma generate",
     "db:migrate": "prisma migrate dev",
     "db:generate": "prisma generate",
-    "db:seed": "node prisma/seed.js",
+    "db:seed": "prisma db seed",
     "db:studio": "prisma studio",
     "test": "npm run test:jest && npm run test:e2e",
     "test:jest": "mkdir -p logs && DATABASE_URL=\"postgresql://testuser:testpass@localhost:5433/testdb?schema=public\" jest --runInBand",
@@ -71,7 +71,8 @@
     "supertest": "^6.3.3"
   },
   "prisma": {
-    "schema": "prisma/schema.prisma"
+    "schema": "prisma/schema.prisma",
+    "seed": "node prisma/seed.js"
   },
   "engines": {
     "node": ">=18.0.0"

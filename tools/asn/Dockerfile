@@ -3,7 +3,7 @@ FROM golang:1.21-alpine AS builder
 WORKDIR /app
 
 # Installer git
-RUN apk --no-cache add git
+RUN apk update && apk --no-cache add git
 
 # Copier le code source et les dépendances
 COPY go.mod go.sum ./
@@ -15,7 +15,7 @@ RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o main .
 
 # Étape 2: Créer l'image finale
 FROM alpine:latest
-RUN apk --no-cache add ca-certificates
+RUN apk update && apk --no-cache add ca-certificates
 
 # Créer un utilisateur non-privilégié
 RUN addgroup -S app && adduser -S -G app app

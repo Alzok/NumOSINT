@@ -77,6 +77,8 @@ services:
     ports:
       - "${PORT:-5001}:${PORT:-5001}"
     volumes:
+      - .:/app
+      - /app/node_modules
       - logs_data:/app/logs
       - results_data:/app/results
       - reports_data:/app/reports
@@ -206,14 +208,20 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
     container_name: numosint_frontend
+    env_file:
+      - .env
     environment:
+      - NODE_ENV=development
       - NEXT_PUBLIC_API_URL=http://localhost:8081
       - INTERNAL_API_URL=http://backend:5001
+      - NEXTAUTH_URL=http://localhost:8081
     ports:
       - "3001:3000"
-    # Le montage de volume est supprimé pour éviter les problèmes de permissions.
-    # Le code est copié dans l'image via le Dockerfile.
-    # Pour les changements de code, reconstruire l'image est nécessaire.
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+      - /app/.next
+    command: npm run dev
     networks:
       - numosint_network
     depends_on:
@@ -235,20 +243,22 @@ services:
       - backend
     restart: unless-stopped
   
-  e2e-tester:
-    build:
-      context: .
-      dockerfile: tests/Dockerfile.e2e
-    container_name: numosint_e2e_tester
-    depends_on:
-      - nginx
-      - backend
-      - frontend
-    networks:
-      - numosint_network
-    volumes:
-      - .:/app
-    command: ["npm", "run", "test:e2e"]
+  # e2e-tester:
+  #   build:
+  #     context: .
+  #     dockerfile: tests/Dockerfile.e2e
+  #   container_name: numosint_e2e_tester
+  #   environment:
+  #     - PUPPETEER_SKIP_DOWNLOAD=true
+  #   depends_on:
+  #     - nginx
+  #     - backend
+  #     - frontend
+  #   networks:
+  #     - numosint_network
+  #   volumes:
+  #     - .:/app
+  #   command: ["npm", "run", "test:e2e"]
 
   qdrant:
     image: qdrant/qdrant

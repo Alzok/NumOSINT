@@ -7,7 +7,7 @@ COPY server.go .
 RUN go build -o /buster-service server.go
 
 # Préparation de l'outil Python
-RUN apk add --no-cache git python3 py3-pip
+RUN apk update && apk add --no-cache git python3 py3-pip
 RUN git clone https://github.com/sham00n/buster.git /buster
 RUN python3 -m venv /py
 ENV PATH="/py/bin:$PATH"

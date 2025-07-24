@@ -18,10 +18,10 @@ import { CreditDisplay } from "@/components/common/CreditDisplay";
 import { useAppStore } from "@/lib/store";
 import { Badge } from "@/components/ui/badge";
 import { NotificationBell } from "@/components/Common/NotificationBell";
-const SearchIcon = (props: React.SVGProps<SVGSVGElement>) => (
+const HomeIcon = (props: React.SVGProps<SVGSVGElement>) => (
   <svg {...props} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <circle cx="11" cy="11" r="8" />
-    <line x1="21" y1="21" x2="16.65" y2="16.65" />
+    <path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+    <polyline points="9 22 9 12 15 12 15 22" />
   </svg>
 );
 const FolderOpenIcon = (props: React.SVGProps<SVGSVGElement>) => (
@@ -60,13 +60,14 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const { data: session, status } = useSession();
   
   const navItems = [
-    { href: '/', icon: <SearchIcon className="h-5 w-5" />, label: 'Accueil' },
+    { href: '/', icon: <HomeIcon className="h-5 w-5" />, label: 'Accueil' },
     { href: '/investigations', icon: <FolderOpenIcon className="h-5 w-5" />, label: 'Investigations' },
     { href: '/statistics', icon: <BarChartIcon className="h-5 w-5" />, label: 'Statistiques' },
     { href: '/results', icon: <TableChartIcon className="h-5 w-5" />, label: 'Résultats' },
   ];
 
   const secondaryNav = [
+      { href: '/notifications', icon: <NotificationBell />, label: 'Notifications' },
       { href: '/help', icon: <HelpIcon className="h-5 w-5" />, label: 'Aide' },
   ];
 
@@ -107,18 +108,13 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         </SidebarMenu>
       </SidebarContent>
       <SidebarFooter>
-        <div className="flex justify-center p-2">
-            <CreditDisplay credits={session?.user?.credits} isLoading={status === 'loading'} />
-        </div>
         <SidebarMenu>
           {secondaryNav.map((item) => (
             <SidebarMenuItem key={item.label}>
               <SidebarMenuButton asChild tooltip={item.label}>
-                <a href={item.href} onClick={(e) => handleNavigation(e, item.href)} className="flex items-center justify-between w-full">
-                  <div className="flex items-center gap-2">
-                    {item.icon}
-                    <span className="text-sm">{item.label}</span>
-                  </div>
+                <a href={item.href} onClick={(e) => handleNavigation(e, item.href)} className="flex items-center gap-2">
+                  {item.icon}
+                  <span className="text-sm">{item.label}</span>
                 </a>
               </SidebarMenuButton>
             </SidebarMenuItem>

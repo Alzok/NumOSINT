@@ -9,7 +9,7 @@ const startInvestigation = z.object({
     })).min(1, "Au moins un indicateur est requis."),
     caseId: z.string().cuid('ID de dossier invalide.').optional(),
     options: z.object({
-        maxGeneration: z.number().int().min(0).max(10).optional(),
+        maxGeneration: z.number().int().min(0).max(50).optional(),
         minConfidence: z.number().min(0).max(1).optional(),
     }).optional(),
   }),

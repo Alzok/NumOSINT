@@ -4,10 +4,9 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5001';
 
 async function fetcher<T>(url: string, options: RequestInit = {}, token?: string | null): Promise<{ data: T | null, error: string | null }> {
   try {
-    const authToken = token || localStorage.getItem('token');
     const headers = new Headers(options.headers || {});
-    if (authToken) {
-      headers.append('Authorization', `Bearer ${authToken}`);
+    if (token) {
+      headers.append('Authorization', `Bearer ${token}`);
     }
     if (!headers.has('Content-Type') && options.body) {
       headers.append('Content-Type', 'application/json');
@@ -39,15 +38,15 @@ export const api = {
   }),
 
   // Investigations
-  createInvestigation: (data: InvestigationInput) => fetcher<Investigation>('/api/investigations', {
+  createInvestigation: (data: InvestigationInput, token?: string | null) => fetcher<Investigation>('/api/investigations', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(data),
-  }),
-  getInvestigationCost: (indicators: { type: string, value: string }[]) => fetcher<{ cost: number; hasEnoughCredits: boolean; userCredits: number }>('/api/investigations/cost', {
+  }, token),
+  getInvestigationCost: (indicators: { type: string, value: string }[], options: { maxGeneration?: number, minConfidence?: number }, userId: string, token?: string | null) => fetcher<{ cost: number; details: any; hasEnoughCredits: boolean; userCredits: number }>('/api/investigations/cost', {
     method: 'POST',
-    body: JSON.stringify({ indicators }),
-  }),
+    body: JSON.stringify({ indicators, options, userId }),
+  }, token),
   getInvestigations: (params: { limit?: number; sortBy?: string; sortOrder?: string; status?: string; date?: string } = {}, token?: string | null) => {
     const query = new URLSearchParams();
     if (params.limit) query.append('limit', params.limit.toString());
@@ -55,11 +54,11 @@ export const api = {
     if (params.sortOrder) query.append('sortOrder', params.sortOrder);
     if (params.status) query.append('status', params.status);
     if (params.date) query.append('date', params.date);
-    return fetcher<Investigation[]>(`/api/investigations?${query.toString()}`, {}, token);
+    return fetcher<{ data: Investigation[], pagination: any }>(`/api/investigations?${query.toString()}`, {}, token);
   },
   getInvestigation: (id: string, token?: string | null) => fetcher<Investigation>(`/api/investigations/${id}`, {}, token),
-  startInvestigation: (id: string) => fetcher<{ message: string }>(`/api/investigations/${id}/start`, { method: 'POST' }),
-  stopInvestigation: (id: string) => fetcher<{ message: string }>(`/api/investigations/${id}/stop`, { method: 'POST' }),
+  startInvestigation: (id: string, token?: string | null) => fetcher<{ message: string }>(`/api/investigations/${id}/start`, { method: 'POST' }, token),
+  stopInvestigation: (id: string, token?: string | null) => fetcher<{ message: string }>(`/api/investigations/${id}/stop`, { method: 'POST' }, token),
   deleteInvestigation: (id: string, token?: string | null) => fetcher<{ message: string }>(`/api/investigations/${id}`, { method: 'DELETE' }, token),
   getResults: (id: string, token?: string | null) => fetcher<Result[]>(`/api/investigations/${id}/results`, {}, token),
   getGroupedResults: (params: any, token?: string | null) => fetcher<any>(`/api/results/grouped?${new URLSearchParams(params)}`, {}, token),
@@ -67,10 +66,9 @@ export const api = {
   getInvestigationGraph: (id: string, token?: string | null) => fetcher<{ nodes: any[], edges: any[] }>(`/api/investigations/${id}/graph`, {}, token),
   exportInvestigation: async (id: string, format: 'pdf' | 'csv', token?: string | null): Promise<{ blob: Blob | null, error: string | null }> => {
     try {
-      const authToken = token || localStorage.getItem('token');
       const headers = new Headers();
-      if (authToken) {
-        headers.append('Authorization', `Bearer ${authToken}`);
+      if (token) {
+        headers.append('Authorization', `Bearer ${token}`);
       }
       const res = await fetch(`${API_URL}/api/reports/investigation/${id}/export?format=${format}`, { headers });
       if (!res.ok) {

@@ -11,7 +11,7 @@ const initialFormState: InvestigationFormState = {
     ips: [initialFormField],
     domains: [initialFormField],
     urls: [initialFormField],
-    maxGeneration: 3,
+    maxGeneration: 4,
     minConfidence: 0.7,
 };
 

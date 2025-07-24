@@ -115,21 +115,16 @@ router.get('/:id', protect, validate(investigationValidation.getInvestigation), 
 
 // POST /api/investigations/cost - Calculer le coût d'une investigation
 router.post('/cost', protect, validate(investigationValidation.startInvestigation), catchAsync(async (req, res) => {
-  const { indicators } = req.body;
+  const { indicators, options, userId } = req.body;
   const { orchestrator } = req.app.locals;
-  const user = await prisma.user.findUnique({ where: { id: req.user.id } });
 
   if (!orchestrator) {
     throw new ApiError('Orchestrateur non disponible', 500);
   }
 
-  const cost = orchestrator.calculateInvestigationCost(indicators);
+  const result = await orchestrator.calculateInvestigationCost(indicators, options, userId);
   
-  res.json({
-    cost,
-    hasEnoughCredits: user.credits >= cost,
-    userCredits: user.credits
-  });
+  res.json(result);
 }));
 
 // POST /api/investigations - Créer une investigation
@@ -142,20 +137,22 @@ router.post('/', protect, validate(investigationValidation.startInvestigation), 
     throw new ApiError('Orchestrateur non disponible', 500);
   }
 
-  const cost = orchestrator.calculateInvestigationCost(indicators);
+  const costResult = await orchestrator.calculateInvestigationCost(indicators, options, req.user.id);
+  logger.info(`[Create Investigation] userId: ${req.user.id}, costResult: ${JSON.stringify(costResult)}`);
 
-  if (user.credits < cost) {
-    throw new ApiError('Crédits insuffisants pour lancer cette investigation.', 402);
+  if (!costResult.hasEnoughCredits) {
+    logger.warn(`[Create Investigation] User ${req.user.id} has insufficient credits.`);
+    throw new ApiError('Jetons insuffisants pour lancer cette investigation.', 402);
   }
 
-  // La déduction des crédits est maintenant gérée par l'orchestrateur à la fin.
+  // La déduction des jetons est maintenant gérée par l'orchestrateur à la fin.
   const investigation = await prisma.investigation.create({
     data: {
       userId: req.user.id,
       status: InvestigationStatus.INITIALIZING,
       progress: 0,
       currentStep: 'initialization',
-      inputData: { indicators, options, cost }, // On enregistre le coût pour plus tard
+      inputData: { indicators, options, cost: costResult.cost }, // On enregistre le coût pour plus tard
       maxGeneration: options?.maxGeneration,
       minConfidence: options?.minConfidence,
       caseId: caseId,

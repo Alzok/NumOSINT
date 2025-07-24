@@ -9,32 +9,39 @@ Ce document suit les chantiers de développement actifs et futurs pour la platef
 ### Chantier A : Gestion des Rôles & Superadmin
 *Objectif : Mettre en place un système de rôles pour différencier les utilisateurs standards des administrateurs, avec des privilèges spécifiques.*
 
-- [ ] **1. Mettre à jour la base de données :**
-    - [ ] Ajouter un `enum Role` (`USER`, `ADMIN`) dans `prisma/schema.prisma`.
-    - [ ] Ajouter un champ `role` au modèle `User` avec la valeur par défaut `USER`.
-    - [ ] Modifier le champ `credits` pour qu'il puisse être `null` (pour les crédits illimités de l'admin).
-    - [ ] Générer et appliquer la nouvelle migration de base de données.
+- [x] **1. Mettre à jour la base de données :**
+    - [x] Ajouter un `enum Role` (`USER`, `ADMIN`) dans `prisma/schema.prisma`.
+    - [x] Ajouter un champ `role` au modèle `User` avec la valeur par défaut `USER`.
+    - [x] Modifier le champ `credits` pour qu'il puisse être `null` (pour les crédits illimités de l'admin).
+    - [x] Générer et appliquer la nouvelle migration de base de données.
 
-- [ ] **2. Créer le compte Superadmin :**
-    - [ ] Créer un script de "seed" Prisma.
-    - [ ] Le script lira les variables d'environnement (`SUPERADMIN_EMAIL`, `SUPERADMIN_PASSWORD`).
-    - [ ] Le script créera (ou mettra à jour) un utilisateur avec le rôle `ADMIN` et des crédits `null`.
+- [x] **2. Créer le compte Superadmin :**
+    - [x] Créer un script de "seed" Prisma.
+    - [x] Le script lira les variables d'environnement (`SUPERADMIN_EMAIL`, `SUPERADMIN_PASSWORD`).
+    - [x] Le script créera (ou mettra à jour) un utilisateur avec le rôle `ADMIN` et des crédits `null`.
 
-- [ ] **3. Adapter la logique métier :**
-    - [ ] Modifier le service de gestion des crédits pour ne pas déduire de crédits si `user.role === 'ADMIN'`.
-    - [ ] Mettre à jour le token JWT et la session NextAuth pour y inclure le `role` et les `credits`.
+- [x] **3. Adapter la logique métier :**
+    - [x] Modifier le service de gestion des crédits pour ne pas déduire de crédits si `user.role === 'ADMIN'`.
+    - [x] Mettre à jour le token JWT et la session NextAuth pour y inclure le `role` et les `credits`.
 
 ### Chantier B : Améliorations UI/UX
 *Objectif : Améliorer l'ergonomie et l'interactivité de l'interface utilisateur.*
 
+- [ ] **Améliorer le feedback des investigations**
+    - [ ] Rendre la timeline d'investigation plus interactive (icônes, couleurs, clics).
+    - [ ] Utiliser des squelettes de chargement (skeletons) plus contextuels pour améliorer la perception de vitesse.
+- [ ] **Améliorer le formulaire d'investigation**
+    - [ ] Afficher le coût en crédits en temps réel pendant que l'utilisateur ajoute des indicateurs.
+    - [ ] Ajouter une validation instantanée (côté client) pour la syntaxe des indicateurs.
+- [ ] **Améliorer la navigation**
+    - [ ] Mettre en place un fil d'Ariane (Breadcrumbs) pour faciliter la navigation.
+    - [ ] Ajouter une barre de recherche globale dans l'application.
 - [ ] **Page de Résultats Unifiée (`/results`)**
     - [ ] Ajouter des filtres avancés (par type de preuve, par outil source, par niveau de confiance).
     - [ ] Mettre en place une pagination ou un défilement infini pour gérer de grands volumes de résultats.
-
 - [ ] **Tableau de Bord Interactif (`/`)**
     - [ ] Permettre de cliquer sur les graphiques pour appliquer des filtres globaux.
     - [ ] Sauvegarder les préférences de filtres de l'utilisateur.
-
 - [ ] **Centre de Notifications (`/notifications`)**
     - [ ] Finaliser la page dédiée pour voir l'historique des notifications.
     - [ ] Ajouter les actions "Marquer tout comme lu" et "Supprimer les notifications lues".

@@ -18,11 +18,13 @@ interface InvestigationUpdatePayload {
 
 const fetchInvestigations = async (token: string | null | undefined): Promise<Investigation[]> => {
   if (!token) return [];
-  const { data, error } = await api.getInvestigations({}, token);
-  if (error) {
-    throw new Error(error);
+  const response = await api.getInvestigations({}, token);
+  if (response.error) {
+    throw new Error(response.error);
   }
-  return data || [];
+  // La réponse de l'API est { data: { data: Investigation[], pagination: {...} }, error: null }
+  // Nous ne voulons que le tableau d'investigations.
+  return response.data?.data || [];
 };
 
 export function useInvestigationsList() {
