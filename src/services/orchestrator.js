@@ -53,7 +53,32 @@ class OrchestratorService {
    * @returns {object} Le coût calculé avec son détail.
    */
   async calculateInvestigationCost(indicators, options = {}, userId) {
-    const { maxGeneration = 1 } = options;
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      include: { subscription: true },
+    });
+    const plan = user?.subscription?.plan || 'DECOUVERTE';
+
+    // Définir les limitations par plan
+    const limits = {
+      DECOUVERTE: { maxIndicators: 2, maxGeneration: 1, allowedTools: ['mosintService', 'maigretService'] },
+      ENQUETEUR: { maxIndicators: 15, maxGeneration: 3, allowedTools: null }, // null = tous les outils d'enrichissement
+      STRATEGE: { maxIndicators: Infinity, maxGeneration: 20, allowedTools: ['all'] }, // 'all' = tous les outils
+    };
+    const userLimits = limits[plan];
+
+    // 1. Vérifier le nombre d'indicateurs
+    if (indicators.length > userLimits.maxIndicators) {
+      throw new Error(`Votre plan ${plan} est limité à ${userLimits.maxIndicators} indicateurs par investigation.`);
+    }
+
+    // 2. Ajuster maxGeneration
+    const requestedMaxGeneration = options.maxGeneration || 1;
+    if (requestedMaxGeneration > userLimits.maxGeneration) {
+      throw new Error(`Votre plan ${plan} est limité à une profondeur de ${userLimits.maxGeneration}.`);
+    }
+    const maxGeneration = requestedMaxGeneration;
+
     const costPerIndicator = 0.25;
     const costPerTool = 0.25;
     const costPerGeneration = 0.5;
@@ -67,8 +92,18 @@ class OrchestratorService {
         logger.error(`No strategy or phases found for indicator type: ${indicator.type}`);
         return;
       }
-      const enrichmentTools = strategy.phases.enrichment || [];
-      const scanningTools = strategy.phases.scanning || [];
+      
+      let enrichmentTools = strategy.phases.enrichment || [];
+      let scanningTools = strategy.phases.scanning || [];
+
+      // 3. Filtrer les outils en fonction du plan
+      if (userLimits.allowedTools && userLimits.allowedTools[0] !== 'all') {
+        enrichmentTools = enrichmentTools.filter(t => userLimits.allowedTools.includes(t.tool));
+        scanningTools = (plan === 'STRATEGE') ? scanningTools : [];
+      } else if (plan === 'ENQUETEUR') {
+        scanningTools = []; // Les enquêteurs n'ont pas accès aux scans
+      }
+      
       const allToolsInStrategy = [...enrichmentTools, ...scanningTools];
       
       allToolsInStrategy.forEach(toolInfo => {
@@ -84,10 +119,10 @@ class OrchestratorService {
     const baseCost = (indicators.length * costPerIndicator) + (toolCount * costPerTool);
     const finalCost = baseCost + (baseCost * (maxGeneration - 1) * costPerGeneration);
 
-    const user = await this.prisma.user.findUnique({ where: { id: userId } });
     logger.info(`[Cost Calculation] User credits from DB: ${user.credits} (type: ${typeof user.credits})`);
     logger.info(`[Cost Calculation] Final cost: ${finalCost} (type: ${typeof finalCost})`);
-    const hasEnoughCredits = user.credits >= finalCost;
+    // Les admins ont des crédits `null` pour un accès illimité.
+    const hasEnoughCredits = user.credits === null || user.credits >= finalCost;
 
     logger.info(`[Cost Calculation] userId: ${userId}, userCredits: ${user.credits}, finalCost: ${finalCost}, hasEnoughCredits: ${hasEnoughCredits}`);
 

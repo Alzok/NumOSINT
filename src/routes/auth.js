@@ -30,7 +30,13 @@ router.post('/register', validate(registerSchema), catchAsync(async (req, res, n
     data: {
       email,
       password: hashedPassword,
-      credits: 100, // Crédits par défaut pour les nouveaux utilisateurs
+      credits: 10, // Crédits du plan Découverte
+      subscription: {
+        create: {
+          plan: 'DECOUVERTE',
+          status: 'ACTIVE',
+        },
+      },
     },
   });
 

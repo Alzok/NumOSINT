@@ -30,6 +30,7 @@ const notificationRoutes = require('./routes/notifications.js');
 const authRoutes = require('./routes/auth.js');
 const billingRoutes = require('./routes/billing.js');
 const templateRoutes = require('./routes/templates.js');
+const subscriptionsRoutes = require('./routes/subscriptions.js');
 
 const app = express();
 const server = createServer(app);
@@ -83,6 +84,7 @@ app.use('/api/reports', protect, rateLimiter, reportRoutes);
 app.use('/api/notifications', protect, rateLimiter, notificationRoutes(prisma, io));
 app.use('/api/billing', protect, rateLimiter, billingRoutes);
 app.use('/api/templates', protect, rateLimiter, templateRoutes);
+app.use('/api/subscriptions', protect, rateLimiter, subscriptionsRoutes);
 
 // Configuration Swagger
 const swaggerOptions = {

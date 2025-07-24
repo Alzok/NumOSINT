@@ -28,10 +28,16 @@ async function main() {
       role: 'ADMIN',
       credits: 999,
       name: 'Super Admin',
+      subscription: {
+        create: {
+          plan: 'STRATEGE',
+          status: 'ACTIVE',
+        },
+      },
     },
   });
 
-  console.log(`✅ Utilisateur admin créé/mis à jour : ${admin.email}`);
+  console.log(`✅ Utilisateur admin créé/mis à jour : ${admin.email} avec le plan STRATEGE.`);
   console.log('🌱 Fin du script de seeding.');
 }
 

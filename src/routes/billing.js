@@ -32,7 +32,6 @@ router.get('/history', async (req, res) => {
         investigation: {
           select: {
             id: true,
-            name: true,
           },
         },
       },
@@ -42,6 +41,41 @@ router.get('/history', async (req, res) => {
   } catch (error) {
     logger.error(`Erreur lors de la récupération de l'historique de facturation pour l'utilisateur ${req.user.id}:`, error);
     res.status(500).json({ error: "Impossible de récupérer l'historique des transactions." });
+  }
+});
+
+router.post('/purchase-tokens', async (req, res) => {
+  const { amount } = req.body;
+  const userId = req.user.id;
+
+  if (!amount || amount <= 0) {
+    return res.status(400).json({ error: 'Le montant doit être positif.' });
+  }
+
+  try {
+    // Mettre à jour les crédits de l'utilisateur et créer une transaction
+    const [, user] = await prisma.$transaction([
+      prisma.creditTransaction.create({
+        data: {
+          amount,
+          type: 'PURCHASE',
+          userId,
+        },
+      }),
+      prisma.user.update({
+        where: { id: userId },
+        data: {
+          credits: {
+            increment: amount,
+          },
+        },
+      }),
+    ]);
+
+    res.json({ message: 'Achat réussi.', credits: user.credits });
+  } catch (error) {
+    logger.error(`Erreur lors de l'achat de jetons pour l'utilisateur ${userId}:`, error);
+    res.status(500).json({ error: "Impossible de finaliser l'achat." });
   }
 });
 

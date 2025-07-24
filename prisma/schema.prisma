@@ -190,8 +190,38 @@ model User {
   logs          InvestigationLog[]
   creditTransactions CreditTransaction[]
   templates     InvestigationTemplate[]
+  subscription  Subscription?
 
   @@map("users")
+}
+
+enum Plan {
+  DECOUVERTE
+  ENQUETEUR
+  STRATEGE
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  CANCELED
+  PAST_DUE
+}
+
+model Subscription {
+  id                 String             @id @default(cuid())
+  userId             String             @unique
+  user               User               @relation(fields: [userId], references: [id])
+  plan               Plan               @default(DECOUVERTE)
+  status             SubscriptionStatus @default(ACTIVE)
+  currentPeriodStart DateTime?
+  currentPeriodEnd   DateTime?
+  canceledAt         DateTime?
+  stripeSubscriptionId String?            @unique
+  stripeCustomerId     String?            @unique
+  stripePriceId        String?
+  stripeCurrentPeriodEnd DateTime?
+
+  @@map("subscriptions")
 }
 
 model Account {

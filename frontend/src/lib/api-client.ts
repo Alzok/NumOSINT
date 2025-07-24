@@ -107,6 +107,14 @@ export const api = {
 
   // Billing
   getBillingHistory: (token?: string | null) => fetcher<any[]>('/api/billing/history', {}, token),
+  purchaseTokens: (amount: number, token?: string | null) => fetcher<{ credits: number }>('/api/billing/purchase-tokens', {
+    method: 'POST',
+    body: JSON.stringify({ amount }),
+  }, token),
+  createCheckoutSession: (plan: string, token?: string | null) => fetcher<any>('/api/subscriptions/create-checkout-session', {
+    method: 'POST',
+    body: JSON.stringify({ plan }),
+  }, token),
 
   // Cases
   getCases: (token?: string | null) => fetcher<Case[]>('/api/cases', {}, token),

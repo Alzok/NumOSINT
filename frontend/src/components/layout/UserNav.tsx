@@ -1,7 +1,7 @@
 'use client';
 
 import {
-  Bell,
+  Coins,
   CreditCard,
   LogOut,
   Settings,
@@ -114,10 +114,10 @@ export function UserNav() {
                         <span>Compte</span>
                     </DropdownMenuItem>
                 </Link>
-                <Link href="/billing">
+                <Link href="/store">
                     <DropdownMenuItem>
-                        <CreditCard className="mr-2 h-4 w-4" />
-                        <span>Facturation</span>
+                        <Coins className="mr-2 h-4 w-4 text-yellow-500" />
+                        <span>Boutique</span>
                     </DropdownMenuItem>
                 </Link>
                  <Link href="/settings">

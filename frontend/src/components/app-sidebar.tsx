@@ -18,6 +18,7 @@ import { CreditDisplay } from "@/components/common/CreditDisplay";
 import { useAppStore } from "@/lib/store";
 import { Badge } from "@/components/ui/badge";
 import { NotificationBell } from "@/components/Common/NotificationBell";
+import { Coins } from "lucide-react";
 const HomeIcon = (props: React.SVGProps<SVGSVGElement>) => (
   <svg {...props} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
@@ -67,6 +68,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   ];
 
   const secondaryNav = [
+      { href: '/store', icon: <Coins className="h-5 w-5 text-yellow-500" />, label: 'Boutique' },
       { href: '/notifications', icon: <NotificationBell />, label: 'Notifications' },
       { href: '/help', icon: <HelpIcon className="h-5 w-5" />, label: 'Aide' },
   ];

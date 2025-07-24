@@ -3,13 +3,13 @@
 import { useEffect, useState } from 'react';
 import { useSession } from 'next-auth/react';
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
-import { Coins } from "lucide-react";
 import { CreditHistoryTable } from '@/components/Billing/CreditHistoryTable';
+import PurchaseSection from '@/components/Billing/PurchaseSection';
 import { api } from '@/lib/api-client';
 import { Skeleton } from '@/components/ui/skeleton';
 import { CreditTransaction } from '@/types';
 
-const BillingPage = () => {
+const StorePage = () => {
   const { data: session } = useSession();
   const token = session?.accessToken;
   const [transactions, setTransactions] = useState<CreditTransaction[]>([]);
@@ -28,20 +28,9 @@ const BillingPage = () => {
 
   return (
     <div className="p-4 md:p-8 space-y-6">
-      <h1 className="text-2xl font-bold">Facturation</h1>
+      <h1 className="text-2xl font-bold">Boutique</h1>
       
-      <Card>
-          <CardHeader>
-              <CardTitle>Acheter des jetons</CardTitle>
-          </CardHeader>
-          <CardContent className="flex flex-col items-center justify-center text-center p-12">
-              <Coins className="w-16 h-16 mb-4 text-muted-foreground" />
-              <h3 className="text-xl font-semibold mb-2">Bientôt disponible</h3>
-              <p className="text-muted-foreground">
-                  La possibilité d'acheter des jetons sera bientôt disponible.
-              </p>
-          </CardContent>
-      </Card>
+      <PurchaseSection />
 
       <Card>
         <CardHeader>
@@ -63,4 +52,4 @@ const BillingPage = () => {
   );
 };
 
-export default BillingPage;
+export default StorePage;
