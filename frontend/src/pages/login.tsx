@@ -1,3 +1,6 @@
+import { useEffect } from 'react';
+import { useRouter } from 'next/router';
+import { toast } from 'sonner';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { LoginForm } from "@/components/auth/LoginForm";
 import Link from "next/link";
@@ -5,6 +8,18 @@ import Silk from '@/components/ui/Backgrounds/Silk/Silk';
 import AnimationOutlinedIcon from '@mui/icons-material/AnimationOutlined';
 
 export default function LoginPage() {
+  const router = useRouter();
+
+  useEffect(() => {
+    if (router.query.error === 'SessionExpired') {
+      toast.warning('Votre session a expiré', {
+        description: 'Veuillez vous reconnecter pour continuer.',
+      });
+      // Retirer le paramètre de l'URL pour éviter que le message ne réapparaisse au rechargement
+      router.replace('/login', undefined, { shallow: true });
+    }
+  }, [router.query, router]);
+
   return (
     <div className="relative flex items-center justify-center min-h-screen w-full bg-background">
       <div className="absolute inset-0 z-0">

@@ -100,8 +100,10 @@ const InvestigationReportView: React.FC<InvestigationReportViewProps> = ({
 
   const getPrimaryTarget = () => {
     const { inputData } = investigation;
-    if (!inputData) return "N/A";
-    return inputData.names?.[0] || inputData.usernames?.[0] || inputData.emails?.[0] || "Cible inconnue";
+    if (!inputData || !inputData.indicators || inputData.indicators.length === 0) {
+      return "N/A";
+    }
+    return inputData.indicators[0].value || "Cible inconnue";
   };
 
   const InfoItem = ({ icon, label, value }: { icon: React.ReactNode, label: string, value: string | string[] | null }) => {

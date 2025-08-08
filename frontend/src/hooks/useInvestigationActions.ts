@@ -49,12 +49,12 @@ export function useInvestigationActions() {
         return null;
       }
 
-      if (response.data) {
-        setCurrentInvestigation(response.data);
-        addSearchLog(`[${new Date().toLocaleTimeString()}] Investigation ${response.data.id} créée.`);
-        addNotification({ type: 'success', title: 'Investigation créée', message: `Investigation ${response.data.id} créée avec succès`, duration: 5000 });
+      if (response.data && response.data.investigation) {
+        setCurrentInvestigation(response.data.investigation);
+        addSearchLog(`[${new Date().toLocaleTimeString()}] Investigation ${response.data.investigation.id} créée.`);
+        addNotification({ type: 'success', title: 'Investigation créée', message: `Investigation ${response.data.investigation.id} créée avec succès`, duration: 5000 });
         
-        return response.data;
+        return response.data.investigation;
       }
     } catch (error) {
       addSearchLog(`[${new Date().toLocaleTimeString()}] Erreur lors de la création de l'investigation.`);
@@ -66,7 +66,7 @@ export function useInvestigationActions() {
     }
 
     return null;
-  }, [addNotification, setLoading, clearSearchLogs, setSearchProgress, addSearchLog]);
+  }, [token, addNotification, setLoading, clearSearchLogs, setSearchProgress, addSearchLog]);
 
   const startInvestigation = useCallback(async (id: string) => {
     setIsLoading(true);
@@ -102,7 +102,7 @@ export function useInvestigationActions() {
     }
 
     return false;
-  }, [addNotification, setLoading, setSearchProgress, addSearchLog, refreshInvestigation]);
+  }, [token, addNotification, setLoading, setSearchProgress, addSearchLog, refreshInvestigation]);
 
   const stopInvestigation = useCallback(async (id: string) => {
     try {
@@ -127,7 +127,7 @@ export function useInvestigationActions() {
     }
 
     return false;
-  }, [addNotification, addSearchLog, refreshInvestigation]);
+  }, [token, addNotification, addSearchLog, refreshInvestigation]);
 
   const deleteInvestigation = useCallback(async (id: string) => {
     try {
@@ -154,7 +154,7 @@ export function useInvestigationActions() {
     }
 
     return false;
-  }, [addNotification, currentInvestigation, addSearchLog, token]);
+  }, [token, addNotification, currentInvestigation, addSearchLog, token]);
 
   return {
     isLoading,

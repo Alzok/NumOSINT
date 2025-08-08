@@ -8,7 +8,9 @@ import { AppSidebar } from "@/components/app-sidebar";
 import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar";
 import { SessionProvider } from "next-auth/react";
 import { FloatingTokenDisplay } from '@/components/common/FloatingTokenDisplay';
+import { FloatingHelpButton } from '@/components/common/FloatingHelpButton';
 import { useRouter } from 'next/router';
+import { SessionManager } from '@/components/providers/SessionManager';
 import '@/styles/globals.css';
 
 const queryClient = new QueryClient();
@@ -22,8 +24,11 @@ export default function App({ Component, pageProps: { session, ...pageProps } }:
     <SidebarProvider style={{ "--sidebar-width": "18rem" } as React.CSSProperties}>
       <AppSidebar variant="sidebar" collapsible="icon" />
       <SidebarInset>
-        <FloatingTokenDisplay />
         {children}
+        <div className="fixed bottom-6 right-6 z-50 flex flex-row items-center gap-4">
+          <FloatingTokenDisplay />
+          <FloatingHelpButton />
+        </div>
       </SidebarInset>
     </SidebarProvider>
   );
@@ -39,6 +44,7 @@ export default function App({ Component, pageProps: { session, ...pageProps } }:
         <QueryClientProvider client={queryClient}>
           <SocketProvider>
             <NotificationsProvider>
+              <SessionManager />
               {isAuthPage ? (
                 <Component {...pageProps} />
               ) : (

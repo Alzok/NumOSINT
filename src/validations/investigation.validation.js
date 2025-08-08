@@ -7,7 +7,7 @@ const startInvestigation = z.object({
       type: z.nativeEnum(IndicatorType),
       value: z.string().min(1),
     })).min(1, "Au moins un indicateur est requis."),
-    caseId: z.string().cuid('ID de dossier invalide.').optional(),
+    caseId: z.string().cuid('ID de dossier invalide.').optional().nullable(),
     options: z.object({
         maxGeneration: z.number().int().min(0).max(50).optional(),
         minConfidence: z.number().min(0).max(1).optional(),

@@ -1,4 +1,5 @@
 import { InvestigationInput, Investigation, Indicator, Result, InvestigationLog, Case, AppNotification as Notification } from '@/types';
+import { useAppStore } from './store';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5001';
 
@@ -15,6 +16,11 @@ async function fetcher<T>(url: string, options: RequestInit = {}, token?: string
     const res = await fetch(`${API_URL}${url}`, { ...options, headers });
 
     if (!res.ok) {
+      if (res.status === 401) {
+        // Gérer l'expiration de la session de manière globale
+        useAppStore.getState().handleSessionExpired();
+        return { data: null, error: 'Session expirée' };
+      }
       const errorData = await res.json().catch(() => ({ message: 'An unknown error occurred' }));
       return { data: null, error: errorData.message || res.statusText };
     }
@@ -38,7 +44,7 @@ export const api = {
   }),
 
   // Investigations
-  createInvestigation: (data: InvestigationInput, token?: string | null) => fetcher<Investigation>('/api/investigations', {
+  createInvestigation: (data: InvestigationInput, token?: string | null) => fetcher<{ message: string, investigation: Investigation }>('/api/investigations', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(data),
@@ -133,6 +139,7 @@ export const api = {
   
   // Notifications
   getNotifications: (token?: string | null) => fetcher<Notification[]>('/api/notifications', {}, token),
+  getHealthStatus: (token?: string | null) => fetcher<any>('/api/health/status', {}, token),
   markNotificationsAsRead: (ids: string[], token?: string | null) => fetcher<{ count: number }>('/api/notifications/mark-as-read', {
     method: 'POST',
     body: JSON.stringify({ ids }),

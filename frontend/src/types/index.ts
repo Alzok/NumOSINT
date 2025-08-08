@@ -85,14 +85,16 @@ export interface AppNotification {
 
 export type InputField = { id: number; value: string };
 
+export type IndicatorType = 'NAME' | 'EMAIL' | 'USERNAME' | 'PHONE' | 'IP' | 'DOMAIN' | 'URL';
+
+export type FormIndicator = {
+  id: number;
+  type: IndicatorType;
+  value: string;
+};
+
 export type InvestigationFormState = {
-    names: InputField[];
-    emails: InputField[];
-    usernames: InputField[];
-    phones: InputField[];
-    ips: InputField[];
-    domains: InputField[];
-    urls: InputField[];
+    indicators: FormIndicator[];
     maxGeneration: number;
     minConfidence: number;
 };
@@ -115,16 +117,16 @@ export interface AppState {
 }
 
 export interface InvestigationInput {
-  names?: string[];
-  emails?: string[];
-  usernames?: string[];
-  phones?: string[];
-  ips?: string[];
-  domains?: string[];
-  urls?: string[];
-  maxGeneration?: number;
-  minConfidence?: number;
-  cost?: number;
+  indicators: {
+    type: string;
+    value: string;
+  }[];
+  options?: {
+    maxGeneration?: number;
+    minConfidence?: number;
+    cost?: number;
+  };
+  caseId?: string | null;
 }
 
 export interface Investigation {

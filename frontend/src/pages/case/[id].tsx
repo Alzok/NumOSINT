@@ -95,7 +95,7 @@ const CaseDetailPage = () => {
                 <Card key={inv.id} onClick={() => router.push(`/investigation/${inv.id}`)} className="cursor-pointer hover:shadow-md">
                     <CardHeader>
                         <CardTitle className="flex justify-between">
-                            <span>{inv.inputData?.names?.[0] || inv.id}</span>
+                            <span>{(inv.inputData?.indicators?.[0]?.value) || inv.id}</span>
                             <Badge>{inv.status}</Badge>
                         </CardTitle>
                     </CardHeader>

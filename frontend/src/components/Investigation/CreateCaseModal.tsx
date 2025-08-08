@@ -88,7 +88,7 @@ export function CreateCaseModal({ isOpen, onClose, onCreate, investigations, isL
                           }}
                         />
                         <label htmlFor={inv.id} className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
-                          {inv.inputData?.names?.[0] || inv.inputData?.emails?.[0] || inv.id}
+                          {(inv.inputData?.indicators?.[0]?.value) || inv.id}
                         </label>
                       </div>
                     ))}

@@ -1,25 +1,19 @@
 import { StateCreator } from 'zustand';
-import { InvestigationFormState, InputField } from '@/types';
+import { InvestigationFormState, FormIndicator, IndicatorType } from '@/types';
 
-const initialFormField: InputField = { id: 1, value: '' };
+const initialIndicator: FormIndicator = { id: 1, type: 'NAME', value: '' };
 
 const initialFormState: InvestigationFormState = {
-    names: [initialFormField],
-    emails: [initialFormField],
-    usernames: [initialFormField],
-    phones: [initialFormField],
-    ips: [initialFormField],
-    domains: [initialFormField],
-    urls: [initialFormField],
+    indicators: [initialIndicator],
     maxGeneration: 4,
     minConfidence: 0.7,
 };
 
 export interface FormSlice {
   investigationForm: InvestigationFormState;
-  setInvestigationFormField: (type: keyof Omit<InvestigationFormState, 'maxGeneration' | 'minConfidence'>, id: number, value: string) => void;
-  addInvestigationFormField: (type: keyof Omit<InvestigationFormState, 'maxGeneration' | 'minConfidence'>) => void;
-  removeInvestigationFormField: (type: keyof Omit<InvestigationFormState, 'maxGeneration' | 'minConfidence'>, id: number) => void;
+  updateIndicator: (id: number, newIndicatorData: Partial<Omit<FormIndicator, 'id'>>) => void;
+  addIndicator: () => void;
+  removeIndicator: (id: number) => void;
   setInvestigationFormOptions: (options: { maxGeneration?: number; minConfidence?: number }) => void;
   resetInvestigationForm: () => void;
   setInvestigationForm: (formState: InvestigationFormState) => void;
@@ -27,23 +21,25 @@ export interface FormSlice {
 
 export const createFormSlice: StateCreator<FormSlice, [], [], FormSlice> = (set) => ({
   investigationForm: initialFormState,
-  setInvestigationFormField: (type, id, value) => set(state => ({
+  updateIndicator: (id, newIndicatorData) => set(state => ({
     investigationForm: {
-        ...state.investigationForm,
-        [type]: state.investigationForm[type].map(field => field.id === id ? { ...field, value } : field)
-    }
+      ...state.investigationForm,
+      indicators: state.investigationForm.indicators.map(indicator =>
+        indicator.id === id ? { ...indicator, ...newIndicatorData } : indicator
+      ),
+    },
   })),
-  addInvestigationFormField: (type) => set(state => ({
+  addIndicator: () => set(state => ({
     investigationForm: {
-        ...state.investigationForm,
-        [type]: [...state.investigationForm[type], { id: Date.now(), value: '' }]
-    }
+      ...state.investigationForm,
+      indicators: [...state.investigationForm.indicators, { id: Date.now(), type: 'NAME', value: '' }],
+    },
   })),
-  removeInvestigationFormField: (type, id) => set(state => ({
+  removeIndicator: (id) => set(state => ({
     investigationForm: {
-        ...state.investigationForm,
-        [type]: state.investigationForm[type].filter(field => field.id !== id)
-    }
+      ...state.investigationForm,
+      indicators: state.investigationForm.indicators.filter(indicator => indicator.id !== id),
+    },
   })),
   setInvestigationFormOptions: (options) => set(state => ({
     investigationForm: {

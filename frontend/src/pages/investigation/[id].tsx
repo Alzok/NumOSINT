@@ -49,6 +49,7 @@ import { api } from '../../lib/api-client';
 import { Investigation, Result, InvestigationLog, Indicator } from '@/types';
 import { saveAs } from 'file-saver';
 import { UnifiedResultsTable, ProofItem } from '@/components/Results/UnifiedResultsTable';
+import { InvestigationErrorState } from '@/components/Investigation/InvestigationErrorState';
 
 // Lazy load all analysis components
 const EmailAnalysisView = dynamic(() => import('@/components/Investigation/EmailAnalysisView'));
@@ -289,7 +290,7 @@ export default function InvestigationDetailPage() {
   const reverseWhoisDomains = useMemo(() => busterResults.flatMap((result: Result) => result.data?.reverse_whois || []), [busterResults]);
   const maigretProfilesForGrid = useMemo(() => transformMaigretResultsForGrid(maigretResults), [maigretResults]);
 
-  const usernameForRecursiveSearch = currentInvestigation?.inputData?.usernames?.[0];
+  const usernameForRecursiveSearch = currentInvestigation?.inputData?.indicators?.find(i => i.type === 'USERNAME')?.value;
 
   if (isLoading && !currentInvestigation) {
     return (
@@ -396,37 +397,43 @@ export default function InvestigationDetailPage() {
               </TabsContent>
 
               <TabsContent value="overview" className="space-y-4">
-                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-                  <Card><CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium">Statut</CardTitle>{getStatusIcon(currentInvestigation.status)}</CardHeader><CardContent><div className="text-2xl font-bold">{currentInvestigation.status}</div>{currentInvestigation.currentStep && (<p className="text-xs text-muted-foreground">{currentInvestigation.currentStep}</p>)}</CardContent></Card>
-                  <Card><CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium">Progression</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold">{currentInvestigation.progress}%</div><Progress value={currentInvestigation.progress} className="mt-2" /></CardContent></Card>
-                  <Card><CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium">Indicateurs</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold">{indicators.length}</div><p className="text-xs text-muted-foreground">Trouvés</p></CardContent></Card>
-                  <Card><CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium">Résultats</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold">{results?.length || 0}</div><p className="text-xs text-muted-foreground">Générés</p></CardContent></Card>
-                </div>
-                <div className="grid gap-4 md:grid-cols-2">
-                  <Card><CardHeader><CardTitle>Actions</CardTitle></CardHeader>
-                    <CardContent className="space-y-2">
-                      {currentInvestigation.status === 'INITIALIZING' && (<Button onClick={handleStartInvestigation} className="w-full"><PlayArrow className="h-4 w-4 mr-2" />Démarrer l'investigation</Button>)}
-                      {isAnalysisRunning && (<Button onClick={handleStopInvestigation} variant="destructive" className="w-full"><Stop className="h-4 w-4 mr-2" />Arrêter l'investigation</Button>)}
-                      <Button onClick={handleDeleteInvestigation} variant="outline" className="w-full text-red-600"><Delete className="h-4 w-4 mr-2" />Supprimer l'investigation</Button>
-                    </CardContent>
-                  </Card>
-                  <Card><CardHeader><CardTitle>Données d'entrée</CardTitle></CardHeader>
-                    <CardContent>
-                      {currentInvestigation.inputData ? (
-                        <div className="space-y-2">
-                          {currentInvestigation.inputData.names && currentInvestigation.inputData.names.length > 0 && (<div><p className="text-sm font-medium">Noms:</p><p className="text-sm text-muted-foreground">{currentInvestigation.inputData.names.join(', ')}</p></div>)}
-                          {currentInvestigation.inputData.emails && currentInvestigation.inputData.emails.length > 0 && (<div><p className="text-sm font-medium">Emails:</p><p className="text-sm text-muted-foreground">{currentInvestigation.inputData.emails.join(', ')}</p></div>)}
-                          {currentInvestigation.inputData.usernames && currentInvestigation.inputData.usernames.length > 0 && (<div><p className="text-sm font-medium">Noms d'utilisateur:</p><p className="text-sm text-muted-foreground">{currentInvestigation.inputData.usernames.join(', ')}</p></div>)}
-                        </div>
-                      ) : (<p className="text-sm text-muted-foreground">Aucune donnée d'entrée</p>)}
-                    </CardContent>
-                  </Card>
-                </div>
-                <div className="grid gap-4 md:grid-cols-1 lg:grid-cols-3">
-                    <EmailSummary email="test.good@example.com" reputation="Good" />
-                    <EmailSummary email="test.suspicious@example.com" reputation="Suspicious" />
-                    <EmailSummary email="test.bad@example.com" reputation="Bad" />
-                </div>
+                {currentInvestigation.status === 'FAILED' ? (
+                  <InvestigationErrorState investigation={currentInvestigation} />
+                ) : (
+                  <>
+                    <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+                      <Card><CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium">Statut</CardTitle>{getStatusIcon(currentInvestigation.status)}</CardHeader><CardContent><div className="text-2xl font-bold">{currentInvestigation.status}</div>{currentInvestigation.currentStep && (<p className="text-xs text-muted-foreground">{currentInvestigation.currentStep}</p>)}</CardContent></Card>
+                      <Card><CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium">Progression</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold">{currentInvestigation.progress}%</div><Progress value={currentInvestigation.progress} className="mt-2" /></CardContent></Card>
+                      <Card><CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium">Indicateurs</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold">{indicators.length}</div><p className="text-xs text-muted-foreground">Trouvés</p></CardContent></Card>
+                      <Card><CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium">Résultats</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold">{results?.length || 0}</div><p className="text-xs text-muted-foreground">Générés</p></CardContent></Card>
+                    </div>
+                    <div className="grid gap-4 md:grid-cols-2">
+                      <Card><CardHeader><CardTitle>Actions</CardTitle></CardHeader>
+                        <CardContent className="space-y-2">
+                          {currentInvestigation.status === 'INITIALIZING' && (<Button onClick={handleStartInvestigation} className="w-full"><PlayArrow className="h-4 w-4 mr-2" />Démarrer l'investigation</Button>)}
+                          {isAnalysisRunning && (<Button onClick={handleStopInvestigation} variant="destructive" className="w-full"><Stop className="h-4 w-4 mr-2" />Arrêter l'investigation</Button>)}
+                          <Button onClick={handleDeleteInvestigation} variant="outline" className="w-full text-red-600"><Delete className="h-4 w-4 mr-2" />Supprimer l'investigation</Button>
+                        </CardContent>
+                      </Card>
+                      <Card><CardHeader><CardTitle>Données d'entrée</CardTitle></CardHeader>
+                        <CardContent>
+                          {currentInvestigation.inputData?.indicators && currentInvestigation.inputData.indicators.length > 0 ? (
+                            <div className="space-y-2">
+                              {currentInvestigation.inputData.indicators.map(indicator => (
+                                <div key={indicator.value}><p className="text-sm font-medium">{indicator.type}:</p><p className="text-sm text-muted-foreground">{indicator.value}</p></div>
+                              ))}
+                            </div>
+                          ) : (<p className="text-sm text-muted-foreground">Aucune donnée d'entrée</p>)}
+                        </CardContent>
+                      </Card>
+                    </div>
+                    <div className="grid gap-4 md:grid-cols-1 lg:grid-cols-3">
+                        <EmailSummary email="test.good@example.com" reputation="Good" />
+                        <EmailSummary email="test.suspicious@example.com" reputation="Suspicious" />
+                        <EmailSummary email="test.bad@example.com" reputation="Bad" />
+                    </div>
+                  </>
+                )}
               </TabsContent>
 
               <TabsContent value="indicators" className="space-y-4">

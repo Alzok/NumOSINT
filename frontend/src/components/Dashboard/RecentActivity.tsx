@@ -52,11 +52,10 @@ const RecentActivity = () => {
 
   const getPrimaryTarget = (investigation: Investigation): string => {
     const inputData = investigation?.inputData;
-    if (!inputData) return 'N/A';
-    if (inputData.names && inputData.names.length > 0) return inputData.names[0];
-    if (inputData.emails && inputData.emails.length > 0) return inputData.emails[0];
-    if (inputData.usernames && inputData.usernames.length > 0) return inputData.usernames[0];
-    return 'Inconnu';
+    if (!inputData || !inputData.indicators || inputData.indicators.length === 0) {
+      return 'N/A';
+    }
+    return inputData.indicators[0].value || 'Inconnu';
   };
 
   if (loading) {

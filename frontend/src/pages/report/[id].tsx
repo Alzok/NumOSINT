@@ -43,7 +43,7 @@ const ReportPage = () => {
     <div className="p-8 bg-white text-black">
       <header className="mb-8 border-b pb-4">
         <h1 className="text-4xl font-bold">Rapport d'Investigation</h1>
-        <h2 className="text-2xl">{investigation.inputData?.names?.[0] || `ID: ${investigation.id}`}</h2>
+        <h2 className="text-2xl">{(investigation.inputData?.indicators?.[0]?.value) || `ID: ${investigation.id}`}</h2>
         <p className="text-sm text-gray-600">Généré le: {new Date().toLocaleDateString()}</p>
       </header>
 

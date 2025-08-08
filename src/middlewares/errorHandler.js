@@ -4,12 +4,18 @@ const ApiError = require('../utils/ApiError');
 const errorHandler = (err, req, res, next) => {
   let error = err;
 
+  // Gérer spécifiquement les erreurs JWT
+  if (error.name === 'JsonWebTokenError' || error.name === 'TokenExpiredError') {
+    const message = error.name === 'TokenExpiredError' ? 'jwt expired' : 'Invalid token';
+    error = new ApiError(message, 401, true, message);
+  }
+  
   // Si l'erreur n'est pas une instance de notre ApiError, on la convertit
   // pour la standardiser. Cela peut arriver pour des erreurs imprévues.
   if (!(error instanceof ApiError)) {
     const statusCode = error.statusCode || 500;
     const message = error.message || 'Internal Server Error';
-    error = new ApiError(error.name, statusCode, false, message);
+    error = new ApiError(message, statusCode, false, message);
   }
 
   // Log de l'erreur

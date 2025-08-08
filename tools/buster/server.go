@@ -114,9 +114,15 @@ func scanHandler(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(ScanResult{Emails: emails})
 }
 
+func healthHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
+}
+
 func main() {
 	http.HandleFunc("/scan", scanHandler)
 	http.HandleFunc("/reverse-whois", reverseWhoisHandler)
+	http.HandleFunc("/health", healthHandler)
 	log.Println("Buster service starting on port 5003...")
 	if err := http.ListenAndServe(":5003", nil); err != nil {
 		log.Fatalf("Failed to start server: %v", err)

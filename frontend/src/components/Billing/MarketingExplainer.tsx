@@ -21,7 +21,7 @@ export const MarketingExplainer = () => {
         <div className="space-y-8">
           <div>
             <h4 className="font-semibold mb-2 text-muted-foreground">Approche Standard : Outils en Silo</h4>
-            <p className="text-xs text-muted-foreground mb-4">La plupart des services lancent des outils les uns après les autres. Les informations découvertes par un outil ne profitent pas aux autres, limitant ainsi la portée de l'enquête.</p>
+            <p className="text-xs text-muted-foreground mb-4">Les outils sont lancés les uns après les autres, sans partage d'informations.</p>
             <div className="flex items-center justify-center space-x-2 text-gray-500">
               {toolIcons.map((tool, index) => (
                 <React.Fragment key={tool.name}>

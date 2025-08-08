@@ -16,7 +16,7 @@ import type { Investigation, Case } from '@/types';
 import { CreateCaseModal } from '@/components/Investigation/CreateCaseModal';
 import { AssignCaseModal } from '@/components/Investigation/AssignCaseModal';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
-import { Trash2 } from 'lucide-react';
+import { Trash2, Ticket } from 'lucide-react';
 import { useSession } from 'next-auth/react';
 import Link from 'next/link';
 
@@ -65,6 +65,37 @@ const CircularProgress = (props: { size?: number, color?: string, className?: st
 
 const InvestigationCard = ({ investigation, onAssignClick, onStopClick, onDeleteClick }: { investigation: Investigation, onAssignClick: (investigation: Investigation) => void, onStopClick: (investigationId: string) => void, onDeleteClick: (investigationId: string) => void }) => {
     const router = useRouter();
+    const { data: session } = useSession();
+
+    const handleOpenTicket = () => {
+      const subject = `Problème avec l'investigation : ${investigation.id}`;
+      
+      const userInfo = `--- Informations Utilisateur ---
+Email: ${session?.user?.email || 'Non disponible'}
+Plan: ${session?.user?.plan?.name || 'Non disponible'}
+Rôle: ${session?.user?.role || 'Non disponible'}
+`;
+  
+      const investigationInfo = `--- Informations Investigation ---
+ID: ${investigation.id}
+Cible: ${getPrimaryTarget(investigation).value}
+Statut: ${investigation.status}
+Erreur: ${investigation.error || 'Non disponible'}
+`;
+  
+      const description = `Une investigation a échoué.
+
+${investigationInfo}
+${userInfo}
+`;
+      const encodedSubject = encodeURIComponent(subject);
+      const encodedDescription = encodeURIComponent(description);
+      const customerEmail = encodeURIComponent(session?.user?.email || '');
+      
+      const ticketUrl = `/helpdesk/app/hd-ticket/new?subject=${encodedSubject}&description=${encodedDescription}&customer=${customerEmail}`;
+      
+      window.open(ticketUrl, '_blank');
+    };
 
     const getPhaseInfo = (phase: Investigation['currentPhase']) => {
         switch (phase) {
@@ -116,12 +147,17 @@ const InvestigationCard = ({ investigation, onAssignClick, onStopClick, onDelete
     const formatDate = (dateString: string) => new Date(dateString).toLocaleString('fr-FR');
     const getPrimaryTarget = (inv: Investigation) => {
         const { inputData } = inv;
-        if (!inputData) return { type: 'ID', value: inv.id, icon: <ArticleIcon className="h-4 w-4" /> };
-        if (inputData.names?.[0]) return { type: 'Nom', value: inputData.names[0], icon: <PersonIcon className="h-4 w-4" /> };
-        if (inputData.emails?.[0]) return { type: 'Email', value: inputData.emails[0], icon: <EmailIcon className="h-4 w-4" /> };
-        if (inputData.usernames?.[0]) return { type: 'Username', value: inputData.usernames[0], icon: <PersonIcon className="h-4 w-4" /> };
-        if (inputData.phones?.[0]) return { type: 'Téléphone', value: inputData.phones[0], icon: <PhoneIcon className="h-4 w-4" /> };
-        return { type: 'ID', value: inv.id, icon: <ArticleIcon className="h-4 w-4" /> };
+        if (!inputData || !inputData.indicators || inputData.indicators.length === 0) {
+            return { type: 'ID', value: inv.id, icon: <ArticleIcon className="h-4 w-4" /> };
+        }
+        const firstIndicator = inputData.indicators[0];
+        switch (firstIndicator.type) {
+            case 'NAME': return { type: 'Nom', value: firstIndicator.value, icon: <PersonIcon className="h-4 w-4" /> };
+            case 'EMAIL': return { type: 'Email', value: firstIndicator.value, icon: <EmailIcon className="h-4 w-4" /> };
+            case 'USERNAME': return { type: 'Username', value: firstIndicator.value, icon: <PersonIcon className="h-4 w-4" /> };
+            case 'PHONE': return { type: 'Téléphone', value: firstIndicator.value, icon: <PhoneIcon className="h-4 w-4" /> };
+            default: return { type: 'ID', value: inv.id, icon: <ArticleIcon className="h-4 w-4" /> };
+        }
     };
     const primaryTarget = getPrimaryTarget(investigation);
 
@@ -150,10 +186,10 @@ const InvestigationCard = ({ investigation, onAssignClick, onStopClick, onDelete
                         <ScheduleIcon className="h-4 w-4" />
                         <span>{formatDate(investigation.createdAt)}</span>
                     </div>
-                    {investigation.inputData?.cost && (
+                    {investigation.inputData?.options?.cost && (
                         <div className="flex items-center gap-2 mt-2">
                             <CreditCardIcon className="h-4 w-4" />
-                            <span>Coût: {investigation.inputData.cost} jeton(s)</span>
+                            <span>Coût: {investigation.inputData.options.cost} jeton(s)</span>
                         </div>
                     )}
                 </div>
@@ -163,6 +199,18 @@ const InvestigationCard = ({ investigation, onAssignClick, onStopClick, onDelete
                         <p className="text-xs text-muted-foreground mt-1 text-right">
                             {investigation.progress}% - {investigation.currentStep}
                         </p>
+                    </div>
+                )}
+                {investigation.status === 'FAILED' && (
+                    <div className="mt-4 p-3 bg-destructive/10 rounded-md border border-destructive/20">
+                        <p className="text-xs text-destructive font-semibold mb-2">Erreur :</p>
+                        <p className="text-xs text-destructive/80 line-clamp-2 mb-3">
+                            {investigation.error || "Une erreur inconnue est survenue."}
+                        </p>
+                        <Button variant="outline" size="sm" onClick={(e) => { e.stopPropagation(); handleOpenTicket(); }} className="w-full border-dashed border-red-500/50 text-red-500 hover:bg-red-500/10 hover:text-red-500 h-8 text-xs">
+                            <Ticket className="h-3 w-3 mr-1.5" />
+                            Ouvrir un ticket
+                        </Button>
                     </div>
                 )}
             </CardContent>

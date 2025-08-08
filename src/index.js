@@ -11,6 +11,7 @@ const swaggerUi = require('swagger-ui-express');
 require('dotenv').config();
 
 const prisma = require('./utils/prisma');
+const redisClient = require('./utils/redis');
 const logger = require('./utils/logger');
 const { setupSocketIO } = require('./utils/socket');
 const { setupOrchestrator } = require('./services/orchestrator');
@@ -59,10 +60,11 @@ app.use(helmet({
 
 // Middleware de base
 app.use(compression());
-app.use(cors({
-  origin: ["http://localhost:3001", "http://frontend:3001", "http://localhost:8081"],
-  credentials: true
-}));
+// La gestion CORS est maintenant déléguée à Nginx
+// app.use(cors({
+//   origin: ["http://localhost:3001", "http://frontend:3001", "http://localhost:8081"],
+//   credentials: true
+// }));
 app.use(morgan('combined', { stream: { write: message => logger.info(message.trim()) } }));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
@@ -131,9 +133,12 @@ app.use(errorHandler);
 // Fonction d'initialisation
 async function initializeApp() {
   try {
-    // Test de connexion à la base de données
-    await prisma.$connect();
-    logger.info('✅ Connexion à PostgreSQL établie');
+    // Connexions aux services
+    await Promise.all([
+      prisma.$connect(),
+      redisClient.connect()
+    ]);
+    logger.info('✅ Connexions à PostgreSQL & Redis établies');
 
     // Nettoyage des investigations en cours au démarrage
     await cleanupOngoingInvestigations();
@@ -160,7 +165,7 @@ async function initializeApp() {
 // Gestion de l'arrêt gracieux
 process.on('SIGTERM', async () => {
   logger.info('🛑 Signal SIGTERM reçu, arrêt gracieux...');
-  await prisma.$disconnect();
+  await Promise.all([prisma.$disconnect(), redisClient.quit()]);
   server.close(() => {
     logger.info('✅ Serveur arrêté proprement');
     process.exit(0);
@@ -169,7 +174,7 @@ process.on('SIGTERM', async () => {
 
 process.on('SIGINT', async () => {
   logger.info('🛑 Signal SIGINT reçu, arrêt gracieux...');
-  await prisma.$disconnect();
+  await Promise.all([prisma.$disconnect(), redisClient.quit()]);
   server.close(() => {
     logger.info('✅ Serveur arrêté proprement');
     process.exit(0);

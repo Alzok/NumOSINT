@@ -169,11 +169,17 @@ func linkSearchHandler(w http.ResponseWriter, r *http.Request) {
 	w.Write(jsonResponse)
 }
 
+func healthHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
+}
+
 func main() {
 	http.HandleFunc("/scan", scanHandler)
 	http.HandleFunc("/hibp-lookup", hibpLookupHandler)
 	http.HandleFunc("/ip-lookup", ipLookupHandler)
 	http.HandleFunc("/link-search", linkSearchHandler)
+	http.HandleFunc("/health", healthHandler)
 	log.Println("Mosint service starting on port 5004...")
 	if err := http.ListenAndServe(":5004", nil); err != nil {
 		log.Fatalf("Failed to start server: %v", err)

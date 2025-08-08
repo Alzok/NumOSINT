@@ -53,31 +53,42 @@ class OrchestratorService {
    * @returns {object} Le coût calculé avec son détail.
    */
   async calculateInvestigationCost(indicators, options = {}, userId) {
+    logger.debug(`[Debug] Calculating cost for indicators: ${JSON.stringify(indicators)}`);
+    if (!indicators) {
+      logger.error('[FATAL] indicators array is undefined in calculateInvestigationCost');
+      throw new Error('Indicators array is undefined');
+    }
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
       include: { subscription: true },
     });
-    const plan = user?.subscription?.plan || 'DECOUVERTE';
 
-    // Définir les limitations par plan
+    const plan = user?.subscription?.plan || 'DECOUVERTE';
     const limits = {
       DECOUVERTE: { maxIndicators: 2, maxGeneration: 1, allowedTools: ['mosintService', 'maigretService'] },
-      ENQUETEUR: { maxIndicators: 15, maxGeneration: 3, allowedTools: null }, // null = tous les outils d'enrichissement
-      STRATEGE: { maxIndicators: Infinity, maxGeneration: 20, allowedTools: ['all'] }, // 'all' = tous les outils
+      ENQUETEUR: { maxIndicators: 15, maxGeneration: 3, allowedTools: null },
+      STRATEGE: { maxIndicators: Infinity, maxGeneration: 20, allowedTools: ['all'] },
     };
-    const userLimits = limits[plan];
+    
+    let userLimits = limits[plan];
 
-    // 1. Vérifier le nombre d'indicateurs
-    if (indicators.length > userLimits.maxIndicators) {
-      throw new Error(`Votre plan ${plan} est limité à ${userLimits.maxIndicators} indicateurs par investigation.`);
-    }
+    // Les admins ne sont pas soumis aux limitations de plan
+    if (user.role === 'ADMIN') {
+      userLimits = { maxIndicators: Infinity, maxGeneration: Infinity, allowedTools: ['all'] };
+    } else {
+      // 1. Vérifier le nombre d'indicateurs
+      if (indicators.length > userLimits.maxIndicators) {
+        throw new ApiError(`Votre plan ${plan} est limité à ${userLimits.maxIndicators} indicateurs par investigation.`, 400);
+      }
 
-    // 2. Ajuster maxGeneration
-    const requestedMaxGeneration = options.maxGeneration || 1;
-    if (requestedMaxGeneration > userLimits.maxGeneration) {
-      throw new Error(`Votre plan ${plan} est limité à une profondeur de ${userLimits.maxGeneration}.`);
+      // 2. Ajuster maxGeneration
+      const requestedMaxGeneration = options.maxGeneration || 1;
+      if (requestedMaxGeneration > userLimits.maxGeneration) {
+        throw new ApiError(`Votre plan ${plan} est limité à une profondeur de ${userLimits.maxGeneration}.`, 400);
+      }
     }
-    const maxGeneration = requestedMaxGeneration;
+    
+    const maxGeneration = options.maxGeneration || 1;
 
     const costPerIndicator = 0.25;
     const costPerTool = 0.25;
@@ -539,8 +550,14 @@ class OrchestratorService {
   async handleInvestigationError(investigationId, error) {
     try {
       logger.error(`❌ Gestion d'erreur pour l'investigation ${investigationId}:`, error);
-      await this.updateInvestigationStatus(investigationId, InvestigationStatus.FAILED, undefined, 'error');
       await this.logStep(investigationId, 'error', `Erreur: ${error.message}`, 'ERROR');
+      
+      // Log important pour la gestion des coûts
+      const investigation = await this.prisma.investigation.findUnique({ where: { id: investigationId }, select: { inputData: true } });
+      const cost = investigation?.inputData?.cost || 0;
+      logger.info(`[Error Handling] Investigation ${investigationId} failed. No credits will be deducted. Cost was: ${cost}`);
+
+      await this.updateInvestigationStatus(investigationId, InvestigationStatus.FAILED, undefined, 'error');
       this.activeInvestigations.delete(investigationId);
       this.io.emit('investigation:update', {
         id: investigationId,

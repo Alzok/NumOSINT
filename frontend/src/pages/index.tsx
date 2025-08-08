@@ -18,6 +18,8 @@ import InvestigationForm from '@/components/Investigation/InvestigationForm';
 import ActiveInvestigations from '@/components/Investigation/ActiveInvestigations';
 import RecentActivity from '@/components/Dashboard/RecentActivity';
 import ModernInvestigationTimeline from '@/components/Investigation/ModernInvestigationTimeline';
+import { ServiceStatusDashboard } from '@/components/Dashboard/ServiceStatus';
+import { InvestigationErrorState } from '@/components/Investigation/InvestigationErrorState';
 
 const InvestigationsChart = dynamic(() => import('@/components/Dashboard/InvestigationsChart'), {
   loading: () => <p>Chargement du graphique...</p>,
@@ -141,6 +143,13 @@ export default function DashboardPage() {
               </div>
 
               <div className="w-full">
+                <ServiceStatusDashboard />
+              </div>
+
+              <div className="w-full">
+                {investigationForTimeline && investigationForTimeline.status === 'FAILED' ? (
+                  <InvestigationErrorState investigation={investigationForTimeline} />
+                ) : (
                   <Card>
                       <CardHeader>
                           <CardTitle>
@@ -159,6 +168,7 @@ export default function DashboardPage() {
                           )}
                       </CardContent>
                   </Card>
+                )}
               </div>
 
             </section>
@@ -170,7 +180,7 @@ export default function DashboardPage() {
 
 
             <section aria-label="Statistiques générales" className="grid gap-4 px-4 md:grid-cols-2 md:gap-8 lg:grid-cols-4 lg:px-6">
-              <Link href="/billing">
+              <Link href="/store">
                 <Card className="hover:bg-muted/50 transition-colors">
                   <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                     <CardTitle className="text-sm font-medium">Jetons restants</CardTitle>
@@ -208,19 +218,6 @@ export default function DashboardPage() {
                     <div className="text-2xl font-bold">{statsLoading ? '...' : stats.completedInvestigations}</div>
                     <p className="text-xs text-muted-foreground">
                       {stats.totalInvestigations > 0 ? `${Math.round((stats.completedInvestigations / stats.totalInvestigations) * 100)}% du total` : '0% du total'}
-                    </p>
-                  </CardContent>
-                </Card>
-              </Link>
-              <Link href="/investigations">
-                <Card className="hover:bg-muted/50 transition-colors">
-                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <CardTitle className="text-sm font-medium">Toutes les investigations</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="text-2xl font-bold">{statsLoading ? '...' : stats.totalInvestigations}</div>
-                    <p className="text-xs text-muted-foreground">
-                      Filtré par la sélection
                     </p>
                   </CardContent>
                 </Card>

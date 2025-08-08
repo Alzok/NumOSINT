@@ -61,7 +61,7 @@ export function AssignCaseModal({ isOpen, onClose, onAssign, investigation, case
                 <div className="flex flex-col space-y-1.5 text-center sm:text-left">
                   <h2 className="text-lg font-semibold leading-none tracking-tight">Assigner à un dossier</h2>
                   <p className="text-sm text-muted-foreground">
-                    Sélectionnez un dossier pour l&apos;investigation &quot;{investigation.inputData?.names?.[0] || investigation.id}&quot;.
+                    Sélectionnez un dossier pour l'investigation "{(investigation.inputData?.indicators?.[0]?.value) || investigation.id}".
                   </p>
                 </div>
                 <div className="py-4">

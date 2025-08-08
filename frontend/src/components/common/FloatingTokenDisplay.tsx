@@ -14,7 +14,7 @@ export function FloatingTokenDisplay() {
 
   if (status === 'loading') {
     return (
-      <div className="fixed bottom-4 right-4 z-50">
+      <div>
         <Card>
           <CardContent className="p-2">
             <CreditDisplay credits={null} isLoading={true} />
@@ -33,9 +33,8 @@ export function FloatingTokenDisplay() {
       initial={{ y: 100, opacity: 0 }}
       animate={{ y: 0, opacity: 1 }}
       transition={{ delay: 0.5, type: 'spring', stiffness: 120 }}
-      className="fixed bottom-4 right-4 z-50"
     >
-      <Link href="/billing" passHref>
+      <Link href="/store" passHref>
         <Card className="cursor-pointer transition-transform hover:scale-105 relative overflow-hidden">
           <div className="absolute inset-0 overflow-hidden rounded-md">
             <Silk

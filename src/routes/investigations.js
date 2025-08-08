@@ -129,13 +129,17 @@ router.post('/cost', protect, validate(investigationValidation.startInvestigatio
 
 // POST /api/investigations - Créer une investigation
 router.post('/', protect, validate(investigationValidation.startInvestigation), catchAsync(async (req, res) => {
-  const { indicators, caseId, options } = req.body;
+  const { caseId, options, indicators } = req.body;
+
   const { orchestrator } = req.app.locals;
   const user = await prisma.user.findUnique({ where: { id: req.user.id } });
 
   if (!orchestrator) {
     throw new ApiError('Orchestrateur non disponible', 500);
   }
+  
+  logger.debug(`[Debug] Creating investigation with indicators: ${JSON.stringify(indicators)}`);
+  logger.debug(`[Debug] Creating investigation with options: ${JSON.stringify(options)}`);
 
   const costResult = await orchestrator.calculateInvestigationCost(indicators, options, req.user.id);
   logger.info(`[Create Investigation] userId: ${req.user.id}, costResult: ${JSON.stringify(costResult)}`);
@@ -171,7 +175,7 @@ router.post('/', protect, validate(investigationValidation.startInvestigation), 
     },
   });
 
-  logger.investigation(investigation.id, 'Nouvelle investigation créée', { userId: req.user.id, inputData: req.body, cost });
+  logger.investigation(investigation.id, 'Nouvelle investigation créée', { userId: req.user.id, inputData: req.body, cost: costResult.cost });
 
   res.status(201).json({
     message: 'Investigation créée avec succès',

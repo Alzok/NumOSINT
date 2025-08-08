@@ -3,14 +3,12 @@
 import { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { z } from 'zod';
-import { InvestigationInput, InvestigationTemplate } from '@/types';
+import { InvestigationInput, InvestigationTemplate, IndicatorType, FormIndicator } from '@/types';
 import { useAppStore } from '@/lib/store';
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Badge } from '@/components/ui/badge';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import Person4Icon from '@mui/icons-material/Person4';
 import FingerprintIcon from '@mui/icons-material/Fingerprint';
@@ -18,42 +16,16 @@ import TuneIcon from '@mui/icons-material/Tune';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Slider } from "@/components/ui/slider"
 import React from 'react';
-import { RocketLaunch, CreditScore, Info } from '@mui/icons-material';
+import { RocketLaunch } from '@mui/icons-material';
 import { SaveTemplateModal } from './SaveTemplateModal';
 import { api } from '@/lib/api-client';
 import { useSession } from 'next-auth/react';
-import { Trash2, Ghost, Mail, Fingerprint, Phone, Bug, Database, Waypoints, UserSearch, Coins } from 'lucide-react';
+import { Trash2, Ghost, Mail, Fingerprint, Phone, Bug, Database, Waypoints, UserSearch, Coins, Plus, X } from 'lucide-react';
 
-// Local SVG Icon Components
-const SearchIcon = (props: React.SVGProps<SVGSVGElement>) => (
-  <svg {...props} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <circle cx="11" cy="11" r="8" />
-    <line x1="21" y1="21" x2="16.65" y2="16.65" />
-  </svg>
-);
-const AddIcon = (props: React.SVGProps<SVGSVGElement>) => (
-  <svg {...props} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <line x1="12" y1="5" x2="12" y2="19" />
-    <line x1="5" y1="12" x2="19" y2="12" />
-  </svg>
-);
-const CloseIcon = (props: React.SVGProps<SVGSVGElement>) => (
-  <svg {...props} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <line x1="18" y1="6" x2="6" y2="18" />
-    <line x1="6" y1="6" x2="18" y2="18" />
-  </svg>
-);
 const TrackChangesIcon = (props: React.SVGProps<SVGSVGElement>) => (
     <svg {...props} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <path d="M12 12m-3 0a3 3 0 1 0 6 0a3 3 0 1 0 -6 0" />
         <path d="M21 12a9 9 0 1 0 -9.536 8.98" />
-    </svg>
-);
-const ErrorOutlineIcon = (props: React.SVGProps<SVGSVGElement>) => (
-    <svg {...props} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M12 12m-9 0a9 9 0 1 0 18 0a9 9 0 1 0 -18 0" />
-        <path d="M12 8l0 4" />
-        <path d="M12 16l.01 0" />
     </svg>
 );
 const EmailIcon = (props: React.SVGProps<SVGSVGElement>) => (
@@ -131,66 +103,39 @@ const SaveIcon = (props: React.SVGProps<SVGSVGElement>) => (
     </svg>
 );
 
-const LoadIcon = (props: React.SVGProps<SVGSVGElement>) => (
-    <svg {...props} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48" />
-    </svg>
-);
-
-
 interface InvestigationFormProps {
   onSubmit: (input: InvestigationInput) => Promise<boolean>;
   isLoading?: boolean;
 }
 
-type InputField = { id: number; value: string };
-type IndicatorFields = {
-    names: InputField[];
-    emails: InputField[];
-    usernames: InputField[];
-    phones: InputField[];
-    ips: InputField[];
-    domains: InputField[];
-    urls: InputField[];
-};
-type FormState = IndicatorFields;
-
-// --- Zod Schemas for Validation ---
-const indicatorSchemas = {
-    names: z.string().min(1, "Le nom ne peut pas être vide."),
-    emails: z.string().email("Format d'email invalide."),
-    usernames: z.string().min(3, "Le nom d'utilisateur doit contenir au moins 3 caractères."),
-    phones: z.string().regex(/^[\+]?[(]?[0-9]{1,4}[)]?[-\s\./0-9]*$/, "Format de téléphone invalide."),
-    ips: z.string().regex(/^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/, "Format d'adresse IP invalide."),
-    domains: z.string().regex(/^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z0-9][a-z0-9-]{0,61}[a-z0-9]$/, "Format de domaine invalide."),
-    urls: z.string().url("Format d'URL invalide."),
+const indicatorSchemas: Record<IndicatorType, z.ZodString> = {
+    NAME: z.string().min(1, "Le nom ne peut pas être vide."),
+    EMAIL: z.string().email("Format d'email invalide."),
+    USERNAME: z.string().min(3, "Le nom d'utilisateur doit contenir au moins 3 caractères."),
+    PHONE: z.string().regex(/^[\+]?[(]?[0-9]{1,4}[)]?[-\s\./0-9]*$/, "Format de téléphone invalide."),
+    IP: z.string().regex(/^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/, "Format d'adresse IP invalide."),
+    DOMAIN: z.string().regex(/^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z0-9][a-z0-9-]{0,61}[a-z0-9]$/, "Format de domaine invalide."),
+    URL: z.string().url("Format d'URL invalide."),
 };
 
-type FieldError = { id: number; message: string | null };
-type FormErrors = {
-    [K in keyof IndicatorFields]: FieldError[];
-};
+type FormError = { id: number; message: string | null };
 
 export default function InvestigationForm({ onSubmit, isLoading: isSubmitting = false }: InvestigationFormProps) {
   const [isExpanded, setIsExpanded] = useState(true);
   const [isLoading, setIsLoading] = useState(isSubmitting);
   const [isSaveModalOpen, setIsSaveModalOpen] = useState(false);
-  const [activeSection, setActiveSection] = useState<keyof FormState | null>(null);
   const [cost, setCost] = useState<{ cost: number; details: any; hasEnoughCredits: boolean } | null>(null);
-  const [isCostDetailsOpen, setIsCostDetailsOpen] = useState(true);
   const [isCostLoading, setIsCostLoading] = useState(false);
   const { data: session } = useSession();
 
-  const [formErrors, setFormErrors] = useState<FormErrors>({
-      names: [], emails: [], usernames: [], phones: [], ips: [], domains: [], urls: []
-  });
+  const [formErrors, setFormErrors] = useState<FormError[]>([]);
   const [templates, setTemplates] = useState<InvestigationTemplate[]>([]);
 
   const {
     investigationForm,
-    setInvestigationFormField,
-    addInvestigationFormField,
-    removeInvestigationFormField,
+    updateIndicator,
+    addIndicator,
+    removeIndicator,
     setInvestigationFormOptions,
     resetInvestigationForm,
     setInvestigationForm,
@@ -198,68 +143,40 @@ export default function InvestigationForm({ onSubmit, isLoading: isSubmitting = 
     setIsSearchLogExpanded
   } = useAppStore();
 
-  const { fields, maxGeneration, minConfidence } = {
-    fields: {
-        names: investigationForm.names,
-        emails: investigationForm.emails,
-        usernames: investigationForm.usernames,
-        phones: investigationForm.phones,
-        ips: investigationForm.ips,
-        domains: investigationForm.domains,
-        urls: investigationForm.urls,
-    },
-    maxGeneration: investigationForm.maxGeneration,
-    minConfidence: investigationForm.minConfidence,
-  };
+  const { indicators, maxGeneration, minConfidence } = investigationForm;
 
   useEffect(() => {
     setIsLoading(isSubmitting);
   }, [isSubmitting]);
 
-  const validateField = useCallback((type: keyof IndicatorFields, id: number, value: string) => {
-      if (!value.trim()) {
-          setFormErrors(prev => ({
-              ...prev,
-              [type]: prev[type].filter(e => e.id !== id)
-          }));
-          return;
-      }
-
-      const schema = indicatorSchemas[type];
-      const result = schema.safeParse(value);
-
-      setFormErrors(prev => {
-          const otherErrors = prev[type].filter(e => e.id !== id);
-          if (!result.success) {
-              const message = result.error.format()._errors[0];
-              return { ...prev, [type]: [...otherErrors, { id, message }] };
-          }
-          return { ...prev, [type]: otherErrors };
-      });
-  }, []);
-
-  const handleFieldChange = (type: keyof FormState, id: number, value: string) => {
-    setInvestigationFormField(type, id, value);
-    validateField(type, id, value);
-  };
-
-  const addField = (type: keyof FormState) => {
-    addInvestigationFormField(type);
-  };
-
-  const removeField = (type: keyof FormState, id: number) => {
-    removeInvestigationFormField(type, id);
-    setFormErrors(prev => ({
-        ...prev,
-        [type]: prev[type].filter(e => e.id !== id)
-    }));
-  };
-
   const { triggerTokenAnimation } = useAppStore();
 
+  const validateAllFields = () => {
+    const errors: FormError[] = [];
+    (indicators || []).forEach(indicator => {
+      if (indicator.value.trim()) {
+        const schema = indicatorSchemas[indicator.type];
+        const result = schema.safeParse(indicator.value);
+        if (!result.success) {
+          errors.push({ id: indicator.id, message: result.error.format()._errors[0] });
+        }
+      }
+    });
+    setFormErrors(errors);
+    return errors.length === 0;
+  };
+  
   const handleLancerClick = (e: React.MouseEvent<HTMLButtonElement>) => {
-    console.log('[Debug] handleLancerClick triggered. Cost object:', cost);
-    if (!cost?.hasEnoughCredits) {
+    if (!validateAllFields()) {
+        e.preventDefault();
+        addToastNotification({
+            title: "Erreurs de validation",
+            message: "Veuillez corriger les erreurs dans le formulaire.",
+            type: 'error'
+        });
+        return;
+    }
+    if (session?.user?.role !== 'ADMIN' && !cost?.hasEnoughCredits) {
       console.log('[Debug] Insufficient credits. Preventing submission.');
       e.preventDefault();
       triggerTokenAnimation();
@@ -273,42 +190,18 @@ export default function InvestigationForm({ onSubmit, isLoading: isSubmitting = 
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setIsLoading(true);
-
-    const indicatorData: Partial<InvestigationInput> = {};
-    let hasErrors = false;
-    (Object.keys(fields) as Array<keyof typeof fields>).forEach(key => {
-        const nonEmptyValues = fields[key]
-            .map(field => {
-                validateField(key, field.id, field.value);
-                return field.value.trim();
-            })
-            .filter(Boolean);
-        
-        if (formErrors[key].length > 0) {
-            hasErrors = true;
-        }
-
-        if (nonEmptyValues.length > 0) {
-            indicatorData[key] = nonEmptyValues;
-        }
-    });
-
-    if (hasErrors) {
-        addToastNotification({
-            title: "Erreurs de validation",
-            message: "Veuillez corriger les erreurs dans le formulaire.",
-            type: 'error'
-        });
-        setIsLoading(false);
+    if (!validateAllFields()) {
         return;
     }
+    setIsLoading(true);
 
-    const hasIndicators = Object.values(indicatorData).some(v => Array.isArray(v) && v.length > 0);
+    const validIndicators = (indicators || [])
+      .map(({ id, ...rest }) => rest) // Remove id
+      .filter(ind => ind.value.trim() !== '');
 
-    if (!hasIndicators) {
+    if (validIndicators.length === 0) {
       addToastNotification({
-        title: "Données invalrides",
+        title: "Données invalides",
         message: "Veuillez fournir au moins un indicateur pour lancer une investigation.",
         type: 'warning'
       });
@@ -317,9 +210,11 @@ export default function InvestigationForm({ onSubmit, isLoading: isSubmitting = 
     }
 
     const formattedInput: InvestigationInput = {
-      ...indicatorData,
-      maxGeneration,
-      minConfidence,
+      indicators: validIndicators,
+      options: {
+        maxGeneration,
+        minConfidence,
+      }
     };
 
     setIsSearchLogExpanded(true);
@@ -364,12 +259,47 @@ export default function InvestigationForm({ onSubmit, isLoading: isSubmitting = 
     if (data) {
       setTemplates(data);
     }
-  }, [session]);
+  }, [session, setTemplates]);
 
   const loadTemplate = (templateId: string) => {
     const template = templates.find(t => t.id === templateId);
     if (template) {
-        setInvestigationForm(template.inputData);
+        let formState = template.inputData;
+        // Compatibility check for old template format
+        if (!formState.indicators && (formState.names || formState.emails)) {
+            const newIndicators: FormIndicator[] = [];
+            let idCounter = Date.now();
+            
+            const indicatorTypes: string[] = ['names', 'emails', 'usernames', 'phones', 'ips', 'domains', 'urls'];
+            
+            indicatorTypes.forEach(type => {
+                if (formState[type] && Array.isArray(formState[type])) {
+                    formState[type].forEach((field: { value: string }) => {
+                        if (field.value) {
+                            newIndicators.push({
+                                id: idCounter++,
+                                type: (type as string).slice(0, -1).toUpperCase() as IndicatorType,
+                                value: field.value
+                            });
+                        }
+                    });
+                }
+            });
+
+            if (newIndicators.length === 0) {
+                newIndicators.push({ id: idCounter, type: 'NAME', value: '' });
+            }
+
+            formState = {
+                ...formState,
+                indicators: newIndicators,
+            };
+            
+            // Clean up old keys
+            indicatorTypes.forEach(type => delete formState[type]);
+        }
+
+        setInvestigationForm(formState);
         addToastNotification({ title: "Modèle chargé", message: `Le modèle "${template.name}" a été chargé.`, type: 'info' });
     }
   };
@@ -389,10 +319,9 @@ export default function InvestigationForm({ onSubmit, isLoading: isSubmitting = 
       loadTemplates();
   }, [loadTemplates]);
 
-  // Debounced effect for cost calculation
   useEffect(() => {
-    const currentIndicators = (Object.keys(fields) as Array<keyof typeof fields>)
-      .flatMap(key => fields[key].map(field => ({ type: key.slice(0, -1).toUpperCase(), value: field.value })))
+    const currentIndicators = (indicators || [])
+      .map(({ id, ...rest }) => rest)
       .filter(ind => ind.value.trim() !== '');
 
     const options = { maxGeneration, minConfidence };
@@ -402,119 +331,40 @@ export default function InvestigationForm({ onSubmit, isLoading: isSubmitting = 
         setIsCostLoading(true);
         api.getInvestigationCost(currentIndicators, options, session.user.id, session.accessToken)
           .then(response => {
-            console.log('[Debug] Cost API response:', response);
             if (response.data) {
               setCost(response.data);
+            } else if (response.error) {
+              addToastNotification({
+                title: "Erreur de calcul du coût",
+                message: response.error,
+                type: 'error'
+              });
+              setCost(null);
             }
           })
           .finally(() => setIsCostLoading(false));
       } else {
         setCost(null);
       }
-    }, 500); // 500ms debounce delay
+    }, 500);
 
     return () => {
       clearTimeout(handler);
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [JSON.stringify(fields), maxGeneration, minConfidence, session?.accessToken]);
+  }, [indicators, maxGeneration, minConfidence, session, addToastNotification]);
 
-  const renderIndicatorSection = (
-    type: keyof FormState,
-    label: string,
-    placeholder: string,
-    IconComponent: React.ComponentType<{ className?: string }>,
-    tooltipText: string
-  ) => {
-    const sectionFields = fields[type];
-    const activeFields = sectionFields.filter(f => f.value.trim() !== '');
-
-    return (
-      <div className="space-y-3 group">
-        <TooltipProvider delayDuration={200}>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Label className="text-sm font-semibold flex items-center gap-2 cursor-help">
-                <IconComponent aria-hidden="true" className={`h-5 w-5 transition-colors duration-300 ${activeSection === type ? 'text-[#e5ee10]' : 'text-muted-foreground'} group-hover:text-[#e5ee10]`} />
-                {label}
-                {activeFields.length > 0 && (
-                  <Badge variant="secondary" className="ml-auto">
-                    {activeFields.length}
-                  </Badge>
-                )}
-              </Label>
-            </TooltipTrigger>
-            <TooltipContent>
-              <p>{tooltipText}</p>
-            </TooltipContent>
-          </Tooltip>
-        </TooltipProvider>
-        
-        {sectionFields.map((field, index) => {
-          const error = formErrors[type].find(e => e.id === field.id);
-          return (
-            <div key={field.id}>
-              <div className="flex items-center gap-2">
-                <Input
-                  type="text"
-                  placeholder={placeholder}
-                  value={field.value}
-                  onFocus={() => setActiveSection(type)}
-                  onBlur={() => validateField(type, field.id, field.value)}
-                  onChange={(e) => handleFieldChange(type, field.id, e.target.value)}
-                  disabled={isLoading}
-                  className={`flex-1 bg-gray-50 dark:bg-gray-900/50 border-gray-300 dark:border-gray-700 focus:border-blue-500 focus:ring-blue-500 ${error ? 'border-red-500' : ''}`}
-                />
-                <div className="flex items-center gap-1">
-                  {sectionFields.length > 1 && (
-                    <Button
-                      type="button"
-                      onClick={() => removeField(type, field.id)}
-                      disabled={isLoading}
-                      size="icon"
-                      variant="ghost"
-                      className="h-8 w-8 hover:bg-red-100 hover:text-red-600"
-                      aria-label={`Supprimer le champ ${label}`}
-                    >
-                      <CloseIcon className="h-4 w-4" aria-hidden="true" />
-                    </Button>
-                  )}
-                  {index === sectionFields.length - 1 && (
-                    <Button
-                      type="button"
-                      onClick={() => addField(type)}
-                      disabled={isLoading}
-                      size="icon"
-                      variant="ghost"
-                      className="h-8 w-8 hover:bg-green-100 hover:text-green-600"
-                      aria-label={`Ajouter un champ ${label}`}
-                    >
-                      <AddIcon className="h-4 w-4" aria-hidden="true" />
-                    </Button>
-                  )}
-                </div>
-              </div>
-              <AnimatePresence>
-                {error && (
-                  <motion.p
-                    initial={{ opacity: 0, y: -10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -10 }}
-                    className="text-xs text-red-500 mt-1 ml-1"
-                  >
-                    {error.message}
-                  </motion.p>
-                )}
-              </AnimatePresence>
-            </div>
-          );
-        })}
-      </div>
-    );
-  };
-
-  const totalIndicators = Object.values(fields).flat().filter(f => f.value.trim() !== '').length;
+  const totalIndicators = (indicators || []).filter(f => f.value.trim() !== '').length;
   const isValid = totalIndicators > 0;
+
+  const indicatorOptions: { value: IndicatorType, label: string, icon: React.ElementType }[] = [
+      { value: 'NAME', label: 'Nom complet', icon: FingerprintIcon },
+      { value: 'USERNAME', label: "Nom d'utilisateur", icon: Person4Icon },
+      { value: 'EMAIL', label: 'Adresse email', icon: EmailIcon },
+      { value: 'PHONE', label: 'Téléphone', icon: PhoneIcon },
+      { value: 'IP', label: 'Adresse IP', icon: DnsIcon },
+      { value: 'DOMAIN', label: 'Domaine', icon: LanguageIcon },
+      { value: 'URL', label: 'URL', icon: LinkIcon },
+  ];
 
   return (
     <div className="w-full">
@@ -526,23 +376,12 @@ export default function InvestigationForm({ onSubmit, isLoading: isSubmitting = 
       <Card className="shadow-lg border-2 hover:shadow-xl transition-all duration-300 overflow-hidden">
         <div className="relative">
           <div className="relative z-10 bg-transparent">
-            <CardHeader
-              className="space-y-2"
-            >
+            <CardHeader className="space-y-2">
               <CardTitle className="text-xl font-bold flex items-center justify-between gap-3 w-full">
-                <TooltipProvider delayDuration={200}>
-                    <Tooltip>
-                        <TooltipTrigger asChild>
-                            <div className="flex items-center gap-3 cursor-help">
-                                <TrackChangesIcon aria-hidden="true" className="h-6 w-6" style={{ color: '#e5ee10' }} />
-                                <span>Nouvelle Investigation OSINT</span>
-                            </div>
-                        </TooltipTrigger>
-                        <TooltipContent>
-                            <p>Lancez une nouvelle enquête en fournissant un ou plusieurs indicateurs.<br/>Les outils OSINT collecteront et analyseront les données publiquement disponibles.</p>
-                        </TooltipContent>
-                    </Tooltip>
-                </TooltipProvider>
+                <div className="flex items-center gap-3">
+                    <TrackChangesIcon aria-hidden="true" className="h-6 w-6" style={{ color: '#e5ee10' }} />
+                    <span>Nouvelle Investigation OSINT</span>
+                </div>
                 <Button
                   type="button"
                   variant="ghost"
@@ -554,11 +393,11 @@ export default function InvestigationForm({ onSubmit, isLoading: isSubmitting = 
                 </Button>
               </CardTitle>
               <p className="text-sm text-muted-foreground pt-2">
-                Tous les champs sont optionnels. Plus vous fournissez d&apos;informations, plus les chances de trouver des résultats pertinents sont élevées.
+                Fournissez un ou plusieurs indicateurs pour démarrer.
               </p>
               {!isExpanded && totalIndicators > 0 && (
                  <p className="text-muted-foreground">
-                  {totalIndicators} indicateur{totalIndicators > 1 ? 's' : ''} prêt{totalIndicators > 1 ? 's' : ''} à être investigué{totalIndicators > 1 ? 's' : ''}.
+                  {totalIndicators} indicateur{totalIndicators > 1 ? 's' : ''} prêt{totalIndicators > 1 ? 's' : ''}.
                 </p>
               )}
             </CardHeader>
@@ -574,18 +413,73 @@ export default function InvestigationForm({ onSubmit, isLoading: isSubmitting = 
               transition={{ duration: 0.3 }}
             >
               <CardContent>
-                <form onSubmit={handleSubmit} className="space-y-8">
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                    {renderIndicatorSection('names', 'Noms complets', 'ex: Jean Dupont', FingerprintIcon, "Noms et prénoms de la personne ciblée.")}
-                    {renderIndicatorSection('usernames', "Noms d'utilisateur", 'ex: jdupont123', Person4Icon, "Pseudos ou noms d'utilisateur utilisés sur les plateformes en ligne.")}
-                    {renderIndicatorSection('emails', 'Adresses email', 'ex: jean.dupont@email.com', EmailIcon, "Adresses e-mail personnelles ou professionnelles.")}
-                    {renderIndicatorSection('phones', 'Numéros de téléphone', 'ex: +33 6 12 34 56 78', PhoneIcon, "Numéros de téléphone, y compris l'indicatif du pays.")}
-                    {renderIndicatorSection('ips', 'Adresses IP', 'ex: 192.168.1.1', DnsIcon, "Adresses IP (IPv4) associées à la cible.")}
-                    {renderIndicatorSection('domains', 'Noms de domaine', 'ex: exemple.com', LanguageIcon, "Domaines web possédés ou gérés par la cible.")}
-                  </div>
-                  
-                  <div className="w-full">
-                    {renderIndicatorSection('urls', 'URLs complètes', 'ex: https://exemple.com/profil', LinkIcon, "Liens vers des profils spécifiques ou des pages web pertinentes.")}
+                <form onSubmit={handleSubmit} className="space-y-6">
+                  <div className="space-y-4">
+                    <Label className="text-base font-semibold">Indicateurs</Label>
+                    {(indicators || []).map((indicator) => {
+                      const error = formErrors.find(e => e.id === indicator.id);
+                      return (
+                        <div key={indicator.id} className="flex items-start gap-2">
+                          <div className="grid grid-cols-3 gap-2 flex-grow">
+                            <Select
+                              value={indicator.type}
+                              onValueChange={(value: IndicatorType) => updateIndicator(indicator.id, { type: value })}
+                            >
+                              <SelectTrigger className="col-span-1">
+                                <SelectValue placeholder="Type" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {indicatorOptions.map(opt => (
+                                  <SelectItem key={opt.value} value={opt.value}>
+                                    <div className="flex items-center gap-2">
+                                      <opt.icon className="h-4 w-4" />
+                                      {opt.label}
+                                    </div>
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                            <div className="col-span-2">
+                              <Input
+                                type="text"
+                                placeholder="Valeur de l'indicateur"
+                                value={indicator.value}
+                                onChange={(e) => updateIndicator(indicator.id, { value: e.target.value })}
+                                disabled={isLoading}
+                                className={`w-full ${error ? 'border-red-500' : ''}`}
+                              />
+                               <AnimatePresence>
+                                {error && (
+                                  <motion.p
+                                    initial={{ opacity: 0, y: -10 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    exit={{ opacity: 0, y: -10 }}
+                                    className="text-xs text-red-500 mt-1 ml-1"
+                                  >
+                                    {error.message}
+                                  </motion.p>
+                                )}
+                              </AnimatePresence>
+                            </div>
+                          </div>
+                          <Button
+                            type="button"
+                            onClick={() => removeIndicator(indicator.id)}
+                            disabled={isLoading || indicators.length <= 1}
+                            size="icon"
+                            variant="ghost"
+                            className="h-9 w-9 hover:bg-red-100 hover:text-red-600"
+                            aria-label="Supprimer l'indicateur"
+                          >
+                            <X className="h-4 w-4" aria-hidden="true" />
+                          </Button>
+                        </div>
+                      );
+                    })}
+                    <Button type="button" variant="outline" onClick={addIndicator}>
+                      <Plus className="h-4 w-4 mr-2" />
+                      Ajouter un indicateur
+                    </Button>
                   </div>
 
                   <div className="border-t pt-6 space-y-6">
@@ -603,7 +497,7 @@ export default function InvestigationForm({ onSubmit, isLoading: isSubmitting = 
                                             <HelpIcon aria-hidden="true" className="h-4 w-4 text-muted-foreground cursor-help" />
                                         </TooltipTrigger>
                                         <TooltipContent>
-                                            <p>Définit le nombre maximum d&apos;itérations pour l&apos;enrichissement.<br/>Une valeur plus élevée peut donner plus de résultats mais prend plus de temps.</p>
+                                            <p>Définit le nombre maximum d'itérations pour l'enrichissement.<br/>Une valeur plus élevée peut donner plus de résultats mais prend plus de temps.</p>
                                         </TooltipContent>
                                     </Tooltip>
                                 </TooltipProvider>
@@ -627,7 +521,7 @@ export default function InvestigationForm({ onSubmit, isLoading: isSubmitting = 
                                             <HelpIcon aria-hidden="true" className="h-4 w-4 text-muted-foreground cursor-help" />
                                         </TooltipTrigger>
                                         <TooltipContent>
-                                            <p>Le seuil de confiance minimum pour qu&apos;un indicateur soit utilisé.<br/>Abaisser ce seuil peut augmenter le bruit.</p>
+                                            <p>Le seuil de confiance minimum pour qu'un indicateur soit utilisé.<br/>Abaisser ce seuil peut augmenter le bruit.</p>
                                         </TooltipContent>
                                     </Tooltip>
                                 </TooltipProvider>
@@ -672,26 +566,10 @@ export default function InvestigationForm({ onSubmit, isLoading: isSubmitting = 
                   </div>
 
                   <CardFooter className="flex flex-col gap-4 bg-slate-900/50 p-4 border-t">
-                    {/* Ligne Supérieure: Détails & Action */}
                     <div className="flex justify-between items-center w-full">
-                      {/* Détails Chiffrés */}
                         <div className="flex-grow">
                             <div className="flex items-center gap-2 mb-2">
                                 <h4 className="font-semibold text-white">Détails de l'estimation</h4>
-                                <TooltipProvider>
-                                    <Tooltip>
-                                        <TooltipTrigger asChild>
-                                            <span className="cursor-help">
-                                                <HelpIcon className="h-4 w-4 text-muted-foreground" />
-                                            </span>
-                                        </TooltipTrigger>
-                                        <TooltipContent>
-                                            <p className="text-xs">Le coût est calculé comme suit :<br />
-                                                <span className="font-mono text-white">(Indicateurs × Outils) × Profondeur</span>
-                                            </p>
-                                        </TooltipContent>
-                                    </Tooltip>
-                                </TooltipProvider>
                             </div>
                             <div className="flex flex-wrap justify-start items-start gap-x-4 text-xs text-muted-foreground">
                                 {cost && !isCostLoading && (
@@ -699,32 +577,19 @@ export default function InvestigationForm({ onSubmit, isLoading: isSubmitting = 
                                         <div className="text-center">
                                             <span className="font-bold text-sm text-white">{cost.details.indicatorCount}</span>
                                             <p>Indicateurs</p>
-                                            <div className="flex items-center justify-center text-yellow-400">
-                                                <span>{cost.details.baseCost.toFixed(1)}</span>
-                                                <Coins className="h-3 w-3 ml-1" />
-                                            </div>
                                         </div>
                                         <div className="text-center pl-4 border-l border-gray-700">
                                             <span className="font-bold text-sm text-white">{cost.details.tools.length}</span>
                                             <p>Outils</p>
-                                            <div className="flex items-center justify-center text-yellow-400">
-                                                <span>{(cost.details.baseCost / cost.details.indicatorCount).toFixed(1)}</span>
-                                                <Coins className="h-3 w-3 ml-1" />
-                                            </div>
                                         </div>
                                         <div className="text-center pl-4 border-l border-gray-700">
                                             <span className="font-bold text-sm text-white">x{cost.details.maxGeneration}</span>
                                             <p>Profondeur</p>
-                                            <div className="flex items-center justify-center text-yellow-400">
-                                                <span>{cost.cost.toFixed(1)}</span>
-                                                <Coins className="h-3 w-3 ml-1" />
-                                            </div>
                                         </div>
                                     </>
                                 )}
                             </div>
                         </div>
-                      {/* Action & Coût Total */}
                       <div className="flex items-center gap-4">
                         {isCostLoading && <p className="text-sm text-muted-foreground animate-pulse">Calcul du coût...</p>}
                         {cost && !isCostLoading && (
@@ -732,14 +597,14 @@ export default function InvestigationForm({ onSubmit, isLoading: isSubmitting = 
                                 <div className="text-center">
                                     <p className="text-xs text-muted-foreground font-semibold">COÛT</p>
                                     <div className="flex items-center justify-center text-2xl font-bold">
-                                        <p className={`${session?.user?.role === 'ADMIN' ? 'text-white' : (cost.hasEnoughCredits ? 'text-green-400' : 'text-red-500')}`}>{cost.cost}</p>
-                                        <Coins className={`h-5 w-5 ml-1 ${session?.user?.role === 'ADMIN' ? 'text-white' : (cost.hasEnoughCredits ? 'text-green-400' : 'text-red-500')}`} />
+                                        <p className={`${session?.user?.role === 'ADMIN' || cost.hasEnoughCredits ? 'text-green-400' : 'text-red-500'}`}>{cost.cost}</p>
+                                        <Coins className={`h-5 w-5 ml-1 ${session?.user?.role === 'ADMIN' || cost.hasEnoughCredits ? 'text-green-400' : 'text-red-500'}`} />
                                     </div>
                                 </div>
                                 <div className="text-center border-l border-gray-700 pl-6">
                                     <p className="text-xs text-muted-foreground font-semibold">DISPONIBLE</p>
                                     <div className="flex items-center justify-center text-2xl font-bold text-white">
-                                        <p>{session?.user?.credits ?? 0}</p>
+                                        <p>{session?.user?.credits ?? '∞'}</p>
                                         <Coins className="h-5 w-5 ml-1 text-white" />
                                     </div>
                                 </div>
@@ -751,7 +616,6 @@ export default function InvestigationForm({ onSubmit, isLoading: isSubmitting = 
                         </Button>
                       </div>
                     </div>
-                    {/* Ligne Inférieure: Outils */}
                     <AnimatePresence>
                       {cost && !isCostLoading && cost.details.tools.length > 0 && (
                         <motion.div

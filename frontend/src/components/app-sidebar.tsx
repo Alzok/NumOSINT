@@ -18,7 +18,7 @@ import { CreditDisplay } from "@/components/common/CreditDisplay";
 import { useAppStore } from "@/lib/store";
 import { Badge } from "@/components/ui/badge";
 import { NotificationBell } from "@/components/Common/NotificationBell";
-import { Coins } from "lucide-react";
+import { Coins, LifeBuoy } from "lucide-react";
 const HomeIcon = (props: React.SVGProps<SVGSVGElement>) => (
   <svg {...props} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
@@ -70,10 +70,14 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const secondaryNav = [
       { href: '/store', icon: <Coins className="h-5 w-5 text-yellow-500" />, label: 'Boutique' },
       { href: '/notifications', icon: <NotificationBell />, label: 'Notifications' },
+      { href: '/helpdesk', icon: <LifeBuoy className="h-5 w-5" />, label: 'Support Technique', external: true },
       { href: '/help', icon: <HelpIcon className="h-5 w-5" />, label: 'Aide' },
   ];
 
-  const handleNavigation = (e: React.MouseEvent<HTMLAnchorElement, MouseEvent>, href: string) => {
+  const handleNavigation = (e: React.MouseEvent<HTMLAnchorElement, MouseEvent>, href: string, external?: boolean) => {
+    if (external) {
+      return; // Let the browser handle the new tab
+    }
     if (href.startsWith('#')) {
       e.preventDefault();
       const targetId = href.replace(/.*#/, "");
@@ -114,7 +118,13 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
           {secondaryNav.map((item) => (
             <SidebarMenuItem key={item.label}>
               <SidebarMenuButton asChild tooltip={item.label}>
-                <a href={item.href} onClick={(e) => handleNavigation(e, item.href)} className="flex items-center gap-2">
+                <a
+                  href={item.href}
+                  onClick={(e) => handleNavigation(e, item.href, item.external)}
+                  className="flex items-center gap-2"
+                  target={item.external ? "_blank" : "_self"}
+                  rel={item.external ? "noopener noreferrer" : ""}
+                >
                   {item.icon}
                   <span className="text-sm">{item.label}</span>
                 </a>
